@@ -25,14 +25,7 @@ export const generateFinalPDF = async (
     
     let y = margin;
     
-    // HEADER - Matching live report exactly
-    pdf.setFontSize(14);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Endoscopy Documentation System', pageWidth / 2, y, { align: 'center' });
-    y += 6;
-    
-    pdf.text('Dr. Mbulelo Renene', pageWidth / 2, y, { align: 'center' });
-    y += 12;
+    // HEADER - Without main titles
     
     // Professional header layout
     const leftX = margin;

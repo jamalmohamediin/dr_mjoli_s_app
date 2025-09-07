@@ -138,9 +138,17 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
           if (canvas) {
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              // DIRECT CANVAS CAPTURE - captures exactly what you see with all markings
-              canvasImageData = canvas.toDataURL('image/png');
-              console.log("🎯 Captured canvas DIRECTLY with all markings visible");
+              // Use html2canvas to capture the entire container including SVG lines and text
+              const capturedCanvas = await html2canvas(containerRef.current, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false
+              });
+              
+              canvasImageData = capturedCanvas.toDataURL('image/png');
+              console.log("🎯 Captured ENTIRE container with markings, lines AND text");
             }
           }
         } catch (error) {
