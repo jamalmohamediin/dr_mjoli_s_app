@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# YoYo AI version control directory
+.yoyo/
+
+# Local Netlify folder
+.netlify

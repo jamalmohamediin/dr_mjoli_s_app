@@ -114,12 +114,161 @@ All colors MUST be HSL.
   }
 }
 
+/* Glass Morphism Base Styles */
 @layer base {
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-medical-gradient min-h-screen;
+    background-attachment: fixed;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Glass Container Components */
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 shadow-2xl rounded-xl;
+  }
+
+  .glass-card-light {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 shadow-xl rounded-lg;
+  }
+
+  .glass-card-heavy {
+    @apply bg-white/25 backdrop-blur-xl border border-white/30 shadow-2xl rounded-xl;
+  }
+
+  .glass-button {
+    @apply bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 
+           shadow-lg rounded-lg transition-all duration-300 hover:shadow-xl 
+           hover:scale-105 text-gray-800 font-medium;
+  }
+
+  .glass-button-primary {
+    @apply bg-gray-400/30 hover:bg-gray-400/40 backdrop-blur-sm border border-gray-300/50 
+           shadow-lg rounded-lg transition-all duration-300 hover:shadow-xl 
+           hover:scale-105 text-black font-medium;
+  }
+
+  .glass-input {
+    @apply bg-white/20 backdrop-blur-sm border border-gray-300/50 rounded-lg 
+           placeholder:text-gray-500 text-black focus:border-gray-400/70 
+           focus:ring-2 focus:ring-gray-300/30 transition-all duration-300;
+  }
+
+  .glass-navbar {
+    @apply bg-white/10 backdrop-blur-xl border-b border-white/20 shadow-lg;
+  }
+
+  .glass-sidebar {
+    @apply bg-white/5 backdrop-blur-xl border-r border-white/15 shadow-xl;
+  }
+
+  .glass-modal {
+    @apply bg-black/30 backdrop-blur-md;
+  }
+
+  .glass-modal-content {
+    @apply bg-white/25 backdrop-blur-lg border border-white/40 shadow-2xl rounded-xl;
+  }
+
+  .glass-table {
+    @apply bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg overflow-hidden;
+  }
+
+  .glass-table-header {
+    @apply bg-white/20 backdrop-blur-sm border-b border-white/20;
+  }
+
+  .glass-table-row {
+    @apply border-b border-white/10 hover:bg-white/10 transition-all duration-200;
+  }
+
+  .glass-section-divider {
+    @apply border-b border-white/20 pb-4 mb-6;
+  }
+
+  /* Text styles for glass theme */
+  .glass-text {
+    @apply text-black font-medium;
+  }
+
+  .glass-text-light {
+    @apply text-gray-800;
+  }
+
+  .glass-text-muted {
+    @apply text-gray-600;
+  }
+
+  /* Hover effects */
+  .glass-hover {
+    @apply hover:bg-white/20 transition-all duration-300 hover:shadow-lg;
+  }
+
+  /* Animation effects */
+  .glass-animate-in {
+    animation: glass-slide-in 0.3s ease-out;
+  }
+
+  /* Responsive utilities */
+  .glass-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .glass-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  .glass-flex {
+    @apply flex flex-col sm:flex-row gap-4 sm:gap-6;
+  }
+}
+
+@layer utilities {
+  /* Custom backdrop blur utilities */
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+  
+  .backdrop-blur-3xl {
+    backdrop-filter: blur(64px);
+  }
+
+  /* Glass border utilities */
+  .border-glass {
+    @apply border border-white/20;
+  }
+
+  .border-glass-light {
+    @apply border border-white/10;
+  }
+
+  .border-glass-heavy {
+    @apply border border-white/30;
+  }
+
+  /* Glass shadow utilities */
+  .shadow-glass {
+    box-shadow: 
+      0 8px 32px 0 rgba(31, 38, 135, 0.37),
+      0 4px 16px 0 rgba(31, 38, 135, 0.2);
+  }
+
+  .shadow-glass-heavy {
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 12px 24px -8px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Text shadows for glass theme */
+  .text-shadow-glass {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,20 +7,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface PatientInfoFormProps {
   onUpdate: (data: any) => void;
+  currentData?: any;
 }
 
-export const PatientInfoForm = ({ onUpdate }: PatientInfoFormProps) => {
+export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps) => {
   const [formData, setFormData] = useState({
-    patientId: "",
-    name: "",
-    age: "",
-    gender: "",
-    indication: "",
-    preparation: "",
-    sedation: "",
-    procedure: "",
-    date: new Date().toISOString().split('T')[0]
+    patientId: currentData?.patientId || "",
+    name: currentData?.name || "",
+    age: currentData?.age || "",
+    gender: currentData?.gender || ""
   });
+
+  // Sync local state when prop changes (from live report edits)
+  useEffect(() => {
+    if (currentData) {
+      setFormData({
+        patientId: currentData.patientId || "",
+        name: currentData.name || "",
+        age: currentData.age || "",
+        gender: currentData.gender || ""
+      });
+    }
+  }, [currentData]);
 
   const handleChange = (field: string, value: string) => {
     const newData = { ...formData, [field]: value };
@@ -29,12 +37,20 @@ export const PatientInfoForm = ({ onUpdate }: PatientInfoFormProps) => {
   };
 
   return (
-    <Card className="p-6 space-y-6">
-      <h3 className="text-xl font-semibold text-primary mb-4">Patient Information</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="patientId">Patient ID</Label>
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="space-y-0.5">
+          <Label htmlFor="name" className="text-xs font-medium">Patient Name</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => handleChange('name', e.target.value)}
+            placeholder="Enter patient full name"
+          />
+        </div>
+        
+        <div className="space-y-0.5">
+          <Label htmlFor="patientId" className="text-xs font-medium">Patient ID</Label>
           <Input
             id="patientId"
             value={formData.patientId}
@@ -43,18 +59,8 @@ export const PatientInfoForm = ({ onUpdate }: PatientInfoFormProps) => {
           />
         </div>
         
-        <div className="space-y-2">
-          <Label htmlFor="name">Patient Name</Label>
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            placeholder="Enter patient name"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="age">Age</Label>
+        <div className="space-y-0.5">
+          <Label htmlFor="age" className="text-xs font-medium">Age</Label>
           <Input
             id="age"
             type="number"
@@ -64,9 +70,9 @@ export const PatientInfoForm = ({ onUpdate }: PatientInfoFormProps) => {
           />
         </div>
         
-        <div className="space-y-2">
-          <Label htmlFor="gender">Gender</Label>
-          <Select onValueChange={(value) => handleChange('gender', value)}>
+        <div className="space-y-0.5">
+          <Label htmlFor="gender" className="text-xs font-medium">Gender</Label>
+          <Select value={formData.gender} onValueChange={(value) => handleChange('gender', value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select gender" />
             </SelectTrigger>
@@ -77,73 +83,7 @@ export const PatientInfoForm = ({ onUpdate }: PatientInfoFormProps) => {
             </SelectContent>
           </Select>
         </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="procedure">Procedure Type</Label>
-          <Select onValueChange={(value) => handleChange('procedure', value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select procedure" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="gastroscopy">Gastroscopy</SelectItem>
-              <SelectItem value="colonoscopy">Colonoscopy</SelectItem>
-              <SelectItem value="both">Combined Procedure</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="date">Procedure Date</Label>
-          <Input
-            id="date"
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleChange('date', e.target.value)}
-          />
-        </div>
       </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="indication">Clinical Indication</Label>
-        <Textarea
-          id="indication"
-          value={formData.indication}
-          onChange={(e) => handleChange('indication', e.target.value)}
-          placeholder="Enter clinical indication for procedure..."
-          rows={3}
-        />
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="preparation">Bowel Preparation</Label>
-          <Select onValueChange={(value) => handleChange('preparation', value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select preparation" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="excellent">Excellent</SelectItem>
-              <SelectItem value="good">Good</SelectItem>
-              <SelectItem value="fair">Fair</SelectItem>
-              <SelectItem value="poor">Poor</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="sedation">Sedation</Label>
-          <Select onValueChange={(value) => handleChange('sedation', value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select sedation type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="conscious">Conscious Sedation</SelectItem>
-              <SelectItem value="deep">Deep Sedation</SelectItem>
-              <SelectItem value="none">No Sedation</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </Card>
+    </div>
   );
 };

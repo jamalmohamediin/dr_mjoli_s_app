@@ -1,0 +1,12 @@
+<svg width='512' height='512' xmlns='http://www.w3.org/2000/svg'>
+  <rect width='512' height='512' fill='#5c3a21'/>
+  <g transform='translate(256,256) scale(1.7066666666666668)'>
+    <circle cx='-80' cy='-40' r='25' fill='white'/>
+    <circle cx='80' cy='-40' r='25' fill='white'/>
+    <path d='M -80 -15 Q -40 20 0 40 Q 40 20 80 -15' stroke='white' stroke-width='12' fill='none'/>
+    <circle cx='0' cy='60' r='30' fill='white'/>
+    <circle cx='0' cy='60' r='20' fill='#5c3a21'/>
+    <path d='M -80 -65 L -80 -15' stroke='white' stroke-width='8'/>
+    <path d='M 80 -65 L 80 -15' stroke='white' stroke-width='8'/>
+  </g>
+</svg>

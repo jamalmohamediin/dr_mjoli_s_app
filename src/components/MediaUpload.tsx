@@ -126,11 +126,11 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <h3 className="text-xl font-semibold text-primary mb-4">Media Upload</h3>
+        <h3 className="text-xl font-semibold text-black mb-4">Media Upload</h3>
         
         {/* Upload Area */}
-        <div className="border-2 border-dashed border-medical-blue-light rounded-lg p-8 text-center space-y-4">
-          <Upload className="h-12 w-12 text-medical-blue mx-auto" />
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center space-y-4">
+          <Upload className="h-12 w-12 text-gray-600 mx-auto" />
           <div>
             <h4 className="text-lg font-medium">Upload Images and Videos</h4>
             <p className="text-muted-foreground">
@@ -178,7 +178,7 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
                           className="w-16 h-16 object-cover rounded border"
                         />
                       ) : (
-                        <div className="w-16 h-16 bg-medical-blue-light rounded border flex items-center justify-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded border flex items-center justify-center">
                           {getFileIcon(file.type)}
                         </div>
                       )}
@@ -229,7 +229,7 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
         )}
 
         {/* Tips */}
-        <div className="mt-6 p-4 bg-medical-blue-light rounded-lg">
+        <div className="mt-6 p-4 bg-gray-100 rounded-lg">
           <h5 className="font-medium text-sm mb-2">📋 Best Practices:</h5>
           <ul className="text-sm text-muted-foreground space-y-1">
             <li>• Capture clear, well-lit images of findings</li>
