@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DocumentUpload } from "./DocumentUpload";
 import gastroscopyAnatomy from "@/assets/gastroscopy-anatomy.jpg";
 import colonoscopyAnatomy from "@/assets/colonoscopy-anatomy.jpg";
+import appendectomyAnatomy from "@/assets/appendectomy.jpg";
 import html2canvas from 'html2canvas';
 import { toast } from "sonner";
 
@@ -27,6 +28,7 @@ interface AnatomyDiagramProps {
   canvasRef?: React.RefObject<HTMLCanvasElement>;
   containerRef?: React.RefObject<HTMLDivElement>;
   onMethodsReady?: (methods: { removeFinding: (id: string) => void; editFinding: (id: string) => void; undoLastAction: () => void; redoLastAction: () => void; canRedo: () => boolean }) => void;
+  customImage?: string;
 }
 
 interface Finding {
@@ -38,7 +40,7 @@ interface Finding {
   location: string;
 }
 
-export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, containerRef: externalContainerRef, onMethodsReady }: AnatomyDiagramProps) => {
+export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, containerRef: externalContainerRef, onMethodsReady, customImage }: AnatomyDiagramProps) => {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = externalCanvasRef || internalCanvasRef;
@@ -174,7 +176,7 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     // The text labels and lines are drawn via HTML/CSS, not on the canvas
   };
 
-  const anatomyImage = type === "gastroscopy" ? gastroscopyAnatomy : colonoscopyAnatomy;
+  const anatomyImage = customImage || (type === "gastroscopy" ? gastroscopyAnatomy : colonoscopyAnatomy);
   
   // Master list of all possible findings
   const masterFindingTypes = [
@@ -596,16 +598,16 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     setCustomFinding('');
   };
 
-  const removeFinding = (id: string) => {
+  const removeFinding = useCallback((id: string) => {
     // Save current state to history before removing finding
     saveToHistory([...findings]);
     
     const newFindings = findings.filter(f => f.id !== id);
     setFindings(newFindings);
     updateWithCanvasData(newFindings, documents, true); // Skip history since we already saved it
-  };
+  }, [findings, documents]);
 
-  const undoLastAction = () => {
+  const undoLastAction = useCallback(() => {
     if (findingsHistory.length === 0) return;
     
     // Save current state to redo history before undoing
@@ -621,9 +623,9 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     setFindings(previousState);
     
     updateWithCanvasData(previousState, documents, true); // Skip saving to history
-  };
+  }, [findingsHistory, findings, documents]);
 
-  const redoLastAction = () => {
+  const redoLastAction = useCallback(() => {
     if (redoHistory.length === 0) return;
     
     // Save current state to undo history before redoing
@@ -639,7 +641,7 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     setFindings(redoState);
     
     updateWithCanvasData(redoState, documents, true); // Skip saving to history
-  };
+  }, [redoHistory, findings, documents]);
 
   const handleDocumentUpdate = (newDocuments: UploadedDocument[]) => {
     setDocuments(newDocuments);
@@ -647,14 +649,16 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
   };
 
   // Add an edit finding function (for now, it will show the finding details in console)
-  const editFinding = (id: string) => {
+  const editFinding = useCallback((id: string) => {
     const finding = findings.find(f => f.id === id);
     if (finding) {
       console.log(`Edit finding:`, finding);
       // For now, just show the finding dialog - in the future this could open an edit modal
       toast.info(`Edit functionality for "${finding.type}" coming soon!`);
     }
-  };
+  }, [findings]);
+
+  const canRedo = useCallback(() => redoHistory.length > 0, [redoHistory.length]);
 
   // Expose methods to parent component
   useEffect(() => {
@@ -664,17 +668,17 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
         editFinding,
         undoLastAction,
         redoLastAction,
-        canRedo: () => redoHistory.length > 0
+        canRedo
       });
     }
-  }, [onMethodsReady]);
+  }, [onMethodsReady, removeFinding, editFinding, undoLastAction, redoLastAction, canRedo]);
 
   return (
     <div className="space-y-6">
       <Card className="p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-sm font-semibold text-black">
-            {type === "gastroscopy" ? "Gastroscopy" : "Colonoscopy"} Findings
+            {type === "gastroscopy" ? "Gastroscopy Findings" : "Colonoscopy Findings"}
           </h3>
           
           <div className="flex gap-2 items-center flex-wrap">
@@ -709,6 +713,7 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
             </Button>
           </div>
         </div>
+
 
         <div ref={containerRef} className="relative border rounded-lg overflow-visible bg-white mx-auto" style={{ maxWidth: 'fit-content' }}>
           <img 

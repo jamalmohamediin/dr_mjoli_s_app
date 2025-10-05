@@ -1,4 +1,4 @@
-const CACHE_NAME = 'endoscope-sa-v1';
+const CACHE_NAME = 'endoscope-sa-v2';
 const urlsToCache = [
   '/',
   '/index.html',

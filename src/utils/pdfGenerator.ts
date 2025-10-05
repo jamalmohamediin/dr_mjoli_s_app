@@ -32,7 +32,7 @@ export const captureReportAsPDF = async (
     
     pdf.setFontSize(10);
     pdf.setFont(undefined, 'normal');
-    pdf.text('Dr. Mbulelo Renene - Specialist Surgeon', pageWidth / 2, y, { align: 'center' });
+    pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, y, { align: 'center' });
     y += 6;
     
     // Patient info
@@ -125,8 +125,8 @@ export const captureReportAsPDF = async (
     pdf.setFontSize(8);
     pdf.setFont(undefined, 'normal');
     pdf.setTextColor(128, 128, 128);
-    pdf.text('Dr. Mbulelo Renene - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
-    pdf.text('Practice Number: 0263133', pageWidth / 2, footerY + 4, { align: 'center' });
+    pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
+    pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 4, { align: 'center' });
     pdf.text(`Report Date: ${new Date().toLocaleDateString('en-ZA')}`, pageWidth / 2, footerY + 8, { align: 'center' });
     
     // Save

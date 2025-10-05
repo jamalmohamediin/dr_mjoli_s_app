@@ -34,7 +34,7 @@ export const generateSinglePagePDF = async (
     
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Dr. Mbulelo Renene', pageWidth / 2, y, { align: 'center' });
+    pdf.text('Dr. Monde Mjoli', pageWidth / 2, y, { align: 'center' });
     y += 10;
     
     // Professional header section
@@ -45,7 +45,7 @@ export const generateSinglePagePDF = async (
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     // Left - Doctor info
-    pdf.text('Dr. Mbulelo Renene', leftX, y, { align: 'left' });
+    pdf.text('Dr. Monde Mjoli', leftX, y, { align: 'left' });
     pdf.text('ENDOSCOPY REPORT', centerX, y, { align: 'center' });
     pdf.text('St. Dominic\'s Medical Suites B', rightX, y, { align: 'right' });
     y += 5;
@@ -59,15 +59,15 @@ export const generateSinglePagePDF = async (
     y += 4;
     
     pdf.setFontSize(8);
-    pdf.text('MBChB (UNITRA), MMed (Surg) (Stell)', leftX, y, { align: 'left' });
+    pdf.text('MBChB (UNITRA), MMed (UKZN), FCS(SA), Cert Gastroenterology, Surg (SA)', leftX, y, { align: 'left' });
     pdf.text('East London, 5201', rightX, y, { align: 'right' });
     y += 4;
     
-    pdf.text('Practice No. 0263133', leftX, y, { align: 'left' });
+    pdf.text('Practice No. 0560812', leftX, y, { align: 'left' });
     pdf.text('Tel: 043 743 7872', rightX, y, { align: 'right' });
     y += 4;
     
-    pdf.text('Cell: 0832556934', leftX, y, { align: 'left' });
+    pdf.text('Cell: 082 417 2630', leftX, y, { align: 'left' });
     pdf.text('Fax: 043 743 6653', rightX, y, { align: 'right' });
     y += 8;
     
@@ -97,7 +97,7 @@ export const generateSinglePagePDF = async (
       
       pdf.setFont('helvetica', 'bold');
       pdf.text('Patient ID:', leftCol, y);
-      pdf.text('Name:', midCol, y);
+      pdf.text('Patient Name:', midCol, y);
       pdf.text('Age:', rightCol, y);
       y += 4;
       
@@ -384,8 +384,8 @@ export const generateSinglePagePDF = async (
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(100, 100, 100);
     
-    pdf.text('Dr. Mbulelo Renene - Specialist Surgeon', pageWidth / 2, footerY + 2, { align: 'center' });
-    pdf.text('Practice Number: 0263133', pageWidth / 2, footerY + 6, { align: 'center' });
+    pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY + 2, { align: 'center' });
+    pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 6, { align: 'center' });
     pdf.text(`Report Date: ${new Date().toLocaleDateString('en-ZA')} | Page 1 of 1`, pageWidth / 2, footerY + 10, { align: 'center' });
     
     // Save

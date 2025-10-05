@@ -18,7 +18,8 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
     date: new Date().toISOString().split('T')[0],
     preparation: "",
     anesthesia: "",
-    indication: ""
+    indication: "",
+    assistant: ""
   });
   const [tempIndication, setTempIndication] = useState('');
 
@@ -53,7 +54,8 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
         date: initialData.date || new Date().toISOString().split('T')[0],
         preparation: initialData.preparation || "",
         anesthesia: initialData.sedation || "",
-        indication: initialData.indication || ""
+        indication: initialData.indication || "",
+        assistant: initialData.assistant || ""
       });
     }
   }, [initialData]);
@@ -133,7 +135,7 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
       </div>
       
       {/* Procedure fields in a row - without procedure type */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         <div className="space-y-0.5">
           <Label htmlFor="date" className="text-xs font-medium">Procedure Date</Label>
           <Input
@@ -172,6 +174,16 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
               <SelectItem value="none">No Sedation</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        
+        <div className="space-y-0.5">
+          <Label htmlFor="assistant" className="text-xs font-medium">Assistant Name</Label>
+          <Input
+            id="assistant"
+            value={formData.assistant}
+            onChange={(e) => handleChange('assistant', e.target.value)}
+            placeholder="Enter assistant name"
+          />
         </div>
       </div>
     </Card>

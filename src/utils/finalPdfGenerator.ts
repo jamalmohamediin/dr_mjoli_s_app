@@ -1,4 +1,6 @@
 import jsPDF from 'jspdf';
+import { formatDateWithSuffix, formatDateOnly } from './dateFormatter';
+import { getFullASAText } from './asaDescriptions';
 
 export interface FinalDiagramCapture {
   canvasImageData?: string;
@@ -34,7 +36,7 @@ export const generateFinalPDF = async (
     
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Dr. Mbulelo Renene', leftX, y, { align: 'left' });
+    pdf.text('Dr. Monde Mjoli', leftX, y, { align: 'left' });
     pdf.text('ENDOSCOPY REPORT', centerX, y, { align: 'center' });
     pdf.text("St. Dominic's Medical Suites B", rightX, y, { align: 'right' });
     y += 5;
@@ -42,20 +44,20 @@ export const generateFinalPDF = async (
     pdf.setFontSize(9);
     pdf.text('Specialist Surgeon', leftX, y, { align: 'left' });
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Generated: ${new Date().toLocaleDateString('en-ZA')}`, centerX, y, { align: 'center' });
+    pdf.text(`Generated: ${formatDateOnly(new Date())}`, centerX, y, { align: 'center' });
     pdf.text('56 St James Road, Southernwood', rightX, y, { align: 'right' });
     y += 4;
     
     pdf.setFontSize(8);
-    pdf.text('MBChB (UNITRA), MMed (Surg) (Stell)', leftX, y, { align: 'left' });
+    pdf.text('MBChB (UNITRA), MMed (UKZN), FCS(SA), Cert Gastroenterology, Surg (SA)', leftX, y, { align: 'left' });
     pdf.text('East London, 5201', rightX, y, { align: 'right' });
     y += 4;
     
-    pdf.text('Practice No. 0263133', leftX, y, { align: 'left' });
+    pdf.text('Practice No. 0560812', leftX, y, { align: 'left' });
     pdf.text('Tel: 043 743 7872', rightX, y, { align: 'right' });
     y += 4;
     
-    pdf.text('Cell: 0832556934', leftX, y, { align: 'left' });
+    pdf.text('Cell: 082 417 2630', leftX, y, { align: 'left' });
     pdf.text('Fax: 043 743 6653', rightX, y, { align: 'right' });
     y += 10;
     
@@ -80,33 +82,72 @@ export const generateFinalPDF = async (
       // Row 1 labels
       pdf.setFont('helvetica', 'bold');
       pdf.text('Patient ID:', col1, y);
-      pdf.text('Name:', col2, y);
-      pdf.text('Age:', col3, y);
+      pdf.text('Patient Name:', col2, y);
+      pdf.text('Date Of Birth:', col3, y);
       y += 4;
       
       // Row 1 values
       pdf.setFont('helvetica', 'normal');
       pdf.text(reportData.patientInfo.patientId || 'N/A', col1, y);
       pdf.text(reportData.patientInfo.name || 'Not specified', col2, y);
-      pdf.text((reportData.patientInfo.age || 'N/A').toString(), col3, y);
+      pdf.text(reportData.patientInfo.dateOfBirth ? formatDateOnly(reportData.patientInfo.dateOfBirth) : 'Not specified', col3, y);
       y += 6;
       
       // Row 2 labels
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Gender:', col1, y);
-      pdf.text('Date:', col2, y);
-      pdf.text('Contact:', col3, y);
+      pdf.text('Age:', col1, y);
+      pdf.text('Sex:', col2, y);
+      pdf.text('Weight:', col3, y);
       y += 4;
       
       // Row 2 values
       pdf.setFont('helvetica', 'normal');
-      pdf.text(reportData.patientInfo.gender || 'N/A', col1, y);
+      pdf.text((reportData.patientInfo.age || 'N/A').toString(), col1, y);
+      const gender = reportData.patientInfo.sex || reportData.patientInfo.gender;
+      const formattedGender = gender ? gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase() : 'Not specified';
+      pdf.text(formattedGender, col2, y);
+      pdf.text(reportData.patientInfo.weight ? `${reportData.patientInfo.weight} kg` : 'Not specified', col3, y);
+      y += 6;
+      
+      // Row 3 labels
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Height:', col1, y);
+      pdf.text('BMI:', col2, y);
+      pdf.text('Date:', col3, y);
+      y += 4;
+      
+      // Row 3 values
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(reportData.patientInfo.height ? `${reportData.patientInfo.height} cm` : 'Not specified', col1, y);
+      pdf.text(reportData.patientInfo.bmi || 'Not calculated', col2, y);
       const date = reportData.patientInfo.date 
         ? new Date(reportData.patientInfo.date).toLocaleDateString('en-ZA') 
         : 'N/A';
-      pdf.text(date, col2, y);
-      pdf.text(reportData.patientInfo.contactNumber || 'N/A', col3, y);
-      y += 8;
+      pdf.text(date, col3, y);
+      y += 6;
+      
+      // Add ASA Score if present
+      if (reportData.patientInfo.asaScore) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('ASA Score:', col1, y);
+        pdf.setFont('helvetica', 'normal');
+        const asaText = getFullASAText(reportData.patientInfo.asaScore);
+        const asaLines = pdf.splitTextToSize(asaText, pageWidth - col2 - margin);
+        pdf.text(asaLines, col2, y);
+        y += asaLines.length > 1 ? 8 : 4;
+      }
+      
+      // Add ASA Notes if present
+      if (reportData.patientInfo.asaNotes) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('ASA Notes:', col1, y);
+        pdf.setFont('helvetica', 'normal');
+        const notesLines = pdf.splitTextToSize(reportData.patientInfo.asaNotes, pageWidth - col2 - margin);
+        pdf.text(notesLines, col2, y);
+        y += notesLines.length > 1 ? 8 : 4;
+      }
+      
+      y += 4;
     }
     
     // PROCEDURE INFORMATION - only indication and sedation
@@ -128,12 +169,24 @@ export const generateFinalPDF = async (
       
       pdf.setFont('helvetica', 'normal');
       const indication = reportData.patientInfo.indication || 'N/A';
-      const sedation = reportData.patientInfo.sedation || 'N/A';
+      const sedation = reportData.patientInfo.sedation ? 
+        reportData.patientInfo.sedation.charAt(0).toUpperCase() + reportData.patientInfo.sedation.slice(1).toLowerCase() : 
+        'N/A';
       
       const indicationLines = pdf.splitTextToSize(indication, (pageWidth - 2 * margin) / 2 - 5);
       pdf.text(indicationLines, leftCol, y);
       pdf.text(sedation, rightCol, y);
-      y += Math.max(indicationLines.length * 4, 6) + 2;
+      y += Math.max(indicationLines.length * 4, 6) + 4;
+      
+      // Assistant field
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Assistant:', leftCol, y);
+      y += 4;
+      
+      pdf.setFont('helvetica', 'normal');
+      const assistant = reportData.patientInfo.assistant || 'Not specified';
+      pdf.text(assistant, leftCol, y);
+      y += 6;
     }
     
     // PROCEDURES PERFORMED
@@ -346,6 +399,55 @@ export const generateFinalPDF = async (
       }
     }
     
+    // SURGEON SIGNATURE - if present
+    if (reportData.signature && (reportData.signature.surgeonSignature || reportData.signature.surgeonSignatureText || reportData.signature.dateTime)) {
+      y += 8;
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('DOCUMENTATION', margin, y);
+      y += 6;
+      
+      pdf.setFontSize(9);
+      
+      if (reportData.signature.surgeonSignatureText) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("Surgeon's Signature:", margin, y);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(reportData.signature.surgeonSignatureText, margin + 35, y);
+        y += 5;
+      }
+      
+      if (!reportData.signature.surgeonSignatureText && reportData.signature.surgeonSignature) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text("Surgeon's Signature:", margin, y);
+        y += 5;
+        
+        if (reportData.signature.surgeonSignature.startsWith('data:image')) {
+          // Add signature image
+          const sigWidth = 40;
+          const sigHeight = 15;
+          pdf.addImage(reportData.signature.surgeonSignature, 'PNG', margin, y, sigWidth, sigHeight);
+          y += sigHeight + 3;
+        } else {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(reportData.signature.surgeonSignature, margin, y);
+          y += 5;
+        }
+      }
+      
+      if (reportData.signature.dateTime) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Date/Time:', margin, y);
+        pdf.setFont('helvetica', 'normal');
+        const dateTimeStr = new Date(reportData.signature.dateTime).toLocaleString('en-ZA', {
+          dateStyle: 'medium',
+          timeStyle: 'short'
+        });
+        pdf.text(dateTimeStr, margin + 22, y);
+        y += 5;
+      }
+    }
+    
     // FOOTER - Always at bottom
     const footerY = pageHeight - 18;
     pdf.setDrawColor(128, 128, 128);
@@ -355,9 +457,9 @@ export const generateFinalPDF = async (
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(100, 100, 100);
     
-    pdf.text('Dr. Mbulelo Renene - Specialist Surgeon', pageWidth / 2, footerY + 2, { align: 'center' });
-    pdf.text('Practice Number: 0263133', pageWidth / 2, footerY + 6, { align: 'center' });
-    pdf.text(`Report Date: ${new Date().toLocaleDateString('en-ZA')} | Page 1 of 1`, pageWidth / 2, footerY + 10, { align: 'center' });
+    pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY + 2, { align: 'center' });
+    pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 6, { align: 'center' });
+    pdf.text(`Report Date: ${formatDateOnly(new Date())} | Page 1 of 1`, pageWidth / 2, footerY + 10, { align: 'center' });
     
     // Save with unique timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
