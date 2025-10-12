@@ -76,17 +76,17 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
 
   const drawPort = (ctx: CanvasRenderingContext2D, mark: PortMarking) => {
     ctx.save();
-    ctx.font = 'bold 14px Arial';
+    ctx.font = 'bold 10px Arial';
     ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(mark.size, mark.x, mark.y - 5);
+    ctx.fillText(mark.size, mark.x, mark.y - 3);
 
     ctx.beginPath();
-    ctx.moveTo(mark.x - 15, mark.y);
-    ctx.lineTo(mark.x + 15, mark.y);
+    ctx.moveTo(mark.x - 10, mark.y);
+    ctx.lineTo(mark.x + 10, mark.y);
     ctx.strokeStyle = 'black';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
   };
@@ -102,7 +102,7 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
       ctx.stroke();
     } else {
       ctx.beginPath();
-      ctx.arc(mark.x, mark.y, 25, 0, 2 * Math.PI);
+      ctx.arc(mark.x, mark.y, 15, 0, 2 * Math.PI);
       ctx.strokeStyle = '#16a34a'; // Green
       ctx.lineWidth = 4;
       ctx.setLineDash([]);

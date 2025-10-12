@@ -28,23 +28,23 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
       // Draw all markings
       markings.forEach((marking) => {
         if (marking.type === 'port') {
-          // Draw port marking: black line with size label
+          // Draw port marking: black line with size label (smaller)
           ctx.save();
-          ctx.font = 'bold 14px Arial';
+          ctx.font = 'bold 10px Arial';  // Reduced from 14px
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 5);
+          ctx.fillText(marking.size, marking.x, marking.y - 3);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 15, marking.y);
-          ctx.lineTo(marking.x + 15, marking.y);
+          ctx.moveTo(marking.x - 10, marking.y);  // Reduced from 15
+          ctx.lineTo(marking.x + 10, marking.y);   // Reduced from 15
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 2;  // Reduced from 4
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
-          // Draw stoma marking
+          // Draw stoma marking (same size for both types)
           ctx.save();
           if (marking.stomaType === 'ileostomy') {
             ctx.beginPath();
@@ -53,11 +53,11 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 3]); // Dashed line
             ctx.stroke();
-          } else { // colostomy
+          } else { // colostomy - same size as ileostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 25, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);  // Changed from 25 to 15
             ctx.strokeStyle = '#16a34a'; // Green
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3;  // Reduced from 4
             ctx.setLineDash([]); // Continuous line
             ctx.stroke();
           }
@@ -167,11 +167,16 @@ export const generateVentralHerniaPDF = async (
     y += 3.5;
     pdf.text('Cell: 082 417 2630', margin, y);
     
-    // CENTER COLUMN - Report Title
-    let centerY = headerStartY;
+    // CENTER COLUMN - Report Title (positioned inline with Cell: 082 417 2630)
+    let centerY = headerStartY + 17.5; // Position inline with Cell: line
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.text('VENTRAL HERNIA REPAIR REPORT', pageWidth / 2, centerY, { align: 'center' });
+    
+    // Add underline for title
+    const titleWidth = pdf.getTextWidth('VENTRAL HERNIA REPAIR REPORT');
+    const titleX = (pageWidth - titleWidth) / 2;
+    pdf.line(titleX, centerY + 1, titleX + titleWidth, centerY + 1);
     
     // RIGHT COLUMN - Practice Address
     let rightY = headerStartY;
@@ -345,6 +350,26 @@ export const generateVentralHerniaPDF = async (
         if (procedure.defectClosed) {
           pdf.text(`Hernia Defect Closed: ${procedure.defectClosed}`, margin, y);
           y += 5;
+          
+          // Closure Technique (if Yes)
+          if (procedure.defectClosed === 'Yes' && procedure.closureTechnique?.length > 0) {
+            pdf.text(`Closure Technique: ${procedure.closureTechnique.join(', ')}`, margin + 10, y);
+            y += 5;
+            if (procedure.closureTechnique.includes('Other') && procedure.closureTechniqueOther) {
+              pdf.text(`Other Technique: ${procedure.closureTechniqueOther}`, margin + 15, y);
+              y += 5;
+            }
+            
+            // Material Used for Closure
+            if (procedure.closureMaterial?.length > 0) {
+              pdf.text(`Material Used: ${procedure.closureMaterial.join(', ')}`, margin + 10, y);
+              y += 5;
+              if (procedure.closureMaterial.includes('Other') && procedure.closureMaterialOther) {
+                pdf.text(`Other Material: ${procedure.closureMaterialOther}`, margin + 15, y);
+                y += 5;
+              }
+            }
+          }
         }
         
         if (procedure.repairType) {
@@ -356,10 +381,22 @@ export const generateVentralHerniaPDF = async (
         if (procedure.meshType?.length > 0) {
           pdf.text(`Mesh Details:`, margin, y);
           y += 5;
-          pdf.text(`• Type: ${procedure.meshType.join(', ')}`, margin + 10, y);
+          let meshTypesText = procedure.meshType.map((type) => {
+            if (type === 'Other' && procedure.meshPlacementOther) {
+              return `Other: ${procedure.meshPlacementOther}`;
+            }
+            return type;
+          }).join(', ');
+          pdf.text(`• Mesh Placement: ${meshTypesText}`, margin + 10, y);
           y += 5;
           if (procedure.meshMaterial?.length > 0) {
-            pdf.text(`• Material: ${procedure.meshMaterial.join(', ')}`, margin + 10, y);
+            let meshMaterialsText = procedure.meshMaterial.map((material) => {
+              if (material === 'Other' && procedure.meshMaterialOther) {
+                return `Other: ${procedure.meshMaterialOther}`;
+              }
+              return material;
+            }).join(', ');
+            pdf.text(`• Material: ${meshMaterialsText}`, margin + 10, y);
             y += 5;
           }
           if (procedure.meshLength || procedure.meshWidth) {
@@ -386,14 +423,28 @@ export const generateVentralHerniaPDF = async (
           }
         }
         
+        // Intra-Operative Difficulty
+        if (procedure.intraOperativeDifficulty?.length > 0) {
+          let difficultyText = procedure.intraOperativeDifficulty.map((difficulty) => {
+            if (difficulty === 'Other' && procedure.intraOperativeDifficultyOther) {
+              return `Other: ${procedure.intraOperativeDifficultyOther}`;
+            }
+            return difficulty;
+          }).join(', ');
+          pdf.text(`Intra-Operative Difficulty: ${difficultyText}`, margin, y);
+          y += 5;
+        }
+        
         // Complications
         if (procedure.complications?.length > 0) {
-          pdf.text(`Intraoperative Complications: ${procedure.complications.join(', ')}`, margin, y);
+          let complicationsText = procedure.complications.map((comp) => {
+            if (comp === 'Other' && procedure.complicationOther) {
+              return `Other: ${procedure.complicationOther}`;
+            }
+            return comp;
+          }).join(', ');
+          pdf.text(`Intraoperative Complications: ${complicationsText}`, margin, y);
           y += 5;
-          if (procedure.complications.includes('Other') && procedure.complicationOther) {
-            pdf.text(`Other Complications: ${procedure.complicationOther}`, margin + 10, y);
-            y += 5;
-          }
         }
         
         y += 5;
@@ -418,14 +469,52 @@ export const generateVentralHerniaPDF = async (
         y += 5;
       }
       
-      if (closure.fascialClosure?.length > 0) {
-        pdf.text(`Fascial Closure: ${closure.fascialClosure.join(', ')}`, margin, y);
+      // Fascial Closure (now from procedure object)
+      if (procedure.fascialClosure?.length > 0) {
+        let fascialClosureText = procedure.fascialClosure.map((closure) => {
+          if (closure === 'Other' && procedure.fascialClosureOther) {
+            return `Other: ${procedure.fascialClosureOther}`;
+          }
+          return closure;
+        }).join(', ');
+        pdf.text(`Fascial Closure: ${fascialClosureText}`, margin, y);
         y += 5;
+        
+        // Material Used for Fascial Closure
+        if (procedure.fascialClosureMaterial?.length > 0) {
+          let fascialMaterialText = procedure.fascialClosureMaterial.map((material) => {
+            if (material === 'Other' && procedure.fascialClosureMaterialOther) {
+              return `Other: ${procedure.fascialClosureMaterialOther}`;
+            }
+            return material;
+          }).join(', ');
+          pdf.text(`Material Used: ${fascialMaterialText}`, margin + 10, y);
+          y += 5;
+        }
       }
       
-      if (closure.skinClosure?.length > 0) {
-        pdf.text(`Skin Closure: ${closure.skinClosure.join(', ')}`, margin, y);
+      // Skin Closure (now from procedure object)
+      if (procedure.skinClosure?.length > 0) {
+        let skinClosureText = procedure.skinClosure.map((closure) => {
+          if (closure === 'Other' && procedure.skinClosureOther) {
+            return `Other: ${procedure.skinClosureOther}`;
+          }
+          return closure;
+        }).join(', ');
+        pdf.text(`Skin Closure: ${skinClosureText}`, margin, y);
         y += 5;
+        
+        // Material Used for Skin Closure
+        if (procedure.skinClosureMaterial?.length > 0) {
+          let skinMaterialText = procedure.skinClosureMaterial.map((material) => {
+            if (material === 'Other' && procedure.skinClosureMaterialOther) {
+              return `Other: ${procedure.skinClosureMaterialOther}`;
+            }
+            return material;
+          }).join(', ');
+          pdf.text(`Material Used: ${skinMaterialText}`, margin + 10, y);
+          y += 5;
+        }
       }
       
       if (closure.specimenSent?.length > 0) {
@@ -512,8 +601,8 @@ export const generateVentralHerniaPDF = async (
         pdf.setFontSize(8);
         const legendItems = [
           '• Ports: Black horizontal lines with size labels',
-          '• Ileostomy: Dashed yellow/gold circles (smaller)',
-          '• Colostomy: Solid green circles (larger)', 
+          '• Ileostomy: Dashed yellow/gold circles',
+          '• Colostomy: Solid green circles', 
           '• Incisions: Dashed dark red lines'
         ];
         
@@ -535,9 +624,9 @@ export const generateVentralHerniaPDF = async (
         const img = new Image();
         img.src = diagramImageData;
         
-        // Use similar proportions as live report (300px max height)
-        const maxWidth = pageWidth - (margin * 2);
-        const maxHeight = 120; // Increased from 60 to 120mm for better visibility
+        // Make diagram smaller for PDF
+        const maxWidth = (pageWidth - (margin * 2)) * 0.5; // Use 50% of page width
+        const maxHeight = 60; // Reduced to make it more compact
         
         // Calculate proper aspect ratio
         let width = maxWidth;

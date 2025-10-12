@@ -22,8 +22,9 @@ interface AppendectomyReportPreviewProps {
       };
       preoperative: {
         surgeons: string[];
-        assistant1: string;
-        assistant2: string;
+        assistants?: string[];
+        assistant1?: string;
+        assistant2?: string;
         anaesthetist: string;
         duration: string;
         indication: string[];
@@ -39,6 +40,8 @@ interface AppendectomyReportPreviewProps {
       };
       procedure: {
         approach: string[];
+        reasonForConversion?: string;
+        operationDescription?: string;
         incisionType: string[];
         incisionOther: string;
         trocarPlacement: string;
@@ -51,11 +54,20 @@ interface AppendectomyReportPreviewProps {
         drainLocation: string;
       };
       closure: {
-        fascialClosure: string;
+        fascialClosure: string | string[];
+        fascialClosureOther?: string;
+        fascialMaterial?: string[];
+        fascialMaterialOther?: string;
         skinClosure: string[];
         skinOther: string;
-        complications: string;
-        complicationDetails: string;
+        skinMaterial?: string[];
+        skinMaterialOther?: string;
+        operativeDifficulty?: string[];
+        operativeDifficultyOther?: string;
+        complications: string | string[];
+        complicationDetails?: string;
+        visceralInjuryDetail?: string;
+        complicationOther?: string;
         pathology: string;
         otherSpecimens: string;
         specimenDetails: string;
@@ -95,17 +107,17 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
         if (marking.type === 'port') {
           // Draw port marking: black line with size label
           ctx.save();
-          ctx.font = 'bold 14px Arial';
+          ctx.font = 'bold 10px Arial';
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 5);
+          ctx.fillText(marking.size, marking.x, marking.y - 3);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 15, marking.y);
-          ctx.lineTo(marking.x + 15, marking.y);
+          ctx.moveTo(marking.x - 10, marking.y);
+          ctx.lineTo(marking.x + 10, marking.y);
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 2;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
@@ -120,7 +132,7 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
             ctx.stroke();
           } else { // colostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 25, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
             ctx.strokeStyle = '#16a34a'; // Green
             ctx.lineWidth = 4;
             ctx.setLineDash([]); // Continuous line
@@ -186,6 +198,8 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
     appendectomy.intraoperative.peritonitis.length > 0 ||
     appendectomy.intraoperative.otherFindings ||
     appendectomy.procedure.approach.length > 0 ||
+    appendectomy.procedure.reasonForConversion ||
+    appendectomy.procedure.operationDescription ||
     appendectomy.procedure.incisionType.length > 0 ||
     appendectomy.procedure.trocarPlacement ||
     appendectomy.procedure.divisionMethod.length > 0 ||
@@ -197,6 +211,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
     appendectomy.patientInfo.age ||
     appendectomy.patientInfo.sex ||
     appendectomy.patientInfo.bmi ||
+    appendectomy.preoperative.assistants?.some(a => a.trim()) ||
     appendectomy.preoperative.assistant1 ||
     appendectomy.preoperative.assistant2 ||
     appendectomy.preoperative.anaesthetist ||
@@ -235,7 +250,8 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             
             {/* Center Column - Report Title */}
             <div className="text-center space-y-2">
-              <h4 className="text-sm font-bold">APPENDECTOMY - SYNOPTIC OPERATIVE REPORT</h4>
+              <h4 className="text-base font-bold underline">Appendicectomy</h4>
+            <p className="text-sm font-bold mt-2">APPENDECTOMY REPORT</p>
               <p className="text-xs">
                 Generated: {formatDateWithSuffix(new Date())}
               </p>
@@ -298,7 +314,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         )}
         
         {/* Preoperative Information */}
-        {(appendectomy.preoperative.surgeons?.some(s => s.trim()) || appendectomy.preoperative.assistant1 || appendectomy.preoperative.anaesthetist || appendectomy.preoperative.duration) && (
+        {(appendectomy.preoperative.surgeons?.some(s => s.trim()) || appendectomy.preoperative.assistants?.some(a => a.trim()) || appendectomy.preoperative.assistant1 || appendectomy.preoperative.anaesthetist || appendectomy.preoperative.duration) && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Preoperative Information</h5>
             {appendectomy.preoperative.surgeons?.some(s => s.trim()) && (
@@ -306,15 +322,23 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
                 <span className="font-medium">Surgeon:</span> {appendectomy.preoperative.surgeons.filter(s => s.trim()).join(', ')}
               </p>
             )}
-            {appendectomy.preoperative.assistant1 && (
+            {appendectomy.preoperative.assistants?.some(a => a.trim()) ? (
               <p className="text-xs text-gray-700">
-                <span className="font-medium">Assistant 1:</span> {appendectomy.preoperative.assistant1}
+                <span className="font-medium">Assistant:</span> {appendectomy.preoperative.assistants.filter(a => a.trim()).join(', ')}
               </p>
-            )}
-            {appendectomy.preoperative.assistant2 && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Assistant 2:</span> {appendectomy.preoperative.assistant2}
-              </p>
+            ) : (
+              <>
+                {appendectomy.preoperative.assistant1 && (
+                  <p className="text-xs text-gray-700">
+                    <span className="font-medium">Assistant 1:</span> {appendectomy.preoperative.assistant1}
+                  </p>
+                )}
+                {appendectomy.preoperative.assistant2 && (
+                  <p className="text-xs text-gray-700">
+                    <span className="font-medium">Assistant 2:</span> {appendectomy.preoperative.assistant2}
+                  </p>
+                )}
+              </>
             )}
             {appendectomy.preoperative.anaesthetist && (
               <p className="text-xs text-gray-700">
@@ -420,6 +444,13 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
                 </Badge>
               ))}
             </div>
+            {appendectomy.procedure.approach.includes('Converted from Laparoscopic to Open') && appendectomy.procedure.reasonForConversion && (
+              <div className="mt-2">
+                <p className="text-xs text-gray-700">
+                  <span className="font-medium">Reason for Conversion:</span> {appendectomy.procedure.reasonForConversion}
+                </p>
+              </div>
+            )}
           </div>
         )}
         
@@ -449,10 +480,20 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
           </div>
         )}
         
+        {/* Operation Description */}
+        {appendectomy.procedure.operationDescription && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Operation Description</h5>
+            <p className="text-xs text-gray-700 whitespace-pre-wrap">
+              {appendectomy.procedure.operationDescription}
+            </p>
+          </div>
+        )}
+        
         {/* Method of Appendiceal Division */}
         {appendectomy.procedure.divisionMethod.length > 0 && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Method of Appendiceal Division</h5>
+            <h5 className="text-xs font-medium text-gray-600">Method of Appendiceal Ligation</h5>
             <div className="flex flex-wrap gap-1">
               {appendectomy.procedure.divisionMethod.map((method, index) => (
                 <Badge key={index} variant="secondary" className="text-xs">
@@ -468,7 +509,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         {/* Mesentery Control */}
         {appendectomy.procedure.mesenteryControl.length > 0 && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Mesentery Control</h5>
+            <h5 className="text-xs font-medium text-gray-600">Method of Appendiceal Vessel Ligation</h5>
             <div className="flex flex-wrap gap-1">
               {appendectomy.procedure.mesenteryControl.map((control, index) => (
                 <Badge key={index} variant="outline" className="text-xs">
@@ -506,9 +547,23 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         {appendectomy.closure.fascialClosure && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Fascial Closure</h5>
-            <p className="text-xs text-gray-700">
-              <span className="font-medium">Fascial Closure:</span> {appendectomy.closure.fascialClosure}
-            </p>
+            <div className="flex flex-wrap gap-1">
+              {(Array.isArray(appendectomy.closure.fascialClosure) ? appendectomy.closure.fascialClosure : [appendectomy.closure.fascialClosure]).map((closure, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {closure === 'Other' && appendectomy.closure.fascialClosureOther 
+                    ? `Other: ${appendectomy.closure.fascialClosureOther}` 
+                    : closure}
+                </Badge>
+              ))}
+            </div>
+            {appendectomy.closure.fascialMaterial && appendectomy.closure.fascialMaterial.length > 0 && (
+              <div className="mt-1">
+                <span className="text-xs font-medium">Material Used: </span>
+                <span className="text-xs">{appendectomy.closure.fascialMaterial.map((mat, idx) => 
+                  mat === 'Other' && appendectomy.closure.fascialMaterialOther ? appendectomy.closure.fascialMaterialOther : mat
+                ).join(', ')}</span>
+              </div>
+            )}
           </div>
         )}
         
@@ -525,17 +580,48 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
                 </Badge>
               ))}
             </div>
+            {appendectomy.closure.skinMaterial && appendectomy.closure.skinMaterial.length > 0 && (
+              <div className="mt-1">
+                <span className="text-xs font-medium">Material Used: </span>
+                <span className="text-xs">{appendectomy.closure.skinMaterial.map((mat, idx) => 
+                  mat === 'Other' && appendectomy.closure.skinMaterialOther ? appendectomy.closure.skinMaterialOther : mat
+                ).join(', ')}</span>
+              </div>
+            )}
           </div>
         )}
         
-        {/* Intraoperative Complications */}
+        {/* Intra-Operative Difficulty */}
+        {appendectomy.closure.operativeDifficulty && appendectomy.closure.operativeDifficulty.length > 0 && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Intra-Operative Difficulty</h5>
+            <div className="flex flex-wrap gap-1">
+              {appendectomy.closure.operativeDifficulty.map((difficulty, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {difficulty === 'Other' && appendectomy.closure.operativeDifficultyOther 
+                    ? `Other: ${appendectomy.closure.operativeDifficultyOther}` 
+                    : difficulty}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Intra-Operative Complications */}
         {appendectomy.closure.complications && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Intraoperative Complications</h5>
-            <p className="text-xs text-gray-700">
-              <span className="font-medium">Complications:</span> {appendectomy.closure.complications}
-              {appendectomy.closure.complicationDetails && ` - ${appendectomy.closure.complicationDetails}`}
-            </p>
+            <h5 className="text-xs font-medium text-gray-600">Intra-Operative Complications</h5>
+            <div className="flex flex-wrap gap-1">
+              {(Array.isArray(appendectomy.closure.complications) ? appendectomy.closure.complications : [appendectomy.closure.complications]).map((complication, index) => (
+                <Badge key={index} variant="destructive" className="text-xs">
+                  {complication === 'Visceral Injury' && appendectomy.closure.visceralInjuryDetail 
+                    ? `Visceral Injury: ${appendectomy.closure.visceralInjuryDetail}` 
+                    : complication === 'Other' && appendectomy.closure.complicationOther
+                    ? `Other: ${appendectomy.closure.complicationOther}`
+                    : complication}
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
         
@@ -594,7 +680,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
               if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
                 return (
                   <div className="space-y-2">
-                    <h5 className="text-xs font-medium text-gray-600">Surgical Procedure Diagram</h5>
+                    <h5 className="text-xs font-medium text-gray-600">Port Sites and Incisions</h5>
                     
                     {/* Legend/Key */}
                     <div className="bg-gray-50 p-3 rounded border text-xs">

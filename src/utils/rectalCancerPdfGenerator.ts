@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateWithSuffix, formatReportDate, formatDateOnly } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
+import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
 
 // Function to create surgical diagram canvas with markings
 const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | null> => {
@@ -96,6 +97,9 @@ export const generateRectalCancerPDF = async (
   try {
     console.log('=== GENERATING RECTAL CANCER PDF ===');
     console.log('Rectal cancer data received:', rectalCancerData);
+    
+    // Map new structure to old structure for backward compatibility
+    const mappedData = mapNewStructureToOld(rectalCancerData);
     
     const pdf = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = 210;
@@ -198,9 +202,9 @@ export const generateRectalCancerPDF = async (
       const details = [
         `Patient Name: ${patientInfo?.name || patientName || 'Not specified'}`,
         `Patient ID: ${patientInfo?.patientId || patientId || 'N/A'}`,
-        `Date: ${rectalCancerData?.caseIdentification?.date || rectalCancerData?.section1?.date || 'Not specified'}`,
-        `Surgeon: ${rectalCancerData?.caseIdentification?.surgeon || rectalCancerData?.section1?.surgeons?.[0] || 'Not specified'}`,
-        `Assistant: ${rectalCancerData?.caseIdentification?.assistant || rectalCancerData?.section1?.assistant1 || 'Not specified'}`
+        `Date: ${mappedData?.caseIdentification?.date || rectalCancerData?.section1?.date || 'Not specified'}`,
+        `Surgeon: ${mappedData?.caseIdentification?.surgeon || rectalCancerData?.section1?.surgeons?.[0] || 'Not specified'}`,
+        `Assistant: ${mappedData?.caseIdentification?.assistant || rectalCancerData?.section1?.assistant1 || 'Not specified'}`
       ];
       
       details.forEach((detail, index) => {
@@ -241,90 +245,192 @@ export const generateRectalCancerPDF = async (
       y += 5;
     });
     
-    // Preoperative Details
-    drawSection('PREOPERATIVE DETAILS', () => {
-      const preop = rectalCancerData?.preoperativeDetails || {};
-      const lines = [
-        `Indication: ${preop.indication?.join(', ') || rectalCancerData?.section1?.indication?.join(', ') || 'Not specified'}`,
-        `Tumor Location: ${preop.tumorLocation || 'Not specified'}`,
-        `Preoperative Staging: T${preop.preoperativeStaging?.tStage || 'x'} N${preop.preoperativeStaging?.nStage || 'x'} M${preop.preoperativeStaging?.mStage || 'x'}`,
-        `Neoadjuvant Therapy: ${preop.neoadjuvantTherapy || 'Not specified'}`,
-      ];
-      
-      if (preop.neoadjuvantTherapy === 'Yes') {
-        if (preop.radiationDetails) {
-          lines.push(`Radiation Details: ${preop.radiationDetails}`);
+    // Surgical Diagram (if available)
+    if (diagrams && diagrams.length > 0) {
+      checkPageBreak(100);
+      drawSection('SURGICAL DIAGRAM', () => {
+        // Create the surgical diagram with markings
+        createSurgicalDiagramCanvas(diagrams).then(diagramDataUrl => {
+          if (diagramDataUrl) {
+            const imgWidth = 120;
+            const imgHeight = 90;
+            const imgX = (pageWidth - imgWidth) / 2;
+            pdf.addImage(diagramDataUrl, 'PNG', imgX, y, imgWidth, imgHeight);
+            y += imgHeight + 10;
+          }
+        });
+        
+        // Add markings legend if present
+        const hasMarkings = diagrams.some(d => d.type);
+        if (hasMarkings) {
+          pdf.setFontSize(9);
+          pdf.text('Markings:', margin, y);
+          y += 5;
+          
+          const legendItems = [
+            { type: 'port', label: 'Port Sites' },
+            { type: 'stoma', label: 'Stoma Sites' },
+            { type: 'incision', label: 'Incisions' }
+          ];
+          
+          legendItems.forEach(item => {
+            if (diagrams.some(d => d.type === item.type)) {
+              pdf.text(`• ${item.label}`, margin + 5, y);
+              y += 4;
+            }
+          });
+          
+          pdf.setFontSize(10);
+          y += 5;
         }
-        if (preop.chemotherapyRegimen) {
-          lines.push(`Chemotherapy Regimen: ${preop.chemotherapyRegimen}`);
-        }
-      }
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        pdf.text(line, margin, y);
-        y += 5;
       });
-      y += 5;
+    }
+    
+    // Add separator line
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+    
+    // Two-column layout starts here
+    checkPageBreak(80);
+    const startY = y;
+    const columnWidth = (pageWidth - 3 * margin) / 2;
+    const leftColumnX = margin;
+    const rightColumnX = margin + columnWidth + margin;
+    
+    // LEFT COLUMN - Preoperative & Surgical Details
+    let leftY = startY;
+    
+    // Preoperative Details
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PREOPERATIVE DETAILS', leftColumnX, leftY);
+    leftY += 7;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    
+    const preop = mappedData?.preoperativeDetails || {};
+    const preopLines = [
+      `Indication: ${preop.indication?.join(', ') || rectalCancerData?.section1?.indication?.join(', ') || 'Not specified'}`,
+      `Tumor Location: ${preop.tumorLocation || 'Not specified'}`,
+      `Staging: T${preop.preoperativeStaging?.tStage || 'x'}N${preop.preoperativeStaging?.nStage || 'x'}M${preop.preoperativeStaging?.mStage || 'x'}`,
+      `Neoadjuvant Therapy: ${preop.neoadjuvantTherapy || 'Not specified'}`,
+    ];
+    
+    if (preop.neoadjuvantTherapy === 'Yes') {
+      if (preop.radiationDetails) {
+        preopLines.push(`Radiation: ${preop.radiationDetails}`);
+      }
+      if (preop.chemotherapyRegimen) {
+        preopLines.push(`Chemotherapy: ${preop.chemotherapyRegimen}`);
+      }
+    }
+    
+    preopLines.forEach(line => {
+      const splitLines = pdf.splitTextToSize(line, columnWidth);
+      splitLines.forEach((splitLine: string) => {
+        pdf.text(splitLine, leftColumnX, leftY);
+        leftY += 5;
+      });
     });
     
-    // Surgical Approach  
-    drawSection('SURGICAL APPROACH', () => {
-      const approach = rectalCancerData?.surgicalApproach || {};
-      const lines = [
-        `Approach: ${approach.approach || rectalCancerData?.section2?.approach?.join(', ') || 'Not specified'}`,
-        `Conversion to Open: ${approach.conversionToOpen || 'No'}`,
-        `Resection Type: ${approach.resectionType || 'Not specified'}`,
-      ];
-      
-      if (approach.conversionToOpen === 'Yes' && approach.conversionReason) {
-        lines.push(`Conversion Reason: ${approach.conversionReason.join(', ')}`);
-        if (approach.conversionReasonOther) {
-          lines.push(`Other Reason: ${approach.conversionReasonOther}`);
-        }
+    leftY += 5;
+    
+    // Surgical Approach (left column)
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SURGICAL APPROACH', leftColumnX, leftY);
+    leftY += 7;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    
+    const approach = mappedData?.surgicalApproach || {};
+    const approachLines = [
+      `Approach: ${approach.approach || rectalCancerData?.section2?.approach?.join(', ') || 'Not specified'}`,
+      `Resection Type: ${approach.resectionType || 'Not specified'}`,
+    ];
+    
+    if (approach.conversionToOpen === 'Yes') {
+      approachLines.push(`Converted to Open: Yes`);
+      if (approach.conversionReason) {
+        approachLines.push(`Reason: ${approach.conversionReason.join(', ')}`);
       }
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        pdf.text(line, margin, y);
-        y += 5;
+    }
+    
+    approachLines.forEach(line => {
+      const splitLines = pdf.splitTextToSize(line, columnWidth);
+      splitLines.forEach((splitLine: string) => {
+        pdf.text(splitLine, leftColumnX, leftY);
+        leftY += 5;
       });
-      y += 5;
     });
+    
+    // RIGHT COLUMN - Intraoperative Findings & Resection Details
+    let rightY1 = startY;
     
     // Intraoperative Findings
-    drawSection('INTRAOPERATIVE FINDINGS', () => {
-      const findings = rectalCancerData?.intraoperativeFindings || {};
-      const lines = [
-        `Tumor Site: ${findings.tumorSite || 'Not specified'}`,
-        `Distance from Anal Verge: ${findings.distanceFromAnalVerge ? findings.distanceFromAnalVerge + ' cm' : 'Not specified'}`,
-        `Fixation: ${findings.fixation || 'Not specified'}`,
-        `Invasion to Adjacent Organs: ${findings.invasionToAdjacentOrgans || 'Not specified'}`,
-      ];
-      
-      if (findings.invasionToAdjacentOrgans === 'Yes' && findings.adjacentOrgansInvolved) {
-        lines.push(`Organs Involved: ${findings.adjacentOrgansInvolved.join(', ')}`);
-      }
-      
-      lines.push(`Peritoneal Deposits: ${findings.peritonealDeposits || 'Not specified'}`);
-      lines.push(`Liver Metastasis: ${findings.liverMetastasis || 'Not specified'}`);
-      
-      if ((findings.peritonealDeposits === 'Yes' || findings.liverMetastasis === 'Yes') && findings.metastasisOrgans) {
-        lines.push(`Metastasis to: ${findings.metastasisOrgans.join(', ')}`);
-        lines.push(`Biopsy Taken: ${findings.biopsyTaken || 'Not specified'}`);
-      }
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        pdf.text(line, margin, y);
-        y += 5;
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('INTRAOPERATIVE FINDINGS', rightColumnX, rightY1);
+    rightY1 += 7;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    
+    const findings = mappedData?.intraoperativeFindings || {};
+    const findingsLines = [
+      `Tumor Site: ${findings.tumorSite || 'Not specified'}`,
+      `Distance from AV: ${findings.distanceFromAnalVerge ? findings.distanceFromAnalVerge + ' cm' : 'N/S'}`,
+      `Fixation: ${findings.fixation || 'Not specified'}`,
+      `Adjacent Organ Invasion: ${findings.invasionToAdjacentOrgans || 'No'}`,
+    ];
+    
+    if (findings.invasionToAdjacentOrgans === 'Yes' && findings.adjacentOrgansInvolved) {
+      findingsLines.push(`Organs: ${findings.adjacentOrgansInvolved.join(', ')}`);
+    }
+    
+    findingsLines.forEach(line => {
+      const splitLines = pdf.splitTextToSize(line, columnWidth);
+      splitLines.forEach((splitLine: string) => {
+        pdf.text(splitLine, rightColumnX, rightY1);
+        rightY1 += 5;
       });
-      y += 5;
     });
     
-    // Resection Details
-    drawSection('RESECTION DETAILS', () => {
-      const resection = rectalCancerData?.resectionDetails || {};
+    rightY1 += 5;
+    
+    // Resection Details (right column)
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('RESECTION DETAILS', rightColumnX, rightY1);
+    rightY1 += 7;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    
+    const resection = mappedData?.resectionDetails || {};
+    const resectionLines = [
+      `Vessel Ligation: ${resection.vesselLigation || 'Not specified'}`,
+      `TME Quality: ${resection.mesorectalExcisionCompleteness || 'N/S'}`,
+      `Margins: D${resection.distalMargin || '?'}cm C${resection.circumferentialMargin || '?'}mm`,
+      `En Bloc: ${resection.enBlocResection || 'No'}`,
+    ];
+    
+    resectionLines.forEach(line => {
+      const splitLines = pdf.splitTextToSize(line, columnWidth);
+      splitLines.forEach((splitLine: string) => {
+        pdf.text(splitLine, rightColumnX, rightY1);
+        rightY1 += 5;
+      });
+    });
+    
+    // Move y position to after both columns
+    y = Math.max(leftY, rightY1) + 10;
+    
+    // Add separator line
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+    
+    // Reconstruction Details (full width)
+    drawSection('RECONSTRUCTION DETAILS', () => {
+      const resection = mappedData?.resectionDetails || {};
       const lines = [
         `Vessel Ligation: ${resection.vesselLigation || 'Not specified'}`,
         `Mesorectal Excision Completeness: ${resection.mesorectalExcisionCompleteness || 'Not specified'}`,
@@ -362,9 +468,9 @@ export const generateRectalCancerPDF = async (
     });
     
     // Perineal Details (for APR)
-    if (rectalCancerData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' && rectalCancerData?.perinealDetails) {
+    if (mappedData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' && mappedData?.perinealDetails) {
       drawSection('PERINEAL PHASE DETAILS', () => {
-        const perineal = rectalCancerData.perinealDetails;
+        const perineal = mappedData.perinealDetails;
         const lines = [
           `Perineal Wound Closure: ${perineal.perinealWoundClosure || 'Not specified'}`,
           `Drains: ${perineal.drains || 'Not specified'}`,
@@ -385,12 +491,12 @@ export const generateRectalCancerPDF = async (
     }
     
     // Stoma Details
-    if ((rectalCancerData?.resectionDetails?.anastomosisPerformed === 'No' || 
-         rectalCancerData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' ||
-         rectalCancerData?.surgicalApproach?.resectionType === 'Hartmann\'s Procedure') && 
-         rectalCancerData?.stomaDetails) {
+    if ((mappedData?.resectionDetails?.anastomosisPerformed === 'No' || 
+         mappedData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' ||
+         mappedData?.surgicalApproach?.resectionType === 'Hartmann\'s Procedure') && 
+         mappedData?.stomaDetails) {
       drawSection('STOMA DETAILS', () => {
-        const stoma = rectalCancerData.stomaDetails;
+        const stoma = mappedData.stomaDetails;
         const lines = [
           `Stoma Type: ${stoma.stomaType || 'Not specified'}`,
           `Stoma Location: ${stoma.stomaLocation || 'Not specified'}`,
@@ -411,7 +517,7 @@ export const generateRectalCancerPDF = async (
     
     // Specimen Handling
     drawSection('SPECIMEN HANDLING', () => {
-      const specimen = rectalCancerData?.specimenHandling || {};
+      const specimen = mappedData?.specimenHandling || {};
       const lines = [
         `Specimen Orientation: ${specimen.specimenOrientation || 'Not specified'}`,
         `Specimen Labelling: ${specimen.specimenLabelling || 'Not specified'}`,
@@ -434,7 +540,7 @@ export const generateRectalCancerPDF = async (
     
     // Postoperative Plan
     drawSection('POSTOPERATIVE PLAN', () => {
-      const postop = rectalCancerData?.postoperativePlan || {};
+      const postop = mappedData?.postoperativePlan || {};
       const lines = [
         `Destination: ${postop.destination || 'Not specified'}`,
         `Analgesia Type: ${postop.analgesiaType || 'Not specified'}`,
