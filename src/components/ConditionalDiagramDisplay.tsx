@@ -44,6 +44,7 @@ export const ConditionalDiagramDisplay = ({
   // Map of surgical procedures to their diagram images
   const surgicalProceduresMap: { [key: string]: string } = {
     "Appendectomy": appendectomyImage,
+    "Appendicectomy": appendectomyImage,
     "Ventral Hernia Repair": appendectomyImage,
     "Rectal Cancer Surgery": appendectomyImage,
   };
@@ -101,7 +102,7 @@ export const ConditionalDiagramDisplay = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Stethoscope className="h-5 w-5 text-gray-600" />
-            {activeSurgicalProcedureName} Diagram
+{activeSurgicalProcedureName === "Appendectomy" ? "Appendicectomy" : activeSurgicalProcedureName} Diagram
           </CardTitle>
           <CardDescription>
             Mark Ports, Stomas, and Incisions on the diagram below.

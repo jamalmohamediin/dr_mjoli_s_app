@@ -1,4 +1,4 @@
-const CACHE_NAME = 'endoscope-sa-v2';
+const CACHE_NAME = 'endoscope-sa-v4-' + Date.now();
 const urlsToCache = [
   '/',
   '/index.html',
@@ -39,6 +39,17 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  // Don't cache JavaScript files during development to prevent cache issues
+  const url = new URL(event.request.url);
+  const isJSFile = url.pathname.includes('.js') || url.pathname.includes('src/');
+  const isDevMode = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  
+  if (isJSFile && isDevMode) {
+    // Always fetch from network for JS files in development
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

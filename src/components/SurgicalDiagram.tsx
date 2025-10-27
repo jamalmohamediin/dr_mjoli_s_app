@@ -19,6 +19,11 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  
+  // Undo/Redo state - Initialize with empty array as first history entry
+  const [history, setHistory] = useState<SurgicalMarking[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [historyInitialized, setHistoryInitialized] = useState(false);
 
   const [portSize, setPortSize] = useState<'5mm' | '10/11mm' | '12mm' | '15mm'>('12mm');
   const [stomaType, setStomaType] = useState<'ileostomy' | 'colostomy'>('ileostomy');
@@ -56,6 +61,15 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
     });
   }, [markings]);
 
+  // Initialize history properly when component mounts
+  useEffect(() => {
+    if (!historyInitialized) {
+      setHistory([[]]);
+      setHistoryIndex(0);
+      setHistoryInitialized(true);
+    }
+  }, [historyInitialized]);
+
   useEffect(() => {
     const image = imageRef.current;
     const canvas = canvasRef.current;
@@ -74,17 +88,22 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
     }
   }, [diagramImage, drawMarkings]);
 
+  // Redraw markings whenever they change
+  useEffect(() => {
+    drawMarkings();
+  }, [drawMarkings]);
+
   const drawPort = (ctx: CanvasRenderingContext2D, mark: PortMarking) => {
     ctx.save();
-    ctx.font = 'bold 10px Arial';
+    ctx.font = 'bold 8px Arial';
     ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillText(mark.size, mark.x, mark.y - 3);
 
     ctx.beginPath();
-    ctx.moveTo(mark.x - 10, mark.y);
-    ctx.lineTo(mark.x + 10, mark.y);
+    ctx.moveTo(mark.x - 8, mark.y);
+    ctx.lineTo(mark.x + 8, mark.y);
     ctx.strokeStyle = 'black';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -160,6 +179,12 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
       const newMarkings = [...markings, newMarking];
       setMarkings(newMarkings);
       onUpdate(newMarkings);
+      
+      // Update history for undo/redo
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(newMarkings);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
     }
 
     setIsDrawing(false);
@@ -168,6 +193,26 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
 
   const toggleTool = (tool: Tool) => {
     setActiveTool(activeTool === tool ? null : tool);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const previousMarkings = history[newIndex];
+      setHistoryIndex(newIndex);
+      setMarkings(previousMarkings);
+      onUpdate(previousMarkings);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const nextMarkings = history[newIndex];
+      setHistoryIndex(newIndex);
+      setMarkings(nextMarkings);
+      onUpdate(nextMarkings);
+    }
   };
 
   return (
@@ -216,8 +261,8 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
         <Button onClick={() => toggleTool('incision')} variant={activeTool === 'incision' ? 'default' : 'outline'}>
           Access Incision
         </Button>
-        <Button variant="outline">Undo</Button>
-        <Button variant="outline">Redo</Button>
+        <Button variant="outline" onClick={handleUndo} disabled={historyIndex === 0}>Undo</Button>
+        <Button variant="outline" onClick={handleRedo} disabled={historyIndex === history.length - 1}>Redo</Button>
       </Card>
 
       <div className="relative border rounded-lg overflow-hidden" style={{ cursor: activeTool ? 'crosshair' : 'default' }}>

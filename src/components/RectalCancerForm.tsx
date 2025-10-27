@@ -5,18 +5,26 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList } from "lucide-react";
+import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo, Redo } from "lucide-react";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
-import { formatDateOnly } from "@/utils/dateFormatter";
+import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/utils/dateFormatter";
 
 interface RectalCancerFormProps {
   currentReport: any;
   updateRectalCancer: (section: string, field: string, value: any) => void;
+  onSave?: (section: string) => void;
+  onClear?: (section: string) => void;
+  onClearAll?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onExportPDF?: () => void;
+  diagramElement?: React.ReactNode;
 }
 
-export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCancerFormProps) => {
+export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, onClear, onClearAll, onUndo, onRedo, onExportPDF, diagramElement }: RectalCancerFormProps) => {
   const [expanded, setExpanded] = useState({
     basicData: true,
+    operativeFindings: true,
     surgicalApproach: true,
     mobilizationResection: true,
     reconstruction: true,
@@ -26,6 +34,11 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
   // Helper function to check if Rectum is selected
   const isRectumSelected = () => {
     return currentReport.rectalCancer?.operationType?.type?.includes('Rectum');
+  };
+
+  // Helper function to check if Colon is selected
+  const isColonSelected = () => {
+    return currentReport.rectalCancer?.operationType?.type?.includes('Colon');
   };
 
   // Helper function to check if neoadjuvant therapy is yes
@@ -38,34 +51,54 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
     return currentReport.rectalCancer?.surgicalApproach?.primaryApproach === 'Laparoscopic Converted To Open';
   };
 
+  // Helper function to check if trocar number should be shown
+  const shouldShowTrocarNumber = () => {
+    const approach = currentReport.rectalCancer?.surgicalApproach?.primaryApproach;
+    return approach === 'Laparoscopic' || approach === 'Laparoscopic Converted To Open' || approach === 'Robotic';
+  };
+
   // Helper function to check if anastomosis is selected
   const isAnastomosisSelected = () => {
-    return currentReport.rectalCancer?.reconstruction?.reconstructionType === 'ANASTOMOSIS';
+    const types = currentReport.rectalCancer?.reconstruction?.reconstructionType;
+    return Array.isArray(types) ? types.includes('Anastomosis') : types === 'Anastomosis';
   };
 
   // Helper function to check if stoma is selected
   const isStomaSelected = () => {
-    return currentReport.rectalCancer?.reconstruction?.reconstructionType === 'STOMA';
+    const types = currentReport.rectalCancer?.reconstruction?.reconstructionType;
+    return Array.isArray(types) ? types.includes('Stoma') : types === 'Stoma';
+  };
+
+  // Helper function to check if other reconstruction is selected
+  const isOtherReconstructionSelected = () => {
+    const types = currentReport.rectalCancer?.reconstruction?.reconstructionType;
+    return Array.isArray(types) ? types.includes('Other') : types === 'Other';
   };
 
   // Helper function to check if suture technique is selected
   const isSutureSelected = () => {
-    return currentReport.rectalCancer?.reconstruction?.anastomosisDetails?.technique === 'SUTURE';
+    return currentReport.rectalCancer?.reconstruction?.anastomosisDetails?.technique === 'Suture';
   };
 
   // Helper function to check if stapled technique is selected
   const isStapledSelected = () => {
-    return currentReport.rectalCancer?.reconstruction?.anastomosisDetails?.technique === 'STAPLED';
+    return currentReport.rectalCancer?.reconstruction?.anastomosisDetails?.technique === 'Stapled';
   };
 
   // Helper function to check if drain insertion is yes
   const isDrainInserted = () => {
-    return currentReport.rectalCancer?.operativeEvents?.drainInsertion === 'YES';
+    return currentReport.rectalCancer?.operativeEvents?.drainInsertion === 'Yes';
   };
 
   // Helper function to check if anal canal is selected for distal transection
   const isAnalCanalSelected = () => {
     return currentReport.rectalCancer?.mobilizationAndResection?.distalTransection === 'Anal Canal';
+  };
+
+  // Helper function to check if specimen extraction is not none
+  const isSpecimenExtractionNotNone = () => {
+    const extraction = currentReport.rectalCancer?.operativeEvents?.specimenExtraction;
+    return extraction && extraction !== 'None';
   };
 
   // Helper function to check if any fascial closure is selected
@@ -78,6 +111,51 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
     return currentReport.rectalCancer?.closure?.skinClosure?.length > 0;
   };
 
+  // Helper function to calculate duration in minutes between two times
+  const calculateDuration = (startTime: string, endTime: string): string => {
+    if (!startTime || !endTime) return '';
+    
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    let startMinutes = startHour * 60 + startMin;
+    let endMinutes = endHour * 60 + endMin;
+    
+    // Handle overnight procedures (end time is next day)
+    if (endMinutes < startMinutes) {
+      endMinutes += 24 * 60; // Add 24 hours in minutes
+    }
+    
+    const durationMinutes = endMinutes - startMinutes;
+    return durationMinutes.toString();
+  };
+
+  // Handle time changes with automatic duration calculation
+  const handleTimeChange = (timeField: 'startTime' | 'endTime', value: string) => {
+    // Update the time field first
+    updateRectalCancer('procedureDetails', timeField, value);
+    
+    // Get current values after update
+    const currentData = currentReport.rectalCancer?.procedureDetails || {};
+    const startTime = timeField === 'startTime' ? value : currentData.startTime;
+    const endTime = timeField === 'endTime' ? value : currentData.endTime;
+    
+    // Auto-calculate duration if both times are present
+    if (startTime && endTime) {
+      const calculatedDuration = calculateDuration(startTime, endTime);
+      if (calculatedDuration) {
+        updateRectalCancer('procedureDetails', 'duration', calculatedDuration);
+      }
+    }
+  };
+
+  // Helper function to check if material used section should be shown for skin closure
+  const shouldShowSkinMaterial = () => {
+    const skinClosures = currentReport.rectalCancer?.closure?.skinClosure || [];
+    const excludedClosures = ['Staples', 'Tissue Glue', 'Adhesive Strips'];
+    return skinClosures.some(closure => !excludedClosures.includes(closure));
+  };
+
   return (
     <div className="space-y-6">
       {/* SECTION I: Basic Data & Preoperative Assessment */}
@@ -86,17 +164,54 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
         onOpenChange={(open) => setExpanded(prev => ({ ...prev, basicData: open }))}
       >
         <Card className="glass-card-light">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-white/20 transition-colors">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-red-600" />
-                  SECTION I: Basic Data & Preoperative Assessment
-                </div>
-                {expanded.basicData ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <User className="h-5 w-5 text-red-600" />
+                    SECTION I: Basic Data & Preoperative Assessment
+                  </div>
+                  {expanded.basicData ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('rectalCancerSection1')}
+                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+                {onUndo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo className="h-4 w-4" />
+                    Undo
+                  </Button>
+                )}
+                {onRedo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRedo}
+                    className="flex items-center gap-1"
+                  >
+                    <Redo className="h-4 w-4" />
+                    Redo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
               {/* Patient Information */}
@@ -109,7 +224,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.name || ''}
                       onChange={(e) => updateRectalCancer('patientInfo', 'name', e.target.value)}
-                      placeholder="Enter patient name"
+                      placeholder="Enter Patient Name"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
@@ -118,7 +233,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.patientId || ''}
                       onChange={(e) => updateRectalCancer('patientInfo', 'patientId', e.target.value)}
-                      placeholder="Enter patient ID"
+                      placeholder="Enter Patient ID"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
@@ -131,7 +246,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       />
                       {currentReport.rectalCancer.patientInfo?.dateOfBirth && (
                         <p className="text-xs text-gray-500 mt-1">
-                          Display format: {formatDateOnly(currentReport.rectalCancer.patientInfo.dateOfBirth)}
+                          Display format: {formatDateDDMMYYYY(currentReport.rectalCancer.patientInfo.dateOfBirth)}
                         </p>
                       )}
                     </div>
@@ -141,23 +256,39 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                     <Input 
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.age || ''}
-                      placeholder="Calculated from date of birth"
+                      placeholder="Calculated from the Date Of Birth"
                       readOnly
                       className="bg-gray-100"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
                     <label className="text-gray-800 font-medium">Sex:</label>
-                    <select 
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                      value={currentReport.rectalCancer.patientInfo?.sex || ''}
-                      onChange={(e) => updateRectalCancer('patientInfo', 'sex', e.target.value)}
-                    >
-                      <option value="">Select sex</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
+                    <div className="space-y-2">
+                      <select 
+                        className="w-full p-2 border border-gray-300 rounded-md"
+                        value={currentReport.rectalCancer.patientInfo?.sex || ''}
+                        onChange={(e) => {
+                          updateRectalCancer('patientInfo', 'sex', e.target.value);
+                          if (e.target.value !== 'other') {
+                            updateRectalCancer('patientInfo', 'sexOther', '');
+                          }
+                        }}
+                      >
+                        <option value="">Select Sex</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other (Please Specify)</option>
+                      </select>
+                      {currentReport.rectalCancer.patientInfo?.sex === 'other' && (
+                        <Input
+                          type="text"
+                          value={currentReport.rectalCancer.patientInfo?.sexOther || ''}
+                          onChange={(e) => updateRectalCancer('patientInfo', 'sexOther', e.target.value)}
+                          placeholder="Please specify"
+                          className="w-full"
+                        />
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
                     <label className="text-gray-800 font-medium">Weight:</label>
@@ -165,7 +296,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.weight || ''}
                       onChange={(e) => updateRectalCancer('patientInfo', 'weight', e.target.value)}
-                      placeholder="Enter weight (kg)"
+                      placeholder="Enter Weight (Kg)"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
@@ -174,7 +305,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.height || ''}
                       onChange={(e) => updateRectalCancer('patientInfo', 'height', e.target.value)}
-                      placeholder="Enter height (cm)"
+                      placeholder="Enter Height (Cm)"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
@@ -182,7 +313,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                     <Input 
                       type="text" 
                       value={currentReport.rectalCancer.patientInfo?.bmi || ''}
-                      placeholder="Calculated from height and weight"
+                      placeholder="Calculated from Height and Weight"
                       readOnly
                       className="bg-gray-100"
                     />
@@ -304,12 +435,51 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
                     <label className="text-gray-800 font-medium">Anaesthetist:</label>
-                    <Input 
-                      type="text" 
-                      placeholder="Enter Anaesthetist name" 
-                      value={currentReport.rectalCancer?.surgicalTeam?.anaesthetist || ''}
-                      onChange={(e) => updateRectalCancer('surgicalTeam', 'anaesthetist', e.target.value)}
-                    />
+                    <div className="space-y-2">
+                      {(currentReport.rectalCancer?.surgicalTeam?.anaesthetists || ['']).map((anaesthetist, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input 
+                            type="text" 
+                            placeholder="Enter Anaesthetist Name" 
+                            className="flex-1" 
+                            value={anaesthetist}
+                            onChange={(e) => {
+                              const newAnaesthetists = [...(currentReport.rectalCancer?.surgicalTeam?.anaesthetists || [''])];
+                              newAnaesthetists[index] = e.target.value;
+                              updateRectalCancer('surgicalTeam', 'anaesthetists', newAnaesthetists);
+                            }}
+                          />
+                          {index === (currentReport.rectalCancer?.surgicalTeam?.anaesthetists || ['']).length - 1 && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs px-2 py-1"
+                              onClick={() => {
+                                const currentAnaesthetists = currentReport.rectalCancer?.surgicalTeam?.anaesthetists || [''];
+                                const newAnaesthetists = [...currentAnaesthetists, ''];
+                                updateRectalCancer('surgicalTeam', 'anaesthetists', newAnaesthetists);
+                              }}
+                            >
+                              +
+                            </Button>
+                          )}
+                          {(currentReport.rectalCancer?.surgicalTeam?.anaesthetists || ['']).length > 1 && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs px-2 py-1 text-red-600 hover:text-red-700"
+                              onClick={() => {
+                                const currentAnaesthetists = currentReport.rectalCancer?.surgicalTeam?.anaesthetists || [''];
+                                const newAnaesthetists = currentAnaesthetists.filter((_, i) => i !== index);
+                                updateRectalCancer('surgicalTeam', 'anaesthetists', newAnaesthetists);
+                              }}
+                            >
+                              −
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -318,19 +488,83 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-gray-800 mb-4">Procedure Details</h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Duration (minutes):</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Enter duration in minutes" 
-                      value={currentReport.rectalCancer?.procedureDetails?.duration || ''}
-                      onChange={(e) => updateRectalCancer('procedureDetails', 'duration', e.target.value)}
-                    />
+                  
+                  {/* Duration of Operation */}
+                  <div>
+                    <h4 className="text-gray-800 font-medium mb-3">Duration of Operation:</h4>
+                    <div className="grid grid-cols-3 gap-4 items-center">
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">Start Time:</label>
+                        <Input 
+                          type="time" 
+                          placeholder="__:__" 
+                          value={currentReport.rectalCancer?.procedureDetails?.startTime || ''}
+                          onChange={(e) => handleTimeChange('startTime', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">End Time:</label>
+                        <Input 
+                          type="time" 
+                          placeholder="__:__" 
+                          value={currentReport.rectalCancer?.procedureDetails?.endTime || ''}
+                          onChange={(e) => handleTimeChange('endTime', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">Total Duration (Mins):</label>
+                        <Input 
+                          type="number" 
+                          placeholder="Auto-calculated or enter manually" 
+                          value={currentReport.rectalCancer?.procedureDetails?.duration || ''}
+                          onChange={(e) => updateRectalCancer('procedureDetails', 'duration', e.target.value)}
+                        />
+                        {currentReport.rectalCancer?.procedureDetails?.startTime && 
+                         currentReport.rectalCancer?.procedureDetails?.endTime && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Auto-calculated from start/end times
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Preoperative Imaging */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
+                    <div className="flex flex-wrap gap-4 ml-4">
+                      {['None', 'Ultrasound', 'CT Scan', 'MRI', 'Other'].map(imaging => (
+                        <div className="flex items-center" key={`imaging-${imaging}`}>
+                          <Checkbox 
+                            id={`imaging-${imaging}`}
+                            checked={currentReport.rectalCancer?.procedureDetails?.preoperativeImaging?.includes(imaging) || false}
+                            onCheckedChange={(checked) => {
+                              const current = currentReport.rectalCancer?.procedureDetails?.preoperativeImaging || [];
+                              const updated = checked 
+                                ? [...current, imaging]
+                                : current.filter(i => i !== imaging);
+                              updateRectalCancer('procedureDetails', 'preoperativeImaging', updated);
+                            }}
+                          />
+                          <label htmlFor={`imaging-${imaging}`} className="ml-2 text-sm">{imaging}</label>
+                        </div>
+                      ))}
+                    </div>
+                    {currentReport.rectalCancer?.procedureDetails?.preoperativeImaging?.includes('Other') && (
+                      <div className="mt-3 ml-4">
+                        <Input 
+                          type="text" 
+                          placeholder="Specify other imaging" 
+                          value={currentReport.rectalCancer?.procedureDetails?.preoperativeImagingOther || ''}
+                          onChange={(e) => updateRectalCancer('procedureDetails', 'preoperativeImagingOther', e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
                     <div className="flex flex-wrap gap-4 ml-4">
-                      {['Emergency', 'Semi-emergency', 'Semi-elective', 'Elective'].map(urgency => (
+                      {['Emergency', 'Semi-Emergency', 'Semi - Elective', 'Elective'].map(urgency => (
                         <div className="flex items-center" key={`urgency-${urgency}`}>
                           <Checkbox 
                             id={`urgency-${urgency}`}
@@ -344,6 +578,51 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       ))}
                     </div>
                   </div>
+
+                  {/* Neoadjuvant Treatment */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Neoadjuvant Treatment:</p>
+                    <div className="flex gap-6 ml-4">
+                      {['Yes', 'No'].map(treatment => (
+                        <div className="flex items-center" key={`neoadjuvant-${treatment}`}>
+                          <Checkbox 
+                            id={`neoadjuvant-${treatment}`}
+                            checked={currentReport.rectalCancer?.operationType?.neoadjuvantTreatment === treatment}
+                            onCheckedChange={(checked) => {
+                              updateRectalCancer('operationType', 'neoadjuvantTreatment', checked ? treatment : '');
+                            }}
+                          />
+                          <label htmlFor={`neoadjuvant-${treatment}`} className="ml-2 text-sm">{treatment}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Conditional Neoadjuvant Details */}
+                  {isNeoadjuvantYes() && !isRectumSelected() && (
+                    <div className="mt-3 ml-4 space-y-3">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Radiation Details:</label>
+                        <Input 
+                          type="text" 
+                          placeholder="e.g., Long course chemoradiation 50.4 Gy in 28 fractions" 
+                          className="mt-1"
+                          value={currentReport.rectalCancer?.operationType?.radiationDetails || ''}
+                          onChange={(e) => updateRectalCancer('operationType', 'radiationDetails', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700">Chemotherapy Regimen:</label>
+                        <Input 
+                          type="text" 
+                          placeholder="e.g., Capecitabine, 5-FU" 
+                          className="mt-1"
+                          value={currentReport.rectalCancer?.operationType?.chemotherapyRegimen || ''}
+                          onChange={(e) => updateRectalCancer('operationType', 'chemotherapyRegimen', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -352,7 +631,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                 <h3 className="font-semibold text-gray-800 mb-4">Operation Type</h3>
                 <div className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Operation Type (PRIMARY BRANCH POINT):</p>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Operation Type:</p>
                     <div className="flex flex-wrap gap-6 ml-4">
                       {['Colon', 'Rectum'].map(operation => (
                         <div className="flex items-center" key={`operation-${operation}`}>
@@ -383,7 +662,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                           'Low Anterior Resection',
                           'Intersphincteric Resection',
                           'Abdominoperineal Resection',
-                          'Local excision',
+                          'Local Excision',
                           'Other'
                         ].map(rectumOp => (
                           <div className="flex items-center" key={`rectum-${rectumOp}`}>
@@ -414,50 +693,6 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                         </div>
                       )}
 
-                      {/* Neoadjuvant Treatment */}
-                      <div className="mt-4">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Neoadjuvant Treatment:</p>
-                        <div className="flex gap-6 ml-4">
-                          {['Yes', 'No'].map(treatment => (
-                            <div className="flex items-center" key={`neoadjuvant-${treatment}`}>
-                              <Checkbox 
-                                id={`neoadjuvant-${treatment}`}
-                                checked={currentReport.rectalCancer?.operationType?.neoadjuvantTreatment === treatment}
-                                onCheckedChange={(checked) => {
-                                  updateRectalCancer('operationType', 'neoadjuvantTreatment', checked ? treatment : '');
-                                }}
-                              />
-                              <label htmlFor={`neoadjuvant-${treatment}`} className="ml-2 text-sm">{treatment}</label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Conditional Neoadjuvant Details */}
-                      {isNeoadjuvantYes() && (
-                        <div className="mt-3 ml-4 space-y-3">
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Radiation Details:</label>
-                            <Input 
-                              type="text" 
-                              placeholder="e.g., Long course chemoradiation 50.4 Gy in 28 fractions" 
-                              className="mt-1"
-                              value={currentReport.rectalCancer?.operationType?.radiationDetails || ''}
-                              onChange={(e) => updateRectalCancer('operationType', 'radiationDetails', e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Chemotherapy Regimen:</label>
-                            <Input 
-                              type="text" 
-                              placeholder="e.g., Capecitabine, 5-FU" 
-                              className="mt-1"
-                              value={currentReport.rectalCancer?.operationType?.chemotherapyRegimen || ''}
-                              onChange={(e) => updateRectalCancer('operationType', 'chemotherapyRegimen', e.target.value)}
-                            />
-                          </div>
-                        </div>
-                      )}
 
                       {/* Findings */}
                       <div className="mt-4">
@@ -473,63 +708,65 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                             />
                           </div>
                           
-                          {/* Tumor Classification */}
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Tumor Classification:</p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <div>
-                                <label className="block text-sm text-gray-600 mb-1">T classification:</label>
-                                <select 
-                                  className="w-full p-2 border border-gray-300 rounded-md"
-                                  value={currentReport.rectalCancer?.findings?.tClassification || ''}
-                                  onChange={(e) => updateRectalCancer('findings', 'tClassification', e.target.value)}
-                                >
-                                  <option value="">Select T stage</option>
-                                  <option value="T1">T1</option>
-                                  <option value="T2">T2</option>
-                                  <option value="T3">T3</option>
-                                  <option value="T4a">T4a</option>
-                                  <option value="T4b">T4b</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-sm text-gray-600 mb-1">N classification:</label>
-                                <select 
-                                  className="w-full p-2 border border-gray-300 rounded-md"
-                                  value={currentReport.rectalCancer?.findings?.nClassification || ''}
-                                  onChange={(e) => updateRectalCancer('findings', 'nClassification', e.target.value)}
-                                >
-                                  <option value="">Select N stage</option>
-                                  <option value="N0">N0</option>
-                                  <option value="N1a">N1a</option>
-                                  <option value="N1b">N1b</option>
-                                  <option value="N1c">N1c</option>
-                                  <option value="N2a">N2a</option>
-                                  <option value="N2b">N2b</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-sm text-gray-600 mb-1">M classification:</label>
-                                <select 
-                                  className="w-full p-2 border border-gray-300 rounded-md"
-                                  value={currentReport.rectalCancer?.findings?.mClassification || ''}
-                                  onChange={(e) => updateRectalCancer('findings', 'mClassification', e.target.value)}
-                                >
-                                  <option value="">Select M stage</option>
-                                  <option value="M0">M0</option>
-                                  <option value="M1a">M1a</option>
-                                  <option value="M1b">M1b</option>
-                                  <option value="M1c">M1c</option>
-                                </select>
+                          {/* Tumor Classification - Hidden when Rectum is selected */}
+                          {!isRectumSelected() && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Tumor Classification:</p>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">T Classification:</label>
+                                  <select 
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    value={currentReport.rectalCancer?.findings?.tClassification || ''}
+                                    onChange={(e) => updateRectalCancer('findings', 'tClassification', e.target.value)}
+                                  >
+                                    <option value="">Select T stage</option>
+                                    <option value="T1">T1</option>
+                                    <option value="T2">T2</option>
+                                    <option value="T3">T3</option>
+                                    <option value="T4a">T4a</option>
+                                    <option value="T4b">T4b</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">N Classification:</label>
+                                  <select 
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    value={currentReport.rectalCancer?.findings?.nClassification || ''}
+                                    onChange={(e) => updateRectalCancer('findings', 'nClassification', e.target.value)}
+                                  >
+                                    <option value="">Select N stage</option>
+                                    <option value="N0">N0</option>
+                                    <option value="N1a">N1a</option>
+                                    <option value="N1b">N1b</option>
+                                    <option value="N1c">N1c</option>
+                                    <option value="N2a">N2a</option>
+                                    <option value="N2b">N2b</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm text-gray-600 mb-1">M Classification:</label>
+                                  <select 
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    value={currentReport.rectalCancer?.findings?.mClassification || ''}
+                                    onChange={(e) => updateRectalCancer('findings', 'mClassification', e.target.value)}
+                                  >
+                                    <option value="">Select M stage</option>
+                                    <option value="M0">M0</option>
+                                    <option value="M1a">M1a</option>
+                                    <option value="M1b">M1b</option>
+                                    <option value="M1c">M1c</option>
+                                  </select>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Location */}
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">Location:</p>
                             <div className="flex flex-wrap gap-4 ml-4">
-                              {['High', 'Middle', 'Low'].map(location => (
+                              {['Upper Third', 'Middle Third', 'Lower Third'].map(location => (
                                 <div className="flex items-center" key={`location-${location}`}>
                                   <Checkbox 
                                     id={`location-${location}`}
@@ -552,7 +789,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                           <div>
                             <p className="text-sm font-medium text-gray-700 mb-2">Mesorectal Completeness:</p>
                             <div className="flex flex-wrap gap-4 ml-4">
-                              {['Complete', 'Near complete', 'Incomplete'].map(completeness => (
+                              {['Complete', 'Near Complete', 'Incomplete'].map(completeness => (
                                 <div className="flex items-center" key={`mesorectal-${completeness}`}>
                                   <Checkbox 
                                     id={`mesorectal-${completeness}`}
@@ -589,6 +826,19 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       </div>
                     </div>
                   )}
+
+                  {/* Conditional Operation Findings for Colon */}
+                  {isColonSelected() && (
+                    <div className="mt-4">
+                      <label className="text-gray-800 font-medium mb-2 block">Operation Findings:</label>
+                      <Textarea 
+                        placeholder="Enter operation findings" 
+                        value={currentReport.rectalCancer?.operationType?.operationFindings || ''}
+                        onChange={(e) => updateRectalCancer('operationType', 'operationFindings', e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -596,37 +846,52 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
         </Card>
       </Collapsible>
 
-      {/* SECTION II: Surgical Approach */}
+      {/* SECTION II: Operative Findings & Anatomical Reference */}
       <Collapsible
-        open={expanded.surgicalApproach}
-        onOpenChange={(open) => setExpanded(prev => ({ ...prev, surgicalApproach: open }))}
+        open={expanded.operativeFindings}
+        onOpenChange={(open) => setExpanded(prev => ({ ...prev, operativeFindings: open }))}
       >
         <Card className="glass-card-light">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-white/20 transition-colors">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Stethoscope className="h-5 w-5 text-red-600" />
-                  SECTION II: Surgical Approach
-                </div>
-                {expanded.surgicalApproach ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <FileSearch className="h-5 w-5 text-red-600" />
+                    SECTION II: Surgical Approach
+                  </div>
+                  {expanded.operativeFindings ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('operativeFindings')}
+                    className="px-3 py-1 text-xs"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
               {/* Primary Approach */}
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Primary Approach (MAJOR BRANCH POINT):</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Primary Approach:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                   {[
                     'Open',
                     'Laparoscopic',
                     'Laparoscopic Converted To Open',
                     'Laparoscopic Hand Assisted',
-                    'TAMIS',
-                    'TEO',
-                    'TEM',
+                    'TAMIS (Transanal Minimally Invasive Surgery)',
+                    'TEO (Transanal Endoscopic Operation)',
+                    'TEM (Transanal Endoscopic Microsurgery)',
                     'Robotic',
                     'Other'
                   ].map(approach => (
@@ -658,16 +923,16 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
               {/* Conversion Reason (Conditional) */}
               {isLaparoscopicConverted() && (
                 <div className="ml-6 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Reason for Conversion (REQUIRED):</p>
+                  <p className="text-sm font-medium text-gray-700 mb-3">Reason for Conversion:</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
                       'Adhesions',
-                      'Visceral Injury',
                       'Vascular Injury',
-                      'Difficult Exposure',
                       'Difficult Visualization',
+                      'Failure to Progress',
+                      'Visceral Injury',
+                      'Difficult Exposure',
                       'Bleeding',
-                      'Failure to progress',
                       'Other'
                     ].map(reason => (
                       <div className="flex items-center" key={`conversion-${reason}`}>
@@ -691,7 +956,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                     <div className="mt-3">
                       <Input 
                         type="text" 
-                        placeholder="Specify other conversion reason" 
+                        placeholder="Specify Other Conversion Reason" 
                         value={currentReport.rectalCancer?.surgicalApproach?.conversionReasonOther || ''}
                         onChange={(e) => updateRectalCancer('surgicalApproach', 'conversionReasonOther', e.target.value)}
                       />
@@ -699,35 +964,150 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                   )}
                 </div>
               )}
-
-              {/* Operative Findings & Anatomical References */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-gray-800 mb-2">Operative Findings & Anatomical References</h4>
-                <p className="text-sm text-gray-600 mb-4">Rectal Cancer Surgery Diagram - Mark Ports, Stomas, and Incisions on the diagram below.</p>
-                {/* The diagram component should be passed as children or handled in the parent component */}
-              </div>
+              
+              {/* Trocar Number (Conditional) */}
+              {shouldShowTrocarNumber() && (
+                <div className="ml-6 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">Trocar Number:</label>
+                    <Input 
+                      type="text" 
+                      placeholder="Enter trocar number" 
+                      value={currentReport.rectalCancer?.surgicalApproach?.trocarNumber || ''}
+                      onChange={(e) => updateRectalCancer('surgicalApproach', 'trocarNumber', e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
 
-      {/* SECTION III: Mobilization and Resection */}
+      {/* SECTION III: Access and Ports */}
+      <Collapsible
+        open={expanded.surgicalApproach}
+        onOpenChange={(open) => setExpanded(prev => ({ ...prev, surgicalApproach: open }))}
+      >
+        <Card className="glass-card-light">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <Stethoscope className="h-5 w-5 text-red-600" />
+                    SECTION III: Access and Ports
+                  </div>
+                  {expanded.surgicalApproach ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('rectalCancerSection2')}
+                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+                {onUndo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo className="h-4 w-4" />
+                    Undo
+                  </Button>
+                )}
+                {onRedo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRedo}
+                    className="flex items-center gap-1"
+                  >
+                    <Redo className="h-4 w-4" />
+                    Redo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-6">
+              {/* Access and Ports */}
+              {diagramElement && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-800 mb-2">Access and Ports</h4>
+                  <p className="text-sm text-gray-600 mb-4">Access and Ports - Mark Ports, Stomas, and Incisions on the diagram below.</p>
+                  {diagramElement}
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* SECTION IV: Mobilization and Resection */}
       <Collapsible
         open={expanded.mobilizationResection}
         onOpenChange={(open) => setExpanded(prev => ({ ...prev, mobilizationResection: open }))}
       >
         <Card className="glass-card-light">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-white/20 transition-colors">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Scissors className="h-5 w-5 text-red-600" />
-                  SECTION III: Mobilization and Resection
-                </div>
-                {expanded.mobilizationResection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <Scissors className="h-5 w-5 text-red-600" />
+                    SECTION IV: Mobilization and Resection
+                  </div>
+                  {expanded.mobilizationResection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('rectalCancerSection3')}
+                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+                {onUndo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo className="h-4 w-4" />
+                    Undo
+                  </Button>
+                )}
+                {onRedo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRedo}
+                    className="flex items-center gap-1"
+                  >
+                    <Redo className="h-4 w-4" />
+                    Redo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
               {/* Extent of Mobilization */}
@@ -905,42 +1285,66 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
               {/* Proximal Transection Site */}
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Proximal Transection Site:</p>
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md ml-4"
-                  value={currentReport.rectalCancer?.mobilizationAndResection?.proximalTransection || ''}
-                  onChange={(e) => updateRectalCancer('mobilizationAndResection', 'proximalTransection', e.target.value)}
-                >
-                  <option value="">Select proximal transection site</option>
-                  <option value="Ileum">Ileum</option>
-                  <option value="Ascending Colon">Ascending Colon</option>
-                  <option value="Transverse Colon">Transverse Colon</option>
-                  <option value="Descending colon">Descending colon</option>
-                  <option value="Sigmoid Colon">Sigmoid Colon</option>
-                  <option value="Proximal Rectum">Proximal Rectum</option>
-                  <option value="Mid Rectum">Mid Rectum</option>
-                  <option value="Distal Rectum">Distal Rectum</option>
-                </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {[
+                    'Ileum',
+                    'Ascending Colon',
+                    'Transverse Colon',
+                    'Descending colon',
+                    'Sigmoid Colon',
+                    'Proximal Rectum',
+                    'Mid Rectum',
+                    'Distal Rectum'
+                  ].map(site => (
+                    <div className="flex items-center" key={`proximal-${site}`}>
+                      <Checkbox 
+                        id={`proximal-${site}`}
+                        checked={currentReport.rectalCancer?.mobilizationAndResection?.proximalTransection?.includes(site) || false}
+                        onCheckedChange={(checked) => {
+                          const current = currentReport.rectalCancer?.mobilizationAndResection?.proximalTransection || [];
+                          const updated = checked 
+                            ? [...current, site]
+                            : current.filter(i => i !== site);
+                          updateRectalCancer('mobilizationAndResection', 'proximalTransection', updated);
+                        }}
+                      />
+                      <label htmlFor={`proximal-${site}`} className="ml-2 text-sm">{site}</label>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Distal Transection Site */}
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Distal Transection Site:</p>
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md ml-4"
-                  value={currentReport.rectalCancer?.mobilizationAndResection?.distalTransection || ''}
-                  onChange={(e) => updateRectalCancer('mobilizationAndResection', 'distalTransection', e.target.value)}
-                >
-                  <option value="">Select distal transection site</option>
-                  <option value="Ascending Colon">Ascending Colon</option>
-                  <option value="Transverse Colon">Transverse Colon</option>
-                  <option value="Descending Colon">Descending Colon</option>
-                  <option value="Sigmoid">Sigmoid</option>
-                  <option value="Proximal Rectum">Proximal Rectum</option>
-                  <option value="Mid Rectum">Mid Rectum</option>
-                  <option value="Distal Rectum">Distal Rectum</option>
-                  <option value="Perineal Resection">Perineal Resection</option>
-                  <option value="Anal Canal">Anal Canal</option>
-                </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {[
+                    'Ascending Colon',
+                    'Transverse Colon',
+                    'Descending Colon',
+                    'Sigmoid',
+                    'Proximal Rectum',
+                    'Mid Rectum',
+                    'Distal Rectum',
+                    'Perineal Resection',
+                    'Anal Canal'
+                  ].map(site => (
+                    <div className="flex items-center" key={`distal-${site}`}>
+                      <Checkbox 
+                        id={`distal-${site}`}
+                        checked={currentReport.rectalCancer?.mobilizationAndResection?.distalTransection?.includes(site) || false}
+                        onCheckedChange={(checked) => {
+                          const current = currentReport.rectalCancer?.mobilizationAndResection?.distalTransection || [];
+                          const updated = checked 
+                            ? [...current, site]
+                            : current.filter(i => i !== site);
+                          updateRectalCancer('mobilizationAndResection', 'distalTransection', updated);
+                        }}
+                      />
+                      <label htmlFor={`distal-${site}`} className="ml-2 text-sm">{site}</label>
+                    </div>
+                  ))}
+                </div>
 
                 {/* Anal Canal Transection Level (Conditional) */}
                 {isAnalCanalSelected() && (
@@ -1029,43 +1433,98 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
         </Card>
       </Collapsible>
 
-      {/* SECTION IV: Reconstruction */}
+      {/* SECTION V: Reconstruction */}
       <Collapsible
         open={expanded.reconstruction}
         onOpenChange={(open) => setExpanded(prev => ({ ...prev, reconstruction: open }))}
       >
         <Card className="glass-card-light">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-white/20 transition-colors">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-red-600" />
-                  SECTION IV: Reconstruction
-                </div>
-                {expanded.reconstruction ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-red-600" />
+                    SECTION V: Reconstruction
+                  </div>
+                  {expanded.reconstruction ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('rectalCancerSection4')}
+                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+                {onUndo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo className="h-4 w-4" />
+                    Undo
+                  </Button>
+                )}
+                {onRedo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRedo}
+                    className="flex items-center gap-1"
+                  >
+                    <Redo className="h-4 w-4" />
+                    Redo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
               {/* Reconstruction Type */}
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Reconstruction Type (PRIMARY BRANCH):</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Reconstruction Type:</p>
                 <div className="flex flex-wrap gap-4 ml-4">
-                  {['ANASTOMOSIS', 'STOMA', 'OTHER'].map(type => (
+                  {['Anastomosis', 'Stoma', 'Other'].map(type => (
                     <div className="flex items-center" key={`reconstruction-${type}`}>
                       <Checkbox 
                         id={`reconstruction-${type}`}
-                        checked={currentReport.rectalCancer?.reconstruction?.reconstructionType === type}
+                        checked={(() => {
+                          const current = currentReport.rectalCancer?.reconstruction?.reconstructionType;
+                          return Array.isArray(current) ? current.includes(type) : current === type;
+                        })()}
                         onCheckedChange={(checked) => {
-                          updateRectalCancer('reconstruction', 'reconstructionType', checked ? type : '');
+                          const current = currentReport.rectalCancer?.reconstruction?.reconstructionType;
+                          let updated;
+                          
+                          if (Array.isArray(current)) {
+                            updated = checked 
+                              ? [...current, type]
+                              : current.filter(t => t !== type);
+                          } else {
+                            if (checked) {
+                              updated = current ? [current, type] : [type];
+                            } else {
+                              updated = current === type ? [] : current;
+                            }
+                          }
+                          
+                          updateRectalCancer('reconstruction', 'reconstructionType', updated);
                         }}
                       />
                       <label htmlFor={`reconstruction-${type}`} className="ml-2 text-sm">{type}</label>
                     </div>
                   ))}
                 </div>
-                {currentReport.rectalCancer?.reconstruction?.reconstructionType === 'OTHER' && (
+                {isOtherReconstructionSelected() && (
                   <div className="mt-3 ml-4">
                     <Input 
                       type="text" 
@@ -1150,7 +1609,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Anastomotic Technique:</p>
                     <div className="flex gap-4 ml-4">
-                      {['SUTURE', 'STAPLED'].map(technique => (
+                      {['Suture', 'Stapled'].map(technique => (
                         <div className="flex items-center" key={`technique-${technique}`}>
                           <Checkbox 
                             id={`technique-${technique}`}
@@ -1471,23 +1930,60 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
         </Card>
       </Collapsible>
 
-      {/* SECTION V: Operative Events & Closure */}
+      {/* SECTION VI: Operative Events & Closure */}
       <Collapsible
         open={expanded.operativeEvents}
         onOpenChange={(open) => setExpanded(prev => ({ ...prev, operativeEvents: open }))}
       >
         <Card className="glass-card-light">
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-white/20 transition-colors">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-red-600" />
-                  SECTION V: Operative Events & Closure
-                </div>
-                {expanded.operativeEvents ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </CardTitle>
-            </CardHeader>
-          </CollapsibleTrigger>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <CardTitle className="flex items-center justify-between flex-1 cursor-pointer hover:bg-white/20 transition-colors p-2 -m-2 rounded">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5 text-red-600" />
+                    SECTION VI: Operative Events & Closure
+                  </div>
+                  {expanded.operativeEvents ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </CardTitle>
+              </CollapsibleTrigger>
+              <div className="flex gap-2 ml-4">
+                {onClear && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onClear('rectalCancerSection5')}
+                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+                {onUndo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndo}
+                    className="flex items-center gap-1"
+                  >
+                    <Undo className="h-4 w-4" />
+                    Undo
+                  </Button>
+                )}
+                {onRedo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRedo}
+                    className="flex items-center gap-1"
+                  >
+                    <Redo className="h-4 w-4" />
+                    Redo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
               {/* Points of Difficulty */}
@@ -1592,7 +2088,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Specimen Extraction Site:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
-                  {['Suprapubic', 'Periumbilical', 'Stoma Site', 'Trans-Anal', 'Transvaginal', 'Other'].map(site => (
+                  {['None', 'Suprapubic', 'Periumbilical', 'Stoma Site', 'Trans-Anal', 'Transvaginal', 'Other'].map(site => (
                     <div className="flex items-center" key={`extraction-${site}`}>
                       <Checkbox 
                         id={`extraction-${site}`}
@@ -1613,6 +2109,42 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                       value={currentReport.rectalCancer?.operativeEvents?.specimenExtractionOther || ''}
                       onChange={(e) => updateRectalCancer('operativeEvents', 'specimenExtractionOther', e.target.value)}
                     />
+                  </div>
+                )}
+                
+                {/* Conditional Laboratory Section */}
+                {isSpecimenExtractionNotNone() && (
+                  <div className="mt-4 ml-4 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Specimen Sent to Laboratory:</p>
+                      <div className="flex gap-4 ml-4">
+                        {['Yes', 'No'].map(sent => (
+                          <div className="flex items-center" key={`lab-${sent}`}>
+                            <Checkbox 
+                              id={`lab-${sent}`}
+                              checked={currentReport.rectalCancer?.operativeEvents?.specimenSentToLab === sent}
+                              onCheckedChange={(checked) => {
+                                updateRectalCancer('operativeEvents', 'specimenSentToLab', checked ? sent : '');
+                              }}
+                            />
+                            <label htmlFor={`lab-${sent}`} className="ml-2 text-sm">{sent}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Laboratory Name - only show when Yes is selected */}
+                    {currentReport.rectalCancer?.operativeEvents?.specimenSentToLab === 'Yes' && (
+                      <div className="mt-3">
+                        <label className="text-sm font-medium text-gray-700 mb-2 block">Specify Laboratory Sent to:</label>
+                        <Input 
+                          type="text" 
+                          placeholder="Enter laboratory name" 
+                          value={currentReport.rectalCancer?.operativeEvents?.laboratoryName || ''}
+                          onChange={(e) => updateRectalCancer('operativeEvents', 'laboratoryName', e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1640,7 +2172,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Drain Insertion:</p>
                 <div className="flex gap-4 ml-4">
-                  {['NO', 'YES'].map(drain => (
+                  {['No', 'Yes'].map(drain => (
                     <div className="flex items-center" key={`drain-${drain}`}>
                       <Checkbox 
                         id={`drain-${drain}`}
@@ -1666,8 +2198,8 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                     <div className="grid grid-cols-1 gap-2 ml-4">
                       {[
                         'Open',
-                        'Closed Suction Drain: [Specify Location]',
-                        'Closed Passive Drain: [Specify Location]',
+                        'Closed Suction Drain',
+                        'Closed Passive Drain',
                         'Other'
                       ].map(type => (
                         <div className="flex items-center" key={`draintype-${type}`}>
@@ -1686,8 +2218,8 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                         </div>
                       ))}
                     </div>
-                    {(currentReport.rectalCancer?.operativeEvents?.drainType?.includes('Closed Suction Drain: [Specify Location]') ||
-                      currentReport.rectalCancer?.operativeEvents?.drainType?.includes('Closed Passive Drain: [Specify Location]') ||
+                    {(currentReport.rectalCancer?.operativeEvents?.drainType?.includes('Closed Suction Drain') ||
+                      currentReport.rectalCancer?.operativeEvents?.drainType?.includes('Closed Passive Drain') ||
                       currentReport.rectalCancer?.operativeEvents?.drainType?.includes('Other')) && (
                       <div className="mt-3 ml-4">
                         <Input 
@@ -1878,7 +2410,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                   </div>
                   
                   {/* Material/Method (Conditional) */}
-                  {isSkinClosureSelected() && (
+                  {shouldShowSkinMaterial() && (
                     <div className="mt-3 ml-4">
                       <p className="text-sm font-medium text-gray-700 mb-2">Material/Method:</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
@@ -1927,7 +2459,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
 
               {/* Post-operative Management */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Post-operative Management:</label>
+                <label className="text-sm font-medium text-gray-700">Post Operative Management:</label>
                 <Textarea 
                   placeholder="Enter post-operative management details" 
                   className="mt-2"
@@ -1936,31 +2468,148 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer }: RectalCa
                 />
               </div>
 
-              {/* Doctor Signature */}
-              <div>
-                <label className="text-sm font-medium text-gray-700">Doctor Signature:</label>
-                <Textarea 
-                  placeholder="Enter doctor signature or upload/draw" 
-                  className="mt-2"
-                  value={currentReport.rectalCancer?.additionalInfo?.doctorSignature || ''}
-                  onChange={(e) => updateRectalCancer('additionalInfo', 'doctorSignature', e.target.value)}
-                />
-              </div>
-
-              {/* Date and Time */}
-              <div>
-                <label className="text-sm font-medium text-gray-700">Date and Time of Report:</label>
-                <Input 
-                  type="datetime-local" 
-                  className="mt-2"
-                  value={currentReport.rectalCancer?.additionalInfo?.dateTime || ''}
-                  onChange={(e) => updateRectalCancer('additionalInfo', 'dateTime', e.target.value)}
-                />
-              </div>
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {/* Surgeon's Signature Section */}
+      <Card className="glass-card-light">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-semibold text-black">Surgeon's Signature</span>
+              <span className="text-xs text-gray-500 font-normal ml-2">Document with signature and date/time</span>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="border-t pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
+                <div className="space-y-2">
+                  <Input 
+                    type="text" 
+                    placeholder="Type signature name or leave blank to upload"
+                    className="w-full"
+                    value={currentReport.rectalCancer?.additionalInfo?.surgeonSignatureText || ''}
+                    onChange={(e) => updateRectalCancer('additionalInfo', 'surgeonSignatureText', e.target.value)}
+                  />
+                  <input 
+                    type="file" 
+                    accept="image/*,.pdf" 
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          updateRectalCancer('additionalInfo', 'surgeonSignature', reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
+                  {currentReport.rectalCancer?.additionalInfo?.surgeonSignature && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-green-600">✓ Signature uploaded</p>
+                      <div className="border rounded p-2 bg-gray-50">
+                        <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                        <img 
+                          src={currentReport.rectalCancer.additionalInfo.surgeonSignature} 
+                          alt="Signature preview" 
+                          className="max-h-12 max-w-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
+                <div className="space-y-2">
+                  <Input 
+                    type="datetime-local" 
+                    className="w-full"
+                    value={currentReport.rectalCancer?.additionalInfo?.dateTime || getLocalDateTimeValue()}
+                    onChange={(e) => updateRectalCancer('additionalInfo', 'dateTime', e.target.value)}
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs px-2 py-1"
+                    onClick={() => updateRectalCancer('additionalInfo', 'dateTime', getLocalDateTimeValue())}
+                  >
+                    Set Current Date/Time
+                  </Button>
+                  {currentReport.rectalCancer?.additionalInfo?.dateTime && (
+                    <p className="text-xs text-gray-500">
+                      Display format: {formatDateOnly(currentReport.rectalCancer.additionalInfo.dateTime)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Action Buttons */}
+      {(onExportPDF || onClearAll || onUndo || onRedo) && (
+        <div className="mt-6 flex justify-center gap-4 flex-wrap">
+          {onUndo && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onUndo}
+              className="flex items-center gap-2"
+            >
+              <Undo className="h-5 w-5" />
+              Undo
+            </Button>
+          )}
+          {onRedo && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={onRedo}
+              className="flex items-center gap-2"
+            >
+              <Redo className="h-5 w-5" />
+              Redo
+            </Button>
+          )}
+          {onExportPDF && (
+            <Button
+              variant="default"
+              size="lg"
+              onClick={() => onExportPDF()}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-5 w-5" />
+              Print/Export PDF
+            </Button>
+          )}
+          {onClearAll && (
+            <Button
+              variant="destructive"
+              size="lg"
+              onClick={() => {
+                if (confirm('Are you sure you want to clear all rectal cancer data? This action cannot be undone.')) {
+                  onClearAll();
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <Trash2 className="h-5 w-5" />
+              Clear All Data
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 };

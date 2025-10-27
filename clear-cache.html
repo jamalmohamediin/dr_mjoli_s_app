@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache</title>
+</head>
+<body>
+    <h1>Clearing Browser Cache...</h1>
+    <p id="status">Processing...</p>
+    
+    <script>
+        async function clearCache() {
+            const statusEl = document.getElementById('status');
+            
+            try {
+                // 1. Unregister all service workers
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.unregister();
+                        console.log('Service worker unregistered');
+                    }
+                }
+                
+                // 2. Clear all caches
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(
+                        cacheNames.map(cacheName => caches.delete(cacheName))
+                    );
+                    console.log('All caches cleared');
+                }
+                
+                // 3. Clear localStorage and sessionStorage
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                statusEl.innerHTML = `
+                    <div style="color: green;">
+                        ✅ Cache cleared successfully!<br>
+                        ✅ Service workers unregistered<br>
+                        ✅ Local storage cleared<br><br>
+                        <strong>Now go back to your app and refresh the page!</strong><br>
+                        <a href="http://localhost:8080/" style="font-size: 18px; color: blue;">← Go back to your app</a>
+                    </div>
+                `;
+                
+            } catch (error) {
+                statusEl.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Run immediately when page loads
+        clearCache();
+    </script>
+</body>
+</html>

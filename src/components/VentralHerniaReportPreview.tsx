@@ -122,7 +122,9 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
                 <div><span className="font-medium">Age:</span> {ventralHernia.patientInfo.age}</div>
               )}
               {ventralHernia.patientInfo.sex && (
-                <div><span className="font-medium">Sex:</span> {formatGender(ventralHernia.patientInfo.sex)}</div>
+                <div><span className="font-medium">Sex:</span> {ventralHernia.patientInfo.sex.toLowerCase() === 'other' && ventralHernia.patientInfo.sexOther
+                  ? ventralHernia.patientInfo.sexOther
+                  : formatGender(ventralHernia.patientInfo.sex)}</div>
               )}
               {ventralHernia.patientInfo.weight && (
                 <div><span className="font-medium">Weight:</span> {ventralHernia.patientInfo.weight} kg</div>
@@ -151,19 +153,123 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
           </div>
         )}
         
-        {/* Indications of Surgery */}
-        {(ventralHernia.preoperative.indication?.length > 0) && (
+        {/* Preoperative Information */}
+        {(ventralHernia.preoperative.surgeons?.some(s => s.trim()) || ventralHernia.preoperative.assistants?.some(s => s.trim()) || 
+          ventralHernia.preoperative.anaesthetist || ventralHernia.preoperative.duration || ventralHernia.preoperative.indication?.length > 0) && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Indications of Surgery</h5>
-            <div className="flex flex-wrap gap-1">
-              {ventralHernia.preoperative.indication.map((ind, index) => (
-                <Badge key={index} variant="secondary" className="text-xs">
-                  {ind === 'Other' && ventralHernia.preoperative.indicationOther 
-                    ? `Other: ${ventralHernia.preoperative.indicationOther}` 
-                    : ind}
-                </Badge>
-              ))}
-            </div>
+            <h5 className="text-xs font-medium text-gray-600">Preoperative Information</h5>
+            {ventralHernia.preoperative.surgeons?.some(s => s.trim()) && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Surgeon:</span> {ventralHernia.preoperative.surgeons.filter(s => s.trim()).join(', ')}
+              </p>
+            )}
+            {ventralHernia.preoperative.assistants?.some(s => s.trim()) && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Assistant:</span> {ventralHernia.preoperative.assistants.filter(s => s.trim()).join(', ')}
+              </p>
+            )}
+            {(ventralHernia.preoperative.anaesthetists?.some(a => a.trim()) || ventralHernia.preoperative.anaesthetist) && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Anaesthetist:</span> {
+                  ventralHernia.preoperative.anaesthetists?.some(a => a.trim()) 
+                    ? ventralHernia.preoperative.anaesthetists.filter(a => a.trim()).join(', ')
+                    : ventralHernia.preoperative.anaesthetist
+                }
+              </p>
+            )}
+            {(ventralHernia.preoperative.duration || ventralHernia.preoperative.startTime || ventralHernia.preoperative.endTime) && (
+              <div className="text-xs text-gray-700 space-y-1">
+                {ventralHernia.preoperative.startTime && (
+                  <p><span className="font-medium">Start Time:</span> {ventralHernia.preoperative.startTime}</p>
+                )}
+                {ventralHernia.preoperative.endTime && (
+                  <p><span className="font-medium">End Time:</span> {ventralHernia.preoperative.endTime}</p>
+                )}
+                {ventralHernia.preoperative.duration && (
+                  <p><span className="font-medium">Total Duration:</span> {ventralHernia.preoperative.duration} minutes</p>
+                )}
+              </div>
+            )}
+            {ventralHernia.preoperative.indication?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Indication for Surgery:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.preoperative.indication.map((ind, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {ind === 'Other' && ventralHernia.preoperative.indicationOther 
+                        ? `Other: ${ventralHernia.preoperative.indicationOther}` 
+                        : ind}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ventralHernia.preoperative.imaging?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Preoperative Imaging:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.preoperative.imaging.map((img, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {img === 'Other' && ventralHernia.preoperative.imagingOther 
+                        ? `Other: ${ventralHernia.preoperative.imagingOther}` 
+                        : img}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ventralHernia.operative.operationDescription && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Operation Description:</p>
+                <p className="text-xs text-gray-700">{ventralHernia.operative.operationDescription}</p>
+              </div>
+            )}
+            {ventralHernia.operative.approach?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Operative Approach:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.operative.approach.map((approach, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {approach === 'Other' && ventralHernia.operative.approachOther 
+                        ? `Other: ${ventralHernia.operative.approachOther}` 
+                        : approach}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ventralHernia.operative.conversionReason?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Reason for Conversion:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.operative.conversionReason.map((reason, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {reason === 'Other' && ventralHernia.operative.conversionReasonOther 
+                        ? `Other: ${ventralHernia.operative.conversionReasonOther}` 
+                        : reason}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ventralHernia.operative.trocarNumber && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Trocar Number:</span> {ventralHernia.operative.trocarNumber}
+              </p>
+            )}
+            {/* Mesh in Situ - Show only when Recurrent Hernia is selected */}
+            {ventralHernia.preoperative.indication?.includes('Recurrent Hernia') && ventralHernia.operative.meshInSitu && (
+              <div className="ml-4">
+                <p className="text-xs text-gray-700">
+                  <span className="font-medium">Does patient have a Mesh in Situ?</span> {ventralHernia.operative.meshInSitu}
+                </p>
+                {ventralHernia.operative.meshInSitu === 'Yes' && ventralHernia.operative.meshDetails && (
+                  <p className="text-xs text-gray-700 ml-4">
+                    <span className="font-medium">Mesh Details:</span> {ventralHernia.operative.meshDetails}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
         
@@ -224,11 +330,6 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
                 <span className="font-medium">Strangulation/Ischaemia:</span> {ventralHernia.operative.strangulation}
               </p>
             )}
-            {ventralHernia.operative.meshInSitu && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Mesh in Situ:</span> {ventralHernia.operative.meshInSitu}
-              </p>
-            )}
             {ventralHernia.operative.approach?.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 <span className="text-xs font-medium text-gray-600">Operative Approach:</span>
@@ -241,9 +342,23 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
                 ))}
               </div>
             )}
-            {ventralHernia.operative.conversionReason && (
+            {ventralHernia.operative.conversionReason?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Reason for Conversion:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.operative.conversionReason.map((reason, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {reason === 'Other' && ventralHernia.operative.conversionReasonOther 
+                        ? `Other: ${ventralHernia.operative.conversionReasonOther}` 
+                        : reason}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {ventralHernia.operative.trocarNumber && (
               <p className="text-xs text-gray-700">
-                <span className="font-medium">Reason for Conversion:</span> {ventralHernia.operative.conversionReason}
+                <span className="font-medium">Trocar Number:</span> {ventralHernia.operative.trocarNumber}
               </p>
             )}
             {ventralHernia.operative.operationDescription && (
@@ -475,33 +590,26 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
                 )}
               </div>
             )}
-          </div>
-        )}
-        
-        
-        {/* Preoperative Information */}
-        {(ventralHernia.preoperative.surgeons?.some(s => s.trim()) || ventralHernia.preoperative.assistants?.some(s => s.trim()) || ventralHernia.preoperative.anaesthetist || ventralHernia.preoperative.duration) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Preoperative Information</h5>
-            {ventralHernia.preoperative.surgeons?.some(s => s.trim()) && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Surgeon:</span> {ventralHernia.preoperative.surgeons.filter(s => s.trim()).join(', ')}
-              </p>
-            )}
-            {ventralHernia.preoperative.assistants?.some(s => s.trim()) && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Assistant:</span> {ventralHernia.preoperative.assistants.filter(s => s.trim()).join(', ')}
-              </p>
-            )}
-            {ventralHernia.preoperative.anaesthetist && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Anaesthetist:</span> {ventralHernia.preoperative.anaesthetist}
-              </p>
-            )}
-            {ventralHernia.preoperative.duration && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Duration:</span> {ventralHernia.preoperative.duration} min
-              </p>
+            {ventralHernia.procedure.specimenSent?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-600">Specimen Sent:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ventralHernia.procedure.specimenSent.map((specimen, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {specimen === 'Other' && ventralHernia.procedure.specimenOther 
+                        ? `Other: ${ventralHernia.procedure.specimenOther}` 
+                        : specimen}
+                    </Badge>
+                  ))}
+                </div>
+                {(ventralHernia.procedure.specimenSent.includes('Hernia Sac') || 
+                  ventralHernia.procedure.specimenSent.includes('Other')) && 
+                  ventralHernia.procedure.laboratoryName && (
+                    <p className="text-xs text-gray-700 ml-2">
+                      <span className="font-medium">Laboratory Sent to:</span> {ventralHernia.procedure.laboratoryName}
+                    </p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -523,11 +631,19 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
           </div>
         )}
         
-        {/* Post-operative Management */}
-        {ventralHernia.postoperativeManagement && (
+        {/* Additional Notes */}
+        {ventralHernia.procedure?.additionalNotes && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Post-operative Management</h5>
-            <p className="text-xs text-gray-700">{ventralHernia.postoperativeManagement}</p>
+            <h5 className="text-xs font-medium text-gray-600">Additional Notes</h5>
+            <p className="text-xs text-gray-700">{ventralHernia.procedure.additionalNotes}</p>
+          </div>
+        )}
+        
+        {/* Post-operative Management */}
+        {ventralHernia.procedure?.postOperativeManagement && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Post Operative Management</h5>
+            <p className="text-xs text-gray-700">{ventralHernia.procedure.postOperativeManagement}</p>
           </div>
         )}
         

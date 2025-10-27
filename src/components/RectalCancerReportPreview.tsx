@@ -374,12 +374,16 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
   // Check if we have any data to show - updated for new structure
   const hasData = (
     report.patientInfo?.name ||
-    rectalCancer?.caseIdentification?.surgeon ||
-    rectalCancer?.preoperativeDetails?.indication?.length > 0 ||
-    rectalCancer?.surgicalApproach?.approach ||
-    rectalCancer?.intraoperativeFindings?.tumorSite ||
-    rectalCancer?.resectionDetails?.vesselLigation ||
-    rectalCancer?.specimenHandling?.sentToHistology ||
+    rectalCancer?.patientInfo?.name ||
+    rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim()) ||
+    rectalCancer?.operationType?.type?.length > 0 ||
+    rectalCancer?.surgicalApproach?.primaryApproach ||
+    rectalCancer?.findings?.description ||
+    rectalCancer?.mobilizationAndResection?.vesselLigation?.length > 0 ||
+    rectalCancer?.reconstruction?.reconstructionType ||
+    rectalCancer?.operativeEvents?.pointsOfDifficulty?.length > 0 ||
+    rectalCancer?.closure?.fascialClosure?.length > 0 ||
+    rectalCancer?.additionalInfo?.additionalInformation ||
     // Legacy fields check
     rectalCancer?.section1?.surgeons?.some(s => s?.trim()) ||
     rectalCancer?.section1?.indication?.length > 0
@@ -425,34 +429,217 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
           </div>
         </div>
         
-        {/* Case Identification Section */}
-        {(report.patientInfo?.name || rectalCancer?.caseIdentification?.surgeon || rectalCancer?.caseIdentification?.procedureType) && (
+        {/* Patient Information Section */}
+        {(rectalCancer?.patientInfo?.name || rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim())) && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Case Identification</h5>
+            <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-              {report.patientInfo?.name && (
-                <div><span className="font-medium">Patient:</span> {report.patientInfo.name}</div>
+              {rectalCancer?.patientInfo?.name && (
+                <div><span className="font-medium">Name:</span> {rectalCancer.patientInfo.name}</div>
               )}
-              {report.patientInfo?.patientId && (
-                <div><span className="font-medium">Patient ID:</span> {report.patientInfo.patientId}</div>
+              {rectalCancer?.patientInfo?.patientId && (
+                <div><span className="font-medium">Patient ID:</span> {rectalCancer.patientInfo.patientId}</div>
               )}
-              {rectalCancer?.caseIdentification?.date && (
-                <div><span className="font-medium">Date:</span> {formatDateOnly(rectalCancer.caseIdentification.date)}</div>
+              {rectalCancer?.patientInfo?.dateOfBirth && (
+                <div><span className="font-medium">Date of Birth:</span> {formatDateOnly(rectalCancer.patientInfo.dateOfBirth)}</div>
               )}
-              {rectalCancer?.caseIdentification?.surgeon && (
-                <div><span className="font-medium">Surgeon:</span> {rectalCancer.caseIdentification.surgeon}</div>
+              {rectalCancer?.patientInfo?.age && (
+                <div><span className="font-medium">Age:</span> {rectalCancer.patientInfo.age}</div>
               )}
-              {rectalCancer?.caseIdentification?.assistant && (
-                <div><span className="font-medium">Assistant:</span> {rectalCancer.caseIdentification.assistant}</div>
+              {rectalCancer?.patientInfo?.sex && (
+                <div><span className="font-medium">Sex:</span> {rectalCancer.patientInfo.sex === 'other' && rectalCancer.patientInfo.sexOther ? rectalCancer.patientInfo.sexOther : rectalCancer.patientInfo.sex.charAt(0).toUpperCase() + rectalCancer.patientInfo.sex.slice(1)}</div>
+              )}
+              {rectalCancer?.patientInfo?.weight && (
+                <div><span className="font-medium">Weight:</span> {rectalCancer.patientInfo.weight} kg</div>
+              )}
+              {rectalCancer?.patientInfo?.height && (
+                <div><span className="font-medium">Height:</span> {rectalCancer.patientInfo.height} cm</div>
+              )}
+              {rectalCancer?.patientInfo?.bmi && (
+                <div><span className="font-medium">BMI:</span> {rectalCancer.patientInfo.bmi}</div>
+              )}
+              {rectalCancer?.patientInfo?.asaScore && (
+                <div><span className="font-medium">ASA Score:</span> {getFullASAText(rectalCancer.patientInfo.asaScore)}</div>
               )}
             </div>
           </div>
         )}
         
-        {/* Patient Demographics */}
+        {/* Surgical Team */}
+        {rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim()) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Surgical Team</h5>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
+              {rectalCancer.surgicalTeam.surgeons.filter(s => s.trim()).length > 0 && (
+                <div><span className="font-medium">Surgeon(s):</span> {rectalCancer.surgicalTeam.surgeons.filter(s => s.trim()).join(', ')}</div>
+              )}
+              {rectalCancer.surgicalTeam.assistants?.filter(a => a.trim()).length > 0 && (
+                <div><span className="font-medium">Assistant(s):</span> {rectalCancer.surgicalTeam.assistants.filter(a => a.trim()).join(', ')}</div>
+              )}
+              {(rectalCancer.surgicalTeam.anaesthetists?.filter(a => a.trim()).length > 0 || rectalCancer.surgicalTeam.anaesthetist) && (
+                <div><span className="font-medium">Anaesthetist(s):</span> {
+                  rectalCancer.surgicalTeam.anaesthetists?.filter(a => a.trim()).length > 0 
+                    ? rectalCancer.surgicalTeam.anaesthetists.filter(a => a.trim()).join(', ')
+                    : rectalCancer.surgicalTeam.anaesthetist
+                }</div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Operation Description */}
+        {rectalCancer?.procedureDetails?.operationDescription && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Operation Description</h5>
+            <p className="text-xs text-gray-700 whitespace-pre-wrap">
+              {rectalCancer.procedureDetails.operationDescription}
+            </p>
+          </div>
+        )}
+
+        {/* Duration of Operation */}
+        {(rectalCancer?.procedureDetails?.startTime || rectalCancer?.procedureDetails?.endTime || rectalCancer?.procedureDetails?.duration) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Duration of Operation</h5>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs text-gray-700">
+              {rectalCancer.procedureDetails.startTime && (
+                <div><span className="font-medium">Start Time:</span> {rectalCancer.procedureDetails.startTime}</div>
+              )}
+              {rectalCancer.procedureDetails.endTime && (
+                <div><span className="font-medium">End Time:</span> {rectalCancer.procedureDetails.endTime}</div>
+              )}
+              {rectalCancer.procedureDetails.duration && (
+                <div><span className="font-medium">Total Duration:</span> {rectalCancer.procedureDetails.duration} minutes</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Preoperative Imaging */}
+        {rectalCancer?.procedureDetails?.preoperativeImaging?.length > 0 && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Preoperative Imaging</h5>
+            <div className="flex flex-wrap gap-1">
+              {rectalCancer.procedureDetails.preoperativeImaging.map((imaging, index) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {imaging === 'Other' && rectalCancer.procedureDetails.preoperativeImagingOther 
+                    ? `Other: ${rectalCancer.procedureDetails.preoperativeImagingOther}` 
+                    : imaging}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Procedure Details */}
+        {rectalCancer?.procedureDetails?.procedureUrgency && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Procedure Details</h5>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
+              {rectalCancer.procedureDetails.procedureUrgency && (
+                <div><span className="font-medium">Urgency:</span> {rectalCancer.procedureDetails.procedureUrgency}</div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Indication for Surgery - Enhanced with comprehensive details */}
+        {(rectalCancer?.operationType?.type?.length > 0 || rectalCancer?.operationType?.neoadjuvantTreatment || rectalCancer?.findings?.description) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Indication for Surgery</h5>
+            <div className="space-y-1 text-xs text-gray-700">
+              {/* Operation Type */}
+              {rectalCancer?.operationType?.type?.length > 0 && (
+                <div><span className="font-medium">Operation Type:</span> {rectalCancer.operationType.type.join(', ')}</div>
+              )}
+              
+              {/* Rectum Operation Types - show with bullet points when Rectum is selected */}
+              {rectalCancer?.operationType?.type?.includes('Rectum') && rectalCancer?.operationType?.rectumOperationType?.length > 0 && (
+                <div className="ml-4">
+                  <span className="font-medium">Rectum Operation Types:</span>
+                  <div className="ml-4 mt-1">
+                    {rectalCancer.operationType.rectumOperationType.map((op, index) => (
+                      <div key={index}>• {op}</div>
+                    ))}
+                    {rectalCancer.operationType.rectumOperationOther && (
+                      <div>• Other: {rectalCancer.operationType.rectumOperationOther}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Neoadjuvant Treatment Details */}
+              {rectalCancer?.operationType?.neoadjuvantTreatment === 'Yes' && (
+                <div className="ml-4">
+                  <span className="font-medium">Neoadjuvant Treatment:</span>
+                  <div className="ml-4 mt-1">
+                    {rectalCancer?.operationType?.radiationDetails && (
+                      <div>• Radiation: {rectalCancer.operationType.radiationDetails}</div>
+                    )}
+                    {rectalCancer?.operationType?.chemotherapyRegimen && (
+                      <div>• Chemotherapy: {rectalCancer.operationType.chemotherapyRegimen}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Tumor Classification */}
+              {(rectalCancer?.operationType?.staging?.t || rectalCancer?.operationType?.staging?.n || rectalCancer?.operationType?.staging?.m) && (
+                <div className="ml-4">
+                  <span className="font-medium">Tumor Classification:</span>
+                  <div className="ml-4 mt-1">
+                    <div>T classification: {rectalCancer?.operationType?.staging?.t || 'Not specified'}</div>
+                    <div>N classification: {rectalCancer?.operationType?.staging?.n || 'Not specified'}</div>
+                    <div>M classification: {rectalCancer?.operationType?.staging?.m || 'Not specified'}</div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Completeness of Tumour Resection */}
+              {rectalCancer?.operationType?.resectionCompleteness && (
+                <div className="ml-4">
+                  <span className="font-medium">Completeness of Tumour Resection:</span> {rectalCancer.operationType.resectionCompleteness}
+                </div>
+              )}
+              
+              {/* Findings Description */}
+              {rectalCancer?.findings?.description && (
+                <div className="ml-4">
+                  <span className="font-medium">Findings:</span> {rectalCancer.findings.description}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Findings */}
+        {(rectalCancer?.findings?.description || rectalCancer?.findings?.location?.length > 0) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Findings</h5>
+            <div className="space-y-1 text-xs text-gray-700">
+              {rectalCancer.findings.description && (
+                <div><span className="font-medium">Description:</span> {rectalCancer.findings.description}</div>
+              )}
+              {rectalCancer.findings.location?.length > 0 && (
+                <div><span className="font-medium">Location:</span> {rectalCancer.findings.location.join(', ')}</div>
+              )}
+              {(rectalCancer.findings.tClassification || rectalCancer.findings.nClassification || rectalCancer.findings.mClassification) && (
+                <div><span className="font-medium">Staging:</span> T{rectalCancer.findings.tClassification || 'x'}N{rectalCancer.findings.nClassification || 'x'}M{rectalCancer.findings.mClassification || 'x'}</div>
+              )}
+              {rectalCancer.findings.mesorectalCompleteness && (
+                <div><span className="font-medium">Mesorectal Completeness:</span> {rectalCancer.findings.mesorectalCompleteness}</div>
+              )}
+              {rectalCancer.findings.completenessOfTumourResection && (
+                <div><span className="font-medium">Completeness of Tumour Resection:</span> {rectalCancer.findings.completenessOfTumourResection}</div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Patient Information */}
         {(report.patientInfo?.dateOfBirth || report.patientInfo?.age || report.patientInfo?.sex || report.patientInfo?.weight || report.patientInfo?.asaScore) && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Patient Demographics</h5>
+            <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
               {report.patientInfo?.dateOfBirth && (
                 <div><span className="font-medium">Date Of Birth:</span> {formatDateOnly(report.patientInfo.dateOfBirth)}</div>
@@ -539,8 +726,168 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
           </div>
         )}
         
-        {/* Surgical Approach Section */}
-        {(rectalCancer?.surgicalApproach?.approach || rectalCancer?.surgicalApproach?.resectionType) && (
+        {/* Surgical Approach Section - New Structure */}
+        {rectalCancer?.surgicalApproach?.primaryApproach && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Surgical Approach</h5>
+            <p className="text-xs text-gray-700">
+              <span className="font-medium">Primary Approach:</span> {rectalCancer.surgicalApproach.primaryApproach}
+            </p>
+            {rectalCancer.surgicalApproach.primaryApproach === 'Laparoscopic Converted To Open' && rectalCancer.surgicalApproach.conversionReason?.length > 0 && (
+              <div className="text-xs text-gray-700 ml-4">
+                <span className="font-medium">Reason for Conversion:</span> {rectalCancer.surgicalApproach.conversionReason.join(', ')}
+                {rectalCancer.surgicalApproach.conversionReasonOther && ` - ${rectalCancer.surgicalApproach.conversionReasonOther}`}
+              </div>
+            )}
+            {rectalCancer.surgicalApproach.trocarNumber && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Trocar Number:</span> {rectalCancer.surgicalApproach.trocarNumber}
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Mobilization and Resection */}
+        {(rectalCancer?.mobilizationAndResection?.extentOfMobilization?.length > 0 || rectalCancer?.mobilizationAndResection?.vesselLigation?.length > 0) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Mobilization and Resection</h5>
+            {rectalCancer.mobilizationAndResection.extentOfMobilization?.length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Extent of Mobilization:</span> {rectalCancer.mobilizationAndResection.extentOfMobilization.join(', ')}
+              </p>
+            )}
+            {rectalCancer.mobilizationAndResection.vesselLigation?.length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Vessel Ligation:</span> {rectalCancer.mobilizationAndResection.vesselLigation.join(', ')}
+              </p>
+            )}
+            {rectalCancer.mobilizationAndResection.enBlocResection?.length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">En-bloc Resection:</span> {rectalCancer.mobilizationAndResection.enBlocResection.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Reconstruction */}
+        {rectalCancer?.reconstruction?.reconstructionType && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Reconstruction</h5>
+            <p className="text-xs text-gray-700">
+              <span className="font-medium">Type:</span> {rectalCancer.reconstruction.reconstructionType}
+            </p>
+            {rectalCancer.reconstruction.reconstructionType === 'ANASTOMOSIS' && rectalCancer.reconstruction.anastomosisDetails && (
+              <div className="text-xs text-gray-700 ml-4 space-y-1">
+                {rectalCancer.reconstruction.anastomosisDetails.site && (
+                  <div><span className="font-medium">Site:</span> {rectalCancer.reconstruction.anastomosisDetails.site}</div>
+                )}
+                {rectalCancer.reconstruction.anastomosisDetails.configuration && (
+                  <div><span className="font-medium">Configuration:</span> {rectalCancer.reconstruction.anastomosisDetails.configuration}</div>
+                )}
+                {rectalCancer.reconstruction.anastomosisDetails.technique && (
+                  <div><span className="font-medium">Technique:</span> {rectalCancer.reconstruction.anastomosisDetails.technique}</div>
+                )}
+                {rectalCancer.reconstruction.anastomosisDetails.airLeakTest && (
+                  <div><span className="font-medium">Air Leak Test:</span> {rectalCancer.reconstruction.anastomosisDetails.airLeakTest}</div>
+                )}
+              </div>
+            )}
+            {rectalCancer.reconstruction.reconstructionType === 'STOMA' && rectalCancer.reconstruction.stomaDetails && (
+              <div className="text-xs text-gray-700 ml-4 space-y-1">
+                {rectalCancer.reconstruction.stomaDetails.configuration && (
+                  <div><span className="font-medium">Configuration:</span> {rectalCancer.reconstruction.stomaDetails.configuration}</div>
+                )}
+                {rectalCancer.reconstruction.stomaDetails.reasonForStoma?.length > 0 && (
+                  <div><span className="font-medium">Reason:</span> {rectalCancer.reconstruction.stomaDetails.reasonForStoma.join(', ')}</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Operative Events */}
+        {(rectalCancer?.operativeEvents?.pointsOfDifficulty?.length > 0 || rectalCancer?.operativeEvents?.intraoperativeEvents?.length > 0 || rectalCancer?.operativeEvents?.specimenExtraction || rectalCancer?.operativeEvents?.drainInsertion) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Operative Events</h5>
+            {rectalCancer.operativeEvents.pointsOfDifficulty?.length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Points of Difficulty:</span> {rectalCancer.operativeEvents.pointsOfDifficulty.join(', ')}
+              </p>
+            )}
+            {rectalCancer.operativeEvents.intraoperativeEvents?.length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Intraoperative Events:</span> {rectalCancer.operativeEvents.intraoperativeEvents.join(', ')}
+              </p>
+            )}
+            {rectalCancer.operativeEvents.specimenExtraction && (
+              <div className="text-xs text-gray-700">
+                <div><span className="font-medium">Specimen Extraction Site:</span> {rectalCancer.operativeEvents.specimenExtraction}</div>
+                {rectalCancer.operativeEvents.specimenExtraction === 'Other' && rectalCancer.operativeEvents.specimenExtractionOther && (
+                  <div className="ml-4">Other: {rectalCancer.operativeEvents.specimenExtractionOther}</div>
+                )}
+                {rectalCancer.operativeEvents.specimenSentToLab && (
+                  <div className="ml-4">
+                    <span className="font-medium">Specimen Sent to Laboratory:</span> {rectalCancer.operativeEvents.specimenSentToLab}
+                    {rectalCancer.operativeEvents.specimenSentToLab === 'Yes' && rectalCancer.operativeEvents.laboratoryName && (
+                      <div className="ml-4">Laboratory: {rectalCancer.operativeEvents.laboratoryName}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {rectalCancer.operativeEvents.drainInsertion && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Drain Insertion:</span> {rectalCancer.operativeEvents.drainInsertion}
+                {rectalCancer.operativeEvents.drainType?.length > 0 && ` - Type: ${rectalCancer.operativeEvents.drainType.join(', ')}`}
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Closure */}
+        {(rectalCancer?.closure?.fascialClosure?.length > 0 || rectalCancer?.closure?.skinClosure?.length > 0) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Closure</h5>
+            {rectalCancer.closure.fascialClosure?.length > 0 && (
+              <div className="text-xs text-gray-700">
+                <div><span className="font-medium">Fascial Closure:</span> {rectalCancer.closure.fascialClosure.join(', ')}</div>
+                {rectalCancer.closure.fascialSutureMaterial?.length > 0 && (
+                  <div className="ml-4"><span className="font-medium">Suture Material:</span> {rectalCancer.closure.fascialSutureMaterial.join(', ')}</div>
+                )}
+                {rectalCancer.closure.fascialSutureMaterialOther && (
+                  <div className="ml-4"><span className="font-medium">Other Suture Material:</span> {rectalCancer.closure.fascialSutureMaterialOther}</div>
+                )}
+              </div>
+            )}
+            {rectalCancer.closure.skinClosure?.length > 0 && (
+              <div className="text-xs text-gray-700">
+                <div><span className="font-medium">Skin Closure:</span> {rectalCancer.closure.skinClosure.join(', ')}</div>
+                {rectalCancer.closure.skinClosureMaterial?.length > 0 && (
+                  <div className="ml-4"><span className="font-medium">Material/Method:</span> {rectalCancer.closure.skinClosureMaterial.join(', ')}</div>
+                )}
+                {rectalCancer.closure.skinClosureMaterialOther && (
+                  <div className="ml-4"><span className="font-medium">Other Material:</span> {rectalCancer.closure.skinClosureMaterialOther}</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Additional Information */}
+        {(rectalCancer?.additionalInfo?.additionalInformation || rectalCancer?.additionalInfo?.postOperativeManagement) && (
+          <div className="space-y-2">
+            <h5 className="text-xs font-medium text-gray-600">Additional Information</h5>
+            {rectalCancer.additionalInfo.additionalInformation && (
+              <p className="text-xs text-gray-700"><span className="font-medium">Additional Information:</span> {rectalCancer.additionalInfo.additionalInformation}</p>
+            )}
+            {rectalCancer.additionalInfo.postOperativeManagement && (
+              <p className="text-xs text-gray-700"><span className="font-medium">Post-operative Management:</span> {rectalCancer.additionalInfo.postOperativeManagement}</p>
+            )}
+          </div>
+        )}
+        
+        {/* Old Structure - Surgical Approach Section */}
+        {(rectalCancer?.surgicalApproach?.approach || rectalCancer?.surgicalApproach?.resectionType) && !rectalCancer?.surgicalApproach?.primaryApproach && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Surgical Approach</h5>
             {rectalCancer?.surgicalApproach?.approach && (
@@ -943,6 +1290,37 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             {generateSynopticSummary()}
           </div>
         </div>
+        
+        {/* Surgeon Signature */}
+        {(rectalCancer?.additionalInfo?.surgeonSignatureText || rectalCancer?.additionalInfo?.surgeonSignature || rectalCancer?.additionalInfo?.dateTime) && (
+          <div className="space-y-2 mt-6 pt-4 border-t">
+            <h5 className="text-xs font-medium text-gray-600">Documentation</h5>
+            {rectalCancer.additionalInfo.surgeonSignatureText && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Surgeon's Signature:</span> {rectalCancer.additionalInfo.surgeonSignatureText}
+              </p>
+            )}
+            {!rectalCancer.additionalInfo.surgeonSignatureText && rectalCancer.additionalInfo.surgeonSignature && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-700 font-medium">Surgeon's Signature:</p>
+                {rectalCancer.additionalInfo.surgeonSignature.startsWith('data:image') ? (
+                  <img 
+                    src={rectalCancer.additionalInfo.surgeonSignature} 
+                    alt="Surgeon signature" 
+                    className="max-h-8 max-w-32 object-contain border rounded bg-gray-50"
+                  />
+                ) : (
+                  <p className="text-xs text-gray-700">{rectalCancer.additionalInfo.surgeonSignature}</p>
+                )}
+              </div>
+            )}
+            {rectalCancer.additionalInfo.dateTime && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Date & Time:</span> {formatDateOnly(rectalCancer.additionalInfo.dateTime)}
+              </p>
+            )}
+          </div>
+        )}
         
         {/* Footer */}
         <div className="border-t pt-4 mt-6 text-center text-xs space-y-1">

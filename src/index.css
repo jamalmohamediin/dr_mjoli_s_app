@@ -271,4 +271,15 @@ All colors MUST be HSL.
   .text-shadow-glass {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   }
+
+  /* Custom checkbox styles - black checkmarks */
+  input[type="checkbox"] {
+    accent-color: #000000;
+  }
+  
+  /* For browsers that don't support accent-color */
+  input[type="checkbox"]:checked {
+    background-color: #000000;
+    border-color: #000000;
+  }
 }

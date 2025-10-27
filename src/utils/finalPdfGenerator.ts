@@ -135,6 +135,7 @@ export const generateFinalPDF = async (
     
     // Row 3
     pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal'); // Remove bold for qualifications and address
     pdf.text('MBChB (UNITRA), MMed (UKZN), FCS(SA),', leftX, y, { align: 'left' });
     pdf.text('56 St James Road, Southernwood', rightX, y, { align: 'right' });
     y += 4;
@@ -320,6 +321,12 @@ export const generateFinalPDF = async (
       y += 8;
     }
 
+    // Define column widths for 3-column layout (also used in PROCEDURE INFORMATION)
+    const threeColumnWidth = (pageWidth - 2 * margin - 16) / 3; // 3 columns with gaps
+    const col1XThree = margin;           // Left column
+    const col2XThree = margin + threeColumnWidth + 8;    // Middle column  
+    const col3XThree = margin + (threeColumnWidth * 2) + 16;  // Right column
+
     // PROCEDURE INFORMATION section
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
@@ -330,33 +337,41 @@ export const generateFinalPDF = async (
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'normal');
       
-      // Get all the data (specimen-related fields moved to SPECIMEN section)
+      // Get all the data (removed intra-operative fields as requested)
       const proceduresText = reportData?.selectedProcedures && reportData.selectedProcedures.length > 0 
         ? reportData.selectedProcedures.join(', ') : '';
-      const indication = reportData.patientInfo.indication || '';
       const bowelPrepRaw = reportData.patientInfo.preparation || '';
       const bowelPrep = bowelPrepRaw ? bowelPrepRaw.charAt(0).toUpperCase() + bowelPrepRaw.slice(1).toLowerCase() : '';
       const anesthesiaType = capitalizeAnesthesia(reportData.patientInfo.sedation || '');
-      const difficulty = reportData?.intraOperative?.difficulty || '';
-      const complications = reportData?.intraOperative?.complications || '';
       
-      // Row 1: Procedures Performed (full width)
-      pdf.text(`Procedures Performed: ${proceduresText}`, col1X, y);
+      // 3-column layout with headers and answers below
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      
+      // Row 1: Column headers
+      pdf.text('Procedures Performed:', col1XThree, y);
+      pdf.text('Type of Anesthesia:', col2XThree, y);
+      pdf.text('Bowel Preparation:', col3XThree, y);
       y += 4;
       
-      // Row 2: Clinical Indication and Bowel Preparation
-      pdf.text(`Clinical Indication: ${indication}`, col1X, y);
-      pdf.text(`Bowel Preparation: ${bowelPrep}`, col2X, y);
-      y += 4;
+      // Row 2: Answers below headers
+      pdf.setFont('helvetica', 'normal');
       
-      // Row 3: Type of Anesthesia and Intra-Operative Difficulty
-      pdf.text(`Type of Anesthesia: ${anesthesiaType}`, col1X, y);
-      pdf.text(`Intra-Operative Difficulty: ${difficulty}`, col2X, y);
-      y += 4;
+      // Split long procedures text if needed
+      const proceduresLines = pdf.splitTextToSize(proceduresText, threeColumnWidth - 4);
+      pdf.text(proceduresLines, col1XThree, y);
       
-      // Row 4: Intra-Operative Complications (full width)
-      pdf.text(`Intra-Operative Complications: ${complications}`, col1X, y);
-      y += 4;
+      // Split long anesthesia text if needed
+      const anesthesiaLines = pdf.splitTextToSize(anesthesiaType, threeColumnWidth - 4);
+      pdf.text(anesthesiaLines, col2XThree, y);
+      
+      // Split long bowel prep text if needed
+      const bowelPrepLines = pdf.splitTextToSize(bowelPrep, threeColumnWidth - 4);
+      pdf.text(bowelPrepLines, col3XThree, y);
+      
+      // Calculate the maximum height used by any column
+      const maxLines = Math.max(proceduresLines.length, anesthesiaLines.length, bowelPrepLines.length);
+      y += (maxLines * 3) + 2;
       
       y += 4; // Add spacing before separator
       
@@ -371,10 +386,10 @@ export const generateFinalPDF = async (
     const gastro = diagrams?.find(d => d.type === 'gastroscopy');
     const colono = diagrams?.find(d => d.type === 'colonoscopy');
     
-    const columnGap = 8;
+    const columnGap = 12; // Increased gap for better separation
     const diagramColumnWidth = (pageWidth - 2 * margin - columnGap) / 2;
-    const diagramLeftX = col1X;  // Align with first column
-    const diagramRightX = col2X; // Align with second column
+    const diagramLeftX = margin;  // Left column starts at margin
+    const diagramRightX = margin + diagramColumnWidth + columnGap; // Right column with proper gap
     
     // Fixed diagram box height to match template (exact diagram size) 
     const diagramBoxHeight = 50;
@@ -499,13 +514,7 @@ export const generateFinalPDF = async (
     // Check page break before SPECIMEN section
     checkPageBreak(60);
     
-    // Define column widths for 3-column layout in SPECIMEN section
-    const threeColumnWidth = (pageWidth - 2 * margin - 16) / 3; // 3 columns with gaps
-    const col1XThree = margin;           // Left column (SPECIMEN)
-    const col2XThree = margin + threeColumnWidth + 8;    // Middle column (CONCLUSION)  
-    const col3XThree = margin + (threeColumnWidth * 2) + 16;  // Right column (FOLLOW UP OPTIONS)
-    
-    // SPECIMEN, CONCLUSION, FOLLOW UP sections - New layout as specified
+    // SPECIMEN, CONCLUSION, FOLLOW UP sections - New layout as specified (using existing three-column variables)
     if (reportData) {
       // Get all the data using correct field paths
       const specimenSent = reportData?.specimen?.sentForPathology || '';
@@ -599,7 +608,8 @@ export const generateFinalPDF = async (
       }
       
       if (postOpMgmt) {
-        const postOpLines = pdf.splitTextToSize(`Post Operative Management: ${postOpMgmt}`, threeColumnWidth - 4);
+        // Display just the content inline with the header (no label repetition)
+        const postOpLines = pdf.splitTextToSize(postOpMgmt, threeColumnWidth - 4);
         pdf.text(postOpLines, col2XThree, postOpY);
         postOpY += postOpLines.length * 3;
       }
@@ -610,7 +620,7 @@ export const generateFinalPDF = async (
       pdf.setDrawColor(0, 0, 0);
       pdf.setLineWidth(0.2);
       pdf.line(margin, y, pageWidth - margin, y);
-      y += 12; // Increased spacing for more room above signature
+      y += 18; // Further increased spacing for more room above signature
       
       // SURGEON SIGNATURE - moved to page 1, closer to NOTES section
       pdf.setFontSize(9);

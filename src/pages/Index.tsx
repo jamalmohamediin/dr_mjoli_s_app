@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Microscope, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, Scissors, Shield, Activity, ClipboardList, FileSearch } from "lucide-react";
+import { FileText, Microscope, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, Scissors, Shield, Activity, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { PatientInfoForm } from "@/components/PatientInfoForm";
 import { ProcedureInfoForm } from "@/components/ProcedureInfoForm";
 import { ProcedureTypeSelection } from "@/components/ProcedureTypeSelection";
@@ -23,7 +23,8 @@ import { generateFinalPDF, FinalDiagramCapture } from "@/utils/finalPdfGenerator
 import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
 import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
-import { getLocalDateTimeValue, formatDateOnly } from "@/utils/dateFormatter";
+import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
+import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 
@@ -41,12 +42,19 @@ const Index = () => {
       findings: '',
       additionalNotes: ''
     },
+    specimen: {
+      sentForPathology: '',
+      laboratoryName: '',
+      otherSpecimensTaken: '',
+      otherSpecimensDetails: ''
+    },
     conclusion: '',
     followUp: {
       enabled: false,
       options: [] as string[],
       other: '',
-      notes: ''
+      notes: '',
+      postOperativeManagement: ''
     },
     signature: {
       surgeonSignature: '',
@@ -60,6 +68,7 @@ const Index = () => {
         dateOfBirth: '',
         age: '',
         sex: '',
+        sexOther: '',
         weight: '',
         height: '',
         bmi: '',
@@ -69,8 +78,10 @@ const Index = () => {
       preoperative: {
         surgeons: [''],
         assistants: [''],
-        anaesthetist: '',
+        anaesthetists: [''],
         duration: '',
+        startTime: '',
+        endTime: '',
         indication: [],
         indicationOther: '',
         imaging: [],
@@ -108,6 +119,11 @@ const Index = () => {
         specimenDetails: '',
         surgeonSignature: '',
         dateTime: ''
+      },
+      // Store appendicectomy-specific diagram findings
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
       }
     },
     ventralHernia: {
@@ -117,6 +133,7 @@ const Index = () => {
         dateOfBirth: '',
         age: '',
         sex: '',
+        sexOther: '',
         weight: '',
         height: '',
         bmi: '',
@@ -126,10 +143,14 @@ const Index = () => {
       preoperative: {
         surgeons: [''],
         assistants: [''],
-        anaesthetist: '',
+        anaesthetists: [''],
         duration: '',
+        startTime: '',
+        endTime: '',
         indication: [],
-        indicationOther: ''
+        indicationOther: '',
+        imaging: [],
+        imagingOther: ''
       },
       operative: {
         herniaType: [],
@@ -137,12 +158,20 @@ const Index = () => {
         herniaSite: [],
         herniaSiteOther: '',
         herniaDefects: '',
+        numberOfDefects: '',
+        contents: [],
+        contentsOther: '',
         strangulation: '',
         meshInSitu: '',
         approach: [],
-        approachOther: ''
+        approachOther: '',
+        conversionReason: [],
+        conversionReasonOther: '',
+        trocarNumber: '',
+        operationDescription: ''
       },
       procedure: {
+        dissection: '',
         sacExcised: '',
         fatDissected: '',
         defectClosed: '',
@@ -176,6 +205,11 @@ const Index = () => {
         skinClosureOther: '',
         skinClosureMaterial: [],
         skinClosureMaterialOther: '',
+        specimenSent: [],
+        specimenOther: '',
+        laboratoryName: '',
+        additionalNotes: '',
+        postOperativeManagement: '',
         surgeonSignature: '',
         dateTime: ''
       }
@@ -309,7 +343,7 @@ const Index = () => {
         surgeons: [''],
         assistant1: '',
         assistant2: '',
-        anaesthetist: '',
+        anaesthetists: [''],
         duration: '',
         asaScore: '',
         emergencyOperation: '',
@@ -366,6 +400,30 @@ const Index = () => {
     }
   });
 
+  // Helper function to calculate duration between start and end times
+  const calculateDuration = (startTime: string, endTime: string): string => {
+    if (!startTime || !endTime) return '';
+    
+    try {
+      const start = new Date(`1970-01-01T${startTime}:00`);
+      const end = new Date(`1970-01-01T${endTime}:00`);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+      
+      let diffMs = end.getTime() - start.getTime();
+      
+      // Handle case where end time is next day (past midnight)
+      if (diffMs < 0) {
+        diffMs += 24 * 60 * 60 * 1000; // Add 24 hours
+      }
+      
+      const diffMinutes = Math.round(diffMs / (1000 * 60));
+      return diffMinutes.toString();
+    } catch (error) {
+      return '';
+    }
+  };
+
   // Appendectomy specific state
   const [activeSection, setActiveSection] = useState("section1");
   const [expanded, setExpanded] = useState({
@@ -374,6 +432,36 @@ const Index = () => {
     section3: false,
     section4: false,
     section5: false
+  });
+
+  // Appendectomy history management for undo/redo
+  const [appendectomyHistory, setAppendectomyHistory] = useState({
+    patientInfo: [currentReport.appendectomy?.patientInfo || {
+      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
+    }],
+    preoperative: [currentReport.appendectomy?.preoperative || {
+      surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
+    }],
+    intraoperative: [currentReport.appendectomy?.intraoperative || {
+      appendixAppearance: [], abscess: '', peritonitis: [], otherFindings: ''
+    }],
+    procedure: [currentReport.appendectomy?.procedure || {
+      approach: [], reasonForConversion: '', operationDescription: '', incisionType: [], incisionOther: '', trocarPlacement: '', divisionMethod: [], divisionOther: '', mesenteryControl: [], mesenteryOther: '', lavage: '', drainPlacement: '', drainLocation: ''
+    }],
+    closure: [currentReport.appendectomy?.closure || {
+      fascialClosure: '', fascialClosureOther: '', fascialMaterial: [], fascialMaterialOther: '', skinClosure: [], skinOther: '', skinMaterial: [], skinMaterialOther: '', operativeDifficulty: [], operativeDifficultyOther: '', complications: '', complicationDetails: '', visceralInjuryDetail: '', complicationOther: '', pathology: '', laboratoryName: '', otherSpecimens: '', specimenDetails: '', additionalNotes: '', postOperativeManagement: '', surgeonSignature: '', surgeonSignatureText: '', dateTime: ''
+    }],
+    procedureFindings: [currentReport.appendectomy?.procedureFindings || {
+      findings: '', additionalNotes: ''
+    }]
+  });
+  const [appendectomyHistoryIndex, setAppendectomyHistoryIndex] = useState({
+    patientInfo: 0,
+    preoperative: 0,
+    intraoperative: 0,
+    procedure: 0,
+    closure: 0,
+    procedureFindings: 0
   });
 
   // Ventral Hernia specific state
@@ -448,6 +536,269 @@ const Index = () => {
     gastroscopy: null,
     colonoscopy: null
   });
+
+  // History for Undo/Redo (endoscopy scope)
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const addToHistory = (state: any) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(JSON.parse(JSON.stringify(state)));
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setCurrentReport(JSON.parse(JSON.stringify(history[historyIndex - 1])));
+      toast.success('Undone');
+    }
+  };
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setCurrentReport(JSON.parse(JSON.stringify(history[historyIndex + 1])));
+      toast.success('Redone');
+    }
+  };
+  
+  // Section-specific history for endoscopy (copying Appendectomy pattern)
+  const [endoscopyHistory, setEndoscopyHistory] = useState({
+    patientInfo: [{}],
+    procedureInfo: [{}],
+    gastroscopyFindings: [{ findings: [] }],
+    colonoscopyFindings: [{ findings: [] }],
+    specimen: [{}],
+    conclusion: [''],
+    followUp: [{}],
+    signature: [{}]
+  });
+
+  const [endoscopyHistoryIndex, setEndoscopyHistoryIndex] = useState({
+    patientInfo: 0,
+    procedureInfo: 0,
+    gastroscopyFindings: 0,
+    colonoscopyFindings: 0,
+    specimen: 0,
+    conclusion: 0,
+    followUp: 0,
+    signature: 0
+  });
+
+  // Section-specific undo/redo functions for endoscopy (copying Appendectomy pattern)
+  const undoEndoscopy = (section: string) => {
+    const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = endoscopyHistory[section as keyof typeof endoscopyHistory][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        [section]: JSON.parse(JSON.stringify(previousState))
+      }));
+      
+      setEndoscopyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} undone`);
+    }
+  };
+
+  const redoEndoscopy = (section: string) => {
+    const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
+    const historyArray = endoscopyHistory[section as keyof typeof endoscopyHistory];
+    
+    if (currentIndex < historyArray.length - 1) {
+      const newIndex = currentIndex + 1;
+      const nextState = historyArray[newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        [section]: JSON.parse(JSON.stringify(nextState))
+      }));
+      
+      setEndoscopyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} redone`);
+    }
+  };
+
+  const addToEndoscopyHistory = (section: string, data: any) => {
+    const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
+    const currentHistory = endoscopyHistory[section as keyof typeof endoscopyHistory];
+    
+    // Remove any history after current index and add new state
+    const newHistory = currentHistory.slice(0, currentIndex + 1);
+    newHistory.push(JSON.parse(JSON.stringify(data)));
+    
+    setEndoscopyHistory(prev => ({
+      ...prev,
+      [section]: newHistory
+    }));
+    
+    setEndoscopyHistoryIndex(prev => ({
+      ...prev,
+      [section]: newHistory.length - 1
+    }));
+  };
+
+  // Clear specific endoscopy section (enhanced to manage section history)
+  const clearEndoscopySection = (section: string) => {
+    let initialState;
+    
+    switch (section) {
+      case 'patientInfo':
+        initialState = {};
+        break;
+      case 'procedureInfo':
+        initialState = {};
+        break;
+      case 'gastroscopyFindings':
+        initialState = { findings: [] };
+        setCurrentReport(prev => ({ ...prev, gastroscopyCanvasData: '' }));
+        break;
+      case 'colonoscopyFindings':
+        initialState = { findings: [] };
+        setCurrentReport(prev => ({ ...prev, colonoscopyCanvasData: '' }));
+        break;
+      case 'specimen':
+        initialState = {
+          sentForPathology: '',
+          laboratoryName: '',
+          otherSpecimensTaken: '',
+          otherSpecimensDetails: ''
+        };
+        break;
+      case 'conclusion':
+        initialState = '';
+        break;
+      case 'followUp':
+        initialState = {
+          enabled: false,
+          options: [],
+          other: '',
+          notes: '',
+          postOperativeManagement: ''
+        };
+        break;
+      case 'signature':
+        initialState = {
+          surgeonSignature: '',
+          surgeonSignatureText: '',
+          dateTime: ''
+        };
+        break;
+      default:
+        return;
+    }
+    
+    setCurrentReport(prev => ({
+      ...prev,
+      [section]: initialState
+    }));
+    
+    // Reset section history
+    setEndoscopyHistory(prev => ({
+      ...prev,
+      [section]: [initialState]
+    }));
+    
+    setEndoscopyHistoryIndex(prev => ({
+      ...prev,
+      [section]: 0
+    }));
+    
+    toast.success(`${section} cleared`);
+  };
+  
+  // Auto-save functionality with shorter debouncing for better user experience
+  const autoSaveEndoscopy = createAutoSave('endoscopy_report', 3000); // 3 seconds for good responsiveness
+  
+  // Track if this is initial load to prevent interference during development
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  
+  // Development mode detection - but persistence should be enabled by default
+  const isDevelopmentMode = process.env.NODE_ENV === 'development';
+  const enablePersistence = localStorage.getItem('disable_persistence') !== 'true'; // Only disable if explicitly set
+  
+  // Load saved data on component mount (this handles ALL templates)
+  useEffect(() => {
+    if (enablePersistence) {
+      const savedData = loadFromStorage('endoscopy_report');
+      if (savedData) {
+        setCurrentReport(savedData);
+        console.log('Restored previous session data for all templates');
+      }
+    }
+  }, [enablePersistence]);
+  
+  // Helper function to check if saved data has meaningful content (very lenient - save almost everything)
+  const hasValidData = (data: any): boolean => {
+    if (!data || typeof data !== 'object') return false;
+    
+    // Check if any section has meaningful data
+    const patientInfo = data.patientInfo || {};
+    const rectalCancer = data.rectalCancer || {};
+    const ventralHernia = data.ventralHernia || {};
+    const appendectomy = data.appendectomy || {};
+    const gastroscopyFindings = data.gastroscopyFindings || {};
+    const colonoscopyFindings = data.colonoscopyFindings || {};
+    
+    // Check various fields that indicate user input (be very inclusive)
+    const hasPatientData = patientInfo.name || patientInfo.patientId || patientInfo.dateOfBirth || patientInfo.age || patientInfo.sex;
+    const hasRectalData = rectalCancer.patientInfo?.name || rectalCancer.surgicalTeam?.surgeons?.some(s => s.trim()) || rectalCancer.operationType?.type?.length > 0;
+    const hasVentralData = ventralHernia.patientInfo?.name || ventralHernia.preoperative?.surgeons?.some(s => s.trim()) || ventralHernia.operative?.herniaType?.length > 0;
+    const hasAppendectomyData = appendectomy.patientInfo?.name || appendectomy.preoperative?.surgeons?.some(s => s.trim()) || appendectomy.procedure?.approach?.length > 0;
+    const hasEndoscopyData = gastroscopyFindings.findings?.length > 0 || colonoscopyFindings.findings?.length > 0 || data.selectedProcedures?.length > 0;
+    const hasNotes = data.notes?.trim() || data.conclusion?.trim();
+    
+    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasEndoscopyData || hasNotes;
+  };
+
+  // Appendectomy data is now handled by the main data loading above
+  // Helper function to check if appendectomy data has meaningful content
+  const hasValidAppendectomyData = (data: any): boolean => {
+    if (!data || typeof data !== 'object') return false;
+    
+    // Check various sections for meaningful data
+    const patientInfo = data.patientInfo || {};
+    const preoperative = data.preoperative || {};
+    const procedure = data.procedure || {};
+    
+    return !!(patientInfo.name || preoperative.surgeons?.some(s => s.trim()) || procedure.operationDescription?.trim());
+  };
+  
+  // Auto-save whenever currentReport changes (if persistence enabled)
+  useEffect(() => {
+    // Auto-save if persistence is enabled - save almost everything to ensure nothing is lost
+    if (enablePersistence) {
+      autoSaveEndoscopy(currentReport);
+    }
+  }, [currentReport, autoSaveEndoscopy, enablePersistence]);
+  
+  // Track user interaction to enable smart saving
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      if (!hasUserInteracted) {
+        setHasUserInteracted(true);
+      }
+    };
+    
+    // Listen for various user interactions
+    document.addEventListener('input', handleUserInteraction);
+    document.addEventListener('change', handleUserInteraction);
+    document.addEventListener('click', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('input', handleUserInteraction);
+      document.removeEventListener('change', handleUserInteraction);
+      document.removeEventListener('click', handleUserInteraction);
+    };
+  }, [hasUserInteracted]);
   
   // Helper functions for automatic calculations
   const calculateBMI = (weight: string, height: string): string => {
@@ -591,18 +942,27 @@ const Index = () => {
         return newState;
       });
     } else {
-      setCurrentReport(prev => ({
-        ...prev,
-        [section]: section === 'media' 
-          ? data 
-          : section === 'conclusion' 
-            ? data 
-            : typeof data === 'object' && data !== null
-              ? { ...prev[section], ...data }
-              : data
-      }));
+      setCurrentReport(prev => {
+        const next = {
+          ...prev,
+          [section]: section === 'media'
+            ? data
+            : section === 'conclusion'
+              ? data
+              : typeof data === 'object' && data !== null
+                ? { ...prev[section], ...data }
+                : data
+        } as typeof prev;
+        setTimeout(() => {
+          addToHistory(next);
+        }, 0);
+        return next;
+      });
     }
   };
+
+  // Create auto-save function with longer debouncing to reduce interference
+  const autoSaveAppendectomy = createAutoSave('appendectomy_data', 10000); // 10 seconds instead of 2
 
   // Update appendectomy specific data
   const updateAppendectomy = (section: string, field: string, value: any) => {
@@ -633,11 +993,419 @@ const Index = () => {
         }
       }
 
-      return {
+      const newReport = {
         ...prev,
         appendectomy: newAppendectomy
       };
+
+      // Auto-save the updated data with debouncing (if persistence enabled)
+      if (enablePersistence) {
+        autoSaveAppendectomy(newReport.appendectomy);
+      }
+
+      return newReport;
     });
+
+    // Add to history for undo/redo functionality
+    setAppendectomyHistory(prevHistory => {
+      const newHistory = { ...prevHistory };
+      const currentIndex = appendectomyHistoryIndex[section as keyof typeof appendectomyHistoryIndex];
+      
+      // Remove any history after current index (when user makes new change after undo)
+      newHistory[section as keyof typeof newHistory] = newHistory[section as keyof typeof newHistory]?.slice(0, currentIndex + 1) || [];
+      
+      // Add new state to history
+      const newSectionData = {
+        ...currentReport.appendectomy[section as keyof typeof currentReport.appendectomy],
+        [field]: value
+      };
+      newHistory[section as keyof typeof newHistory].push(newSectionData);
+      
+      // Keep only last 20 history entries per section
+      if (newHistory[section as keyof typeof newHistory]?.length > 20) {
+        newHistory[section as keyof typeof newHistory] = newHistory[section as keyof typeof newHistory].slice(-20);
+      }
+
+      // Update history index with the new history length
+      setAppendectomyHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        [section]: (newHistory[section as keyof typeof newHistory]?.length || 1) - 1
+      }));
+      
+      return newHistory;
+    });
+  };
+
+  // Appendectomy undo/redo/clear functions
+  const undoAppendectomy = (section: keyof typeof appendectomyHistory) => {
+    const currentIndex = appendectomyHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = appendectomyHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        appendectomy: {
+          ...prev.appendectomy,
+          [section]: previousState
+        }
+      }));
+      
+      setAppendectomyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} changes undone`);
+    } else {
+      toast.info(`No more actions to undo for ${section}`);
+    }
+  };
+
+  const redoAppendectomy = (section: keyof typeof appendectomyHistory) => {
+    const currentIndex = appendectomyHistoryIndex[section];
+    const maxIndex = appendectomyHistory[section].length - 1;
+    
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = appendectomyHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        appendectomy: {
+          ...prev.appendectomy,
+          [section]: nextState
+        }
+      }));
+      
+      setAppendectomyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} changes redone`);
+    } else {
+      toast.info(`No more actions to redo for ${section}`);
+    }
+  };
+
+  const clearAppendectomy = (section: keyof typeof appendectomyHistory) => {
+    const initialState = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      preoperative: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        indication: [],
+        indicationOther: '',
+        imaging: [],
+        imagingOther: ''
+      },
+      intraoperative: {
+        appendixAppearance: [],
+        abscess: '',
+        peritonitis: [],
+        otherFindings: ''
+      },
+      procedure: {
+        approach: [],
+        reasonForConversion: '',
+        operationDescription: '',
+        incisionType: [],
+        incisionOther: '',
+        trocarPlacement: '',
+        divisionMethod: [],
+        divisionOther: '',
+        mesenteryControl: [],
+        mesenteryOther: '',
+        lavage: '',
+        drainPlacement: '',
+        drainLocation: ''
+      },
+      closure: {
+        fascialClosure: '',
+        skinClosure: [],
+        skinOther: '',
+        complications: '',
+        complicationDetails: '',
+        pathology: '',
+        otherSpecimens: '',
+        specimenDetails: '',
+        surgeonSignature: '',
+        dateTime: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      appendectomy: {
+        ...prev.appendectomy,
+        [section]: initialState[section]
+      }
+    }));
+
+    // Add cleared state to history
+    setAppendectomyHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...prevHistory[section], initialState[section]]
+    }));
+
+    setAppendectomyHistoryIndex(prev => ({
+      ...prev,
+      [section]: appendectomyHistory[section].length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  const clearAllAppendectomyData = () => {
+    const initialAppendectomy = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      preoperative: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        indication: [],
+        indicationOther: '',
+        imaging: [],
+        imagingOther: ''
+      },
+      intraoperative: {
+        appendixAppearance: [],
+        abscess: '',
+        peritonitis: [],
+        otherFindings: ''
+      },
+      procedure: {
+        approach: [],
+        reasonForConversion: '',
+        operationDescription: '',
+        incisionType: [],
+        incisionOther: '',
+        trocarPlacement: '',
+        divisionMethod: [],
+        divisionOther: '',
+        mesenteryControl: [],
+        mesenteryOther: '',
+        lavage: '',
+        drainPlacement: '',
+        drainLocation: ''
+      },
+      closure: {
+        fascialClosure: '',
+        skinClosure: [],
+        skinOther: '',
+        complications: '',
+        complicationDetails: '',
+        pathology: '',
+        otherSpecimens: '',
+        specimenDetails: '',
+        surgeonSignature: '',
+        dateTime: ''
+      }
+      ,
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      appendectomy: initialAppendectomy
+    }));
+
+    // Reset history
+    setAppendectomyHistory({
+      patientInfo: [initialAppendectomy.patientInfo],
+      preoperative: [initialAppendectomy.preoperative],
+      intraoperative: [initialAppendectomy.intraoperative],
+      procedure: [initialAppendectomy.procedure],
+      closure: [initialAppendectomy.closure],
+      procedureFindings: [initialAppendectomy.procedureFindings]
+    });
+
+    setAppendectomyHistoryIndex({
+      patientInfo: 0,
+      preoperative: 0,
+      intraoperative: 0,
+      procedure: 0,
+      closure: 0,
+      procedureFindings: 0
+    });
+
+    toast.success('All appendectomy data cleared');
+  };
+
+  // Handle clearing endoscopy data (section-specific or all)
+  const handleClearData = (section?: string) => {
+    if (section) {
+      // Clear specific section
+      switch (section) {
+        case 'patientInfo':
+          setCurrentReport(prev => ({
+            ...prev,
+            patientInfo: {}
+          }));
+          toast.success('Patient information cleared');
+          break;
+        
+        case 'procedureInfo':
+          setCurrentReport(prev => ({
+            ...prev,
+            procedureFindings: {
+              findings: '',
+              additionalNotes: ''
+            }
+          }));
+          toast.success('Procedure information cleared');
+          break;
+        
+        case 'procedureTypes':
+          setCurrentReport(prev => ({
+            ...prev,
+            selectedProcedures: []
+          }));
+          toast.success('Procedure types cleared');
+          break;
+        
+        case 'specimen':
+          setCurrentReport(prev => ({
+            ...prev,
+            specimen: {
+              sentForPathology: '',
+              laboratoryName: '',
+              otherSpecimensTaken: '',
+              otherSpecimensDetails: ''
+            }
+          }));
+          toast.success('Specimen information cleared');
+          break;
+        
+        case 'gastroscopyFindings':
+          setCurrentReport(prev => ({
+            ...prev,
+            gastroscopyFindings: { findings: [] },
+            gastroscopyCanvasData: ''
+          }));
+          toast.success('Gastroscopy findings cleared');
+          break;
+        
+        case 'colonoscopyFindings':
+          setCurrentReport(prev => ({
+            ...prev,
+            colonoscopyFindings: { findings: [] },
+            colonoscopyCanvasData: ''
+          }));
+          toast.success('Colonoscopy findings cleared');
+          break;
+        
+        case 'conclusion':
+          setCurrentReport(prev => ({
+            ...prev,
+            conclusion: ''
+          }));
+          toast.success('Conclusion cleared');
+          break;
+        
+        case 'followUp':
+          setCurrentReport(prev => ({
+            ...prev,
+            followUp: {
+              enabled: false,
+              options: [],
+              other: '',
+              notes: '',
+              postOperativeManagement: ''
+            }
+          }));
+          toast.success('Follow-up information cleared');
+          break;
+        
+        case 'signature':
+          setCurrentReport(prev => ({
+            ...prev,
+            signature: {
+              surgeonSignature: '',
+              surgeonSignatureText: '',
+              dateTime: ''
+            }
+          }));
+          toast.success('Signature cleared');
+          break;
+        
+        default:
+          toast.error('Unknown section');
+          break;
+      }
+    } else {
+      // Clear all endoscopy data
+      setCurrentReport(prev => ({
+        ...prev,
+        patientInfo: {},
+        gastroscopyFindings: { findings: [] },
+        colonoscopyFindings: { findings: [] },
+        media: [],
+        notes: "",
+        selectedProcedures: [],
+        gastroscopyCanvasData: '',
+        colonoscopyCanvasData: '',
+        procedureFindings: {
+          findings: '',
+          additionalNotes: ''
+        },
+        specimen: {
+          sentForPathology: '',
+          laboratoryName: '',
+          otherSpecimensTaken: '',
+          otherSpecimensDetails: ''
+        },
+        conclusion: '',
+        followUp: {
+          enabled: false,
+          options: [],
+          other: '',
+          notes: '',
+          postOperativeManagement: ''
+        },
+        signature: {
+          surgeonSignature: '',
+          surgeonSignatureText: '',
+          dateTime: ''
+        }
+      }));
+      toast.success('All endoscopy data cleared');
+    }
   };
 
   // Update ventral hernia specific data
@@ -765,7 +1533,17 @@ const Index = () => {
           const url = URL.createObjectURL(result.blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `appendectomy_report_${currentReport.appendectomy?.patientInfo?.name?.replace(/\s+/g, '_') || 'patient'}_${new Date().getTime()}.pdf`;
+          // Create filename in format: PatientName_PatientID_Appendectomy_Report_dd_mm_yyyy
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const dateFormatted = `${day}_${month}_${year}`;
+          
+          const cleanPatientName = (currentReport.appendectomy?.patientInfo?.name || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanPatientId = (currentReport.appendectomy?.patientInfo?.patientId || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
+          
+          link.download = `${cleanPatientName}_${cleanPatientId}_Appendectomy_Report_${dateFormatted}.pdf`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -798,11 +1576,11 @@ const Index = () => {
 
         // Use the new rectal cancer PDF generator
         const result = await generateRectalCancerPDF(
-          currentReport.patientInfo?.name || 'Unknown Patient',
-          currentReport.patientInfo?.patientId || 'N/A',
+          currentReport.rectalCancer?.patientInfo?.name || currentReport.patientInfo?.name || 'Unknown Patient',
+          currentReport.rectalCancer?.patientInfo?.patientId || currentReport.patientInfo?.patientId || 'N/A',
           surgicalMarkings, // Pass surgical markings
           currentReport.rectalCancer, // Pass rectal cancer data
-          currentReport.patientInfo // Pass patient info
+          currentReport.rectalCancer?.patientInfo || currentReport.patientInfo // Pass patient info
         );
         
         if (result.success && result.blob) {
@@ -810,7 +1588,9 @@ const Index = () => {
           const url = URL.createObjectURL(result.blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `rectal_cancer_report_${currentReport.patientInfo?.name?.replace(/\s+/g, '_') || 'patient'}_${new Date().getTime()}.pdf`;
+          const patientName = (currentReport.rectalCancer?.patientInfo?.name || currentReport.patientInfo?.name || 'patient').replace(/\s+/g, '_');
+          const dob = formatDOBForFilename(currentReport.rectalCancer?.patientInfo?.dateOfBirth || currentReport.patientInfo?.dateOfBirth);
+          link.download = `${patientName}_${dob}_Rectal_Cancer_Surgery_Report.pdf`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -843,8 +1623,8 @@ const Index = () => {
 
         // Use the new ventral hernia PDF generator
         const result = await generateVentralHerniaPDF(
-          currentReport.patientInfo?.name || 'Unknown Patient',
-          currentReport.patientInfo?.patientId || 'N/A',
+          currentReport.ventralHernia?.patientInfo?.name || 'Unknown Patient',
+          currentReport.ventralHernia?.patientInfo?.patientId || 'N/A',
           surgicalMarkings, // Pass surgical markings
           currentReport.ventralHernia // Pass ventral hernia data
         );
@@ -854,7 +1634,17 @@ const Index = () => {
           const url = URL.createObjectURL(result.blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `ventral_hernia_report_${currentReport.patientInfo?.name?.replace(/\s+/g, '_') || 'patient'}_${new Date().getTime()}.pdf`;
+          // Format filename as: PatientName_PatientID_Ventral_Hernia_Report_DD_MM_YYYY
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const formattedDate = `${day}_${month}_${year}`;
+          
+          const cleanPatientName = (currentReport.ventralHernia?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanPatientId = (currentReport.ventralHernia?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
+          
+          link.download = `${cleanPatientName}_${cleanPatientId}_Ventral_Hernia_Report_${formattedDate}.pdf`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -1083,6 +1873,46 @@ const Index = () => {
     toast.success("Follow-up removed successfully!");
   };
 
+  // Development helper function to clear persistent data
+  const clearPersistentData = () => {
+    if (clearAllStorage()) {
+      toast.success("All persistent data cleared successfully!");
+      // Refresh the page to reset all state
+      window.location.reload();
+    } else {
+      toast.error("Failed to clear persistent data");
+    }
+  };
+
+  // Development helper function to toggle persistence
+  const togglePersistence = () => {
+    const newState = !enablePersistence;
+    if (newState) {
+      localStorage.removeItem('disable_persistence');
+      toast.success("Persistence enabled - your data will be saved");
+    } else {
+      localStorage.setItem('disable_persistence', 'true');
+      toast.success("Persistence disabled - perfect for development");
+    }
+    window.location.reload();
+  };
+
+  // Development helpers: Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+        event.preventDefault();
+        clearPersistentData();
+      } else if (event.ctrlKey && event.shiftKey && event.key === 'P') {
+        event.preventDefault();
+        togglePersistence();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [enablePersistence]);
+
   return (
     <AppLayout>
       <GlassContainer>
@@ -1098,13 +1928,27 @@ const Index = () => {
           <div className="2xl:col-span-3">
             <Card className="shadow-glass-heavy">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Microscope className="h-5 w-5 text-gray-600" />
-                  Patient & Procedure Documentation
-                </CardTitle>
-                <CardDescription>
-                  Complete patient information and procedure documentation
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Microscope className="h-5 w-5 text-gray-600" />
+                      Patient & Procedure Documentation
+                    </CardTitle>
+                    <CardDescription>
+                      Complete patient information and procedure documentation
+                    </CardDescription>
+                  </div>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => handleClearData()}
+                    title="Clear all endoscopy data"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Clear All Data
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
@@ -1115,7 +1959,7 @@ const Index = () => {
                     </TabsTrigger>
                     <TabsTrigger value="appendectomy" className="flex items-center gap-2">
                       <Scissors className="h-4 w-4" />
-                      Appendectomy
+                      Appendicectomy
                     </TabsTrigger>
                     <TabsTrigger value="hernia" className="flex items-center gap-2">
                       <Shield className="h-4 w-4" />
@@ -1133,22 +1977,182 @@ const Index = () => {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-lg">
                           <User className="h-5 w-5 text-gray-600" />
-                          Patient Details
+                          Patient Information
                         </CardTitle>
-                        <CardDescription>
-                          Enter the patient's personal and medical information
-                        </CardDescription>
+                        <div className="flex gap-2 mt-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoEndoscopy('patientInfo')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoEndoscopy('patientInfo')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearEndoscopySection('patientInfo')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-6">
                         <PatientInfoForm 
                           onUpdate={(data) => updateReport('patientInfo', data)}
                           currentData={currentReport.patientInfo}
                         />
-                        
+
+                        {/* Preoperative Information */}
+                        <div className="space-y-4 pt-6 border-t">
+                          <div>
+                            <h3 className="text-base font-semibold mb-4">Preoperative Information</h3>
+                          </div>
+                          <div className="space-y-4">
+                            {/* Surgeons */}
+                            <div className="space-y-2">
+                              <label className="text-gray-800 font-medium">Surgeon:</label>
+                              {(currentReport.patientInfo?.surgeons || ['']).map((value: string, index: number) => (
+                                <div key={`surgeon-${index}`} className="flex items-center gap-2">
+                                  <Input
+                                    value={value}
+                                    onChange={(e) => {
+                                      const list = [...(currentReport.patientInfo?.surgeons || [''])];
+                                      list[index] = e.target.value;
+                                      updateReport('patientInfo', { surgeons: list });
+                                    }}
+                                    placeholder="Enter Surgeon Name"
+                                    className="flex-1"
+                                  />
+                                  {index === (currentReport.patientInfo?.surgeons || ['']).length - 1 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="px-2 py-1 h-8"
+                                      onClick={() => {
+                                        const list = [...(currentReport.patientInfo?.surgeons || [''])];
+                                        list.push('');
+                                        updateReport('patientInfo', { surgeons: list });
+                                      }}
+                                    >
+                                      +
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Assistants */}
+                            <div className="space-y-2">
+                              <label className="text-gray-800 font-medium">Assistant:</label>
+                              {(currentReport.patientInfo?.assistants || ['']).map((value: string, index: number) => (
+                                <div key={`assistant-${index}`} className="flex items-center gap-2">
+                                  <Input
+                                    value={value}
+                                    onChange={(e) => {
+                                      const list = [...(currentReport.patientInfo?.assistants || [''])];
+                                      list[index] = e.target.value;
+                                      updateReport('patientInfo', { assistants: list });
+                                    }}
+                                    placeholder="Enter Assistant Name"
+                                    className="flex-1"
+                                  />
+                                  {index === (currentReport.patientInfo?.assistants || ['']).length - 1 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="px-2 py-1 h-8"
+                                      onClick={() => {
+                                        const list = [...(currentReport.patientInfo?.assistants || [''])];
+                                        list.push('');
+                                        updateReport('patientInfo', { assistants: list });
+                                      }}
+                                    >
+                                      +
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Anaesthetists */}
+                            <div className="space-y-2">
+                              <label className="text-gray-800 font-medium">Anaesthetist:</label>
+                              {(currentReport.patientInfo?.anaesthetists || ['']).map((value: string, index: number) => (
+                                <div key={`anaesthetist-${index}`} className="flex items-center gap-2">
+                                  <Input
+                                    value={value}
+                                    onChange={(e) => {
+                                      const list = [...(currentReport.patientInfo?.anaesthetists || [''])];
+                                      list[index] = e.target.value;
+                                      updateReport('patientInfo', { anaesthetists: list });
+                                    }}
+                                    placeholder="Enter Anaesthetist Name"
+                                    className="flex-1"
+                                  />
+                                  {index === (currentReport.patientInfo?.anaesthetists || ['']).length - 1 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="px-2 py-1 h-8"
+                                      onClick={() => {
+                                        const list = [...(currentReport.patientInfo?.anaesthetists || [''])];
+                                        list.push('');
+                                        updateReport('patientInfo', { anaesthetists: list });
+                                      }}
+                                    >
+                                      +
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                         <div className="space-y-4 pt-6 border-t">
                           <div>
                             <h3 className="text-base font-semibold mb-4">Procedure Information</h3>
-                            <p className="text-sm text-gray-500 mb-4">Enter procedure-specific details</p>
+                            <div className="flex gap-2 mb-4">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0"
+                                onClick={() => undoEndoscopy('procedureInfo')}
+                                title="Undo"
+                              >
+                                <Undo2 className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0"
+                                onClick={() => redoEndoscopy('procedureInfo')}
+                                title="Redo"
+                              >
+                                <Redo2 className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                                onClick={() => clearEndoscopySection('procedureInfo')}
+                                title="Clear Section"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                           <ProcedureInfoForm 
                             onUpdate={(data) => updateReport('patientInfo', data)}
@@ -1159,12 +2163,73 @@ const Index = () => {
                     </Card>
 
                     {/* Procedure Type Selection */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="sr-only">Procedure Type Selection</h3>
+                      <div className="flex gap-2 ml-auto mb-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => undoEndoscopy('procedureTypes')}
+                          title="Undo"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => redoEndoscopy('procedureTypes')}
+                          title="Redo"
+                        >
+                          <Redo2 className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                          onClick={() => clearEndoscopySection('procedureTypes')}
+                          title="Clear Section"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                     <ProcedureTypeSelection
                       onUpdate={(procedures) => updateReport('selectedProcedures', procedures)}
                       initialProcedures={currentReport.selectedProcedures}
                     />
                     
                     {/* Conditional Diagram Display */}
+                    <div className="flex items-center justify-end gap-2 mb-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
+                        onClick={() => handleUndoFinding('gastroscopy')}
+                        title="Undo"
+                      >
+                        <Undo2 className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
+                        onClick={() => handleRedoFinding('gastroscopy')}
+                        title="Redo"
+                      >
+                        <Redo2 className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                        onClick={handleRemoveProcedureFindings}
+                        title="Clear Section"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
                     <ConditionalDiagramDisplay
                       selectedProcedures={currentReport.selectedProcedures}
                       onGastroscopyUpdate={(data) => updateReport('gastroscopyFindings', data)}
@@ -1178,6 +2243,117 @@ const Index = () => {
                       onGastroscopyMethodsReady={(methods) => setDiagramMethods(prev => ({ ...prev, gastroscopy: methods }))}
                       onColonoscopyMethodsReady={(methods) => setDiagramMethods(prev => ({ ...prev, colonoscopy: methods }))}
                     />
+
+                    {/* Specimen Section */}
+                    <Card className="glass-card-light">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-gray-600" />
+                            <span className="text-sm font-semibold text-black">Specimen</span>
+                          </span>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0"
+                              onClick={() => undoEndoscopy('specimen')}
+                              title="Undo"
+                            >
+                              <Undo2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0"
+                              onClick={() => redoEndoscopy('specimen')}
+                              title="Redo"
+                            >
+                              <Redo2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                              onClick={() => clearEndoscopySection('specimen')}
+                              title="Clear Section"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Sent for Pathology */}
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Specimen Sent for Pathology:</p>
+                          <div className="flex space-x-6">
+                            <label className="flex items-center space-x-2 text-sm text-gray-700">
+                              <input
+                                type="radio"
+                                name="endo-specimen-path"
+                                checked={currentReport.specimen?.sentForPathology === 'Yes'}
+                                onChange={() => updateReport('specimen', { sentForPathology: 'Yes' })}
+                              />
+                              <span>Yes</span>
+                            </label>
+                            <label className="flex items-center space-x-2 text-sm text-gray-700">
+                              <input
+                                type="radio"
+                                name="endo-specimen-path"
+                                checked={currentReport.specimen?.sentForPathology === 'No'}
+                                onChange={() => updateReport('specimen', { sentForPathology: 'No', laboratoryName: '' })}
+                              />
+                              <span>No</span>
+                            </label>
+                          </div>
+                          {currentReport.specimen?.sentForPathology === 'Yes' && (
+                            <div className="mt-3">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Specify Laboratory Sent to:</label>
+                              <Input
+                                type="text"
+                                className="w-full max-w-md"
+                                value={currentReport.specimen?.laboratoryName || ''}
+                                onChange={(e) => updateReport('specimen', { laboratoryName: e.target.value })}
+                                placeholder="Enter laboratory name"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Other Specimens Taken */}
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Other Specimens Taken:</p>
+                          <div className="flex items-center">
+                            <label className="flex items-center space-x-2 text-sm text-gray-700">
+                              <input
+                                type="radio"
+                                name="endo-other-specimens"
+                                checked={currentReport.specimen?.otherSpecimensTaken === 'Yes'}
+                                onChange={() => updateReport('specimen', { otherSpecimensTaken: 'Yes' })}
+                              />
+                              <span>Yes (Specify:)</span>
+                            </label>
+                            <Input
+                              type="text"
+                              className="ml-2 w-48"
+                              value={currentReport.specimen?.otherSpecimensDetails || ''}
+                              onChange={(e) => updateReport('specimen', { otherSpecimensDetails: e.target.value })}
+                              placeholder="e.g. Biopsies"
+                            />
+                            <label className="flex items-center space-x-2 text-sm text-gray-700 ml-6">
+                              <input
+                                type="radio"
+                                name="endo-other-specimens"
+                                checked={currentReport.specimen?.otherSpecimensTaken === 'No'}
+                                onChange={() => updateReport('specimen', { otherSpecimensTaken: 'No', otherSpecimensDetails: '' })}
+                              />
+                              <span>No</span>
+                            </label>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
 
                     {/* Conclusion Section */}
                     <Card className="glass-card-light">
@@ -1435,6 +2611,19 @@ const Index = () => {
                               )}
                             </div>
                           </div>
+
+                          {/* Post Operative Management */}
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Post Operative Management</label>
+                            <div className="space-y-2">
+                              <Textarea
+                                value={currentReport.followUp?.postOperativeManagement || ''}
+                                onChange={(e) => updateReport('followUp', { ...currentReport.followUp, postOperativeManagement: e.target.value })}
+                                rows={3}
+                                placeholder="Enter post-operative management plan..."
+                              />
+                            </div>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -1538,6 +2727,14 @@ const Index = () => {
                               <Download className="h-3 w-3 mr-1" />
                               {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
                             </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="glass-button text-xs"
+                              onClick={() => handleClearData()}
+                            >
+                              Clear All Data
+                            </Button>
                           </div>
                         </div>
                       </CardHeader>
@@ -1582,10 +2779,20 @@ const Index = () => {
                                 setCurrentTab('appendectomy');
                                 handleExportPDF();
                               }}
-                              disabled={isGeneratingPDF}
+                              title="Export appendectomy PDF"
                             >
                               <Download className="w-4 h-4 mr-2" />
-                              {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
+                              Print/Export PDF
+                            </Button>
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="text-xs"
+                              onClick={clearAllAppendectomyData}
+                              title="Clear all appendectomy data"
+                            >
+                              <RotateCcw className="w-4 h-4 mr-2" />
+                              Clear All Data
                             </Button>
                           </div>
                         </div>
@@ -1595,11 +2802,44 @@ const Index = () => {
                     {/* Section I: Patient Information */}
                     <Card className="glass-card-light">
                       <div 
-                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${activeSection === "section1" ? "bg-blue-50" : ""}`}
-                        onClick={() => toggleExpand("section1")}
+                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center ${activeSection === "section1" ? "bg-blue-50" : ""}`}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Patient Information</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section1 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer flex-1"
+                          onClick={() => toggleExpand("section1")}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Patient Information</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section1 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoAppendectomy('patientInfo')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoAppendectomy('patientInfo')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearAppendectomy('patientInfo')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {expanded.section1 && (
@@ -1612,7 +2852,7 @@ const Index = () => {
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.name}
                                 onChange={(e) => updateAppendectomy('patientInfo', 'name', e.target.value)}
-                                placeholder="Enter patient name"
+                                placeholder="Enter Patient Name"
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
@@ -1622,7 +2862,7 @@ const Index = () => {
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.patientId}
                                 onChange={(e) => updateAppendectomy('patientInfo', 'patientId', e.target.value)}
-                                placeholder="Enter patient ID"
+                                placeholder="Enter Patient ID"
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
@@ -1647,22 +2887,33 @@ const Index = () => {
                                 className="w-full bg-gray-100" 
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.age}
-                                placeholder="Calculated from date of birth"
+                                placeholder="Calculated from the Date Of Birth"
                                 readOnly
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
                               <label className="text-gray-800 font-medium">Sex:</label>
-                              <select 
-                                className="w-full p-2 border border-gray-300 rounded-md"
-                                value={currentReport.appendectomy.patientInfo.sex}
-                                onChange={(e) => updateAppendectomy('patientInfo', 'sex', e.target.value)}
-                              >
-                                <option value="">Select sex</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                              </select>
+                              <div className="space-y-2">
+                                <select 
+                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  value={currentReport.appendectomy.patientInfo.sex}
+                                  onChange={(e) => updateAppendectomy('patientInfo', 'sex', e.target.value)}
+                                >
+                                  <option value="">Select Sex</option>
+                                  <option value="male">Male</option>
+                                  <option value="female">Female</option>
+                                  <option value="other">Other</option>
+                                </select>
+                                {currentReport.appendectomy.patientInfo.sex === 'other' && (
+                                  <Input
+                                    className="w-full"
+                                    type="text"
+                                    placeholder="Please Specify"
+                                    value={currentReport.appendectomy.patientInfo.sexOther || ''}
+                                    onChange={(e) => updateAppendectomy('patientInfo', 'sexOther', e.target.value)}
+                                  />
+                                )}
+                              </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
                               <label className="text-gray-800 font-medium">Weight:</label>
@@ -1671,7 +2922,7 @@ const Index = () => {
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.weight}
                                 onChange={(e) => updateAppendectomy('patientInfo', 'weight', e.target.value)}
-                                placeholder="Enter weight (kg)"
+                                placeholder="Enter Weight (Kg)"
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
@@ -1681,7 +2932,7 @@ const Index = () => {
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.height}
                                 onChange={(e) => updateAppendectomy('patientInfo', 'height', e.target.value)}
-                                placeholder="Enter height (cm)"
+                                placeholder="Enter Height (Cm)"
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
@@ -1690,7 +2941,7 @@ const Index = () => {
                                 className="w-full bg-gray-100" 
                                 type="text" 
                                 value={currentReport.appendectomy.patientInfo.bmi}
-                                placeholder="Calculated from height and weight"
+                                placeholder="Calculated from Height and Weight"
                                 readOnly
                               />
                             </div>
@@ -1709,11 +2960,44 @@ const Index = () => {
                     {/* Section II: Preoperative Information */}
                     <Card className="glass-card-light">
                       <div 
-                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${activeSection === "section2" ? "bg-blue-50" : ""}`}
-                        onClick={() => toggleExpand("section2")}
+                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center ${activeSection === "section2" ? "bg-blue-50" : ""}`}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Preoperative Information</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section2 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer flex-1"
+                          onClick={() => toggleExpand("section2")}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Preoperative Information</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section2 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoAppendectomy('preoperative')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoAppendectomy('preoperative')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearAppendectomy('preoperative')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {expanded.section2 && (
@@ -1814,20 +3098,56 @@ const Index = () => {
                               </div>
                               <div className="grid grid-cols-2 gap-4 items-center">
                                 <label className="text-gray-800 font-medium">Anaesthetist:</label>
-                                <Input 
-                                  className="w-full" 
-                                  type="text" 
-                                  placeholder="Enter Anaesthetist name" 
-                                  value={currentReport.appendectomy.preoperative.anaesthetist}
-                                  onChange={(e) => updateAppendectomy('preoperative', 'anaesthetist', e.target.value)}
-                                />
+                                <div className="space-y-2">
+                                  {currentReport.appendectomy.preoperative.anaesthetists.map((anaesthetist, index) => (
+                                    <div className="flex items-center gap-2" key={`anaesthetist-${index}`}>
+                                      <Input 
+                                        className="w-full" 
+                                        type="text" 
+                                        placeholder="Enter Anaesthetist name" 
+                                        value={anaesthetist}
+                                        onChange={(e) => {
+                                          const newAnaesthetists = [...currentReport.appendectomy.preoperative.anaesthetists];
+                                          newAnaesthetists[index] = e.target.value;
+                                          updateAppendectomy('preoperative', 'anaesthetists', newAnaesthetists);
+                                        }}
+                                      />
+                                      {index === currentReport.appendectomy.preoperative.anaesthetists.length - 1 && (
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="text-xs px-2 py-1"
+                                          onClick={() => {
+                                            const newAnaesthetists = [...currentReport.appendectomy.preoperative.anaesthetists, ''];
+                                            updateAppendectomy('preoperative', 'anaesthetists', newAnaesthetists);
+                                          }}
+                                        >
+                                          +
+                                        </Button>
+                                      )}
+                                      {currentReport.appendectomy.preoperative.anaesthetists.length > 1 && (
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="text-xs px-2 py-1 text-red-600 hover:text-red-700"
+                                          onClick={() => {
+                                            const newAnaesthetists = currentReport.appendectomy.preoperative.anaesthetists.filter((_, i) => i !== index);
+                                            updateAppendectomy('preoperative', 'anaesthetists', newAnaesthetists);
+                                          }}
+                                        >
+                                          −
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
-                                {['Acute Appendicitis', 'Perforated Appendix', 'Abscess', 'Interval Appendectomy', 'Other'].map(indication => (
+                                {['Acute Appendicitis', 'Perforated Appendix', 'Abscess', 'Interval Appendicectomy', 'Other'].map(indication => (
                                   <div className="flex items-center" key={`indication-${indication}`}>
                                     <Checkbox 
                                       id={`indication-${indication}`} 
@@ -1855,6 +3175,7 @@ const Index = () => {
                               </div>
                             </div>
 
+
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
@@ -1870,6 +3191,7 @@ const Index = () => {
                                           : currentImaging.filter(i => i !== imaging);
                                         updateAppendectomy('preoperative', 'imaging', newImaging);
                                       }}
+                                      className="data-[state=checked]:bg-black data-[state=checked]:border-black"
                                     />
                                     <label htmlFor={`imaging-${imaging}`} className="ml-2 block text-sm text-gray-700">{imaging}</label>
                                     {imaging === 'Other' && (
@@ -1885,24 +3207,298 @@ const Index = () => {
                                 ))}
                               </div>
                             </div>
+
+                            {/* Operation Description - moved here after Preoperative Imaging */}
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full min-h-[100px]"
+                                placeholder="Please describe the surgical approach and key procedural steps"
+                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
+                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
+                              />
+                            </div>
+
+                            {/* Duration of Operation with Start and End Times - moved here after Preoperative Imaging */}
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-3 gap-4 items-center">
+                                <label className="text-gray-800 font-medium">Start Time:</label>
+                                <Input 
+                                  className="w-full" 
+                                  type="time" 
+                                  placeholder="HH:MM" 
+                                  value={currentReport.appendectomy.preoperative.startTime}
+                                  onChange={(e) => {
+                                    updateAppendectomy('preoperative', 'startTime', e.target.value);
+                                    // Auto-calculate duration when both times are available
+                                    if (e.target.value && currentReport.appendectomy.preoperative.endTime) {
+                                      const duration = calculateDuration(e.target.value, currentReport.appendectomy.preoperative.endTime);
+                                      updateAppendectomy('preoperative', 'duration', duration);
+                                    }
+                                  }}
+                                />
+                                <div className="text-sm text-gray-600">24-hour format</div>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-4 items-center">
+                                <label className="text-gray-800 font-medium">End Time:</label>
+                                <Input 
+                                  className="w-full" 
+                                  type="time" 
+                                  placeholder="HH:MM" 
+                                  value={currentReport.appendectomy.preoperative.endTime}
+                                  onChange={(e) => {
+                                    updateAppendectomy('preoperative', 'endTime', e.target.value);
+                                    // Auto-calculate duration when both times are available
+                                    if (currentReport.appendectomy.preoperative.startTime && e.target.value) {
+                                      const duration = calculateDuration(currentReport.appendectomy.preoperative.startTime, e.target.value);
+                                      updateAppendectomy('preoperative', 'duration', duration);
+                                    }
+                                  }}
+                                />
+                                <div className="text-sm text-gray-600">24-hour format</div>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-4 items-center">
+                                <label className="text-gray-800 font-medium">Duration of Operation (in minutes):</label>
+                                <Input 
+                                  className="w-full" 
+                                  type="text" 
+                                  placeholder="Auto-calculated or manual entry" 
+                                  value={currentReport.appendectomy.preoperative.duration}
+                                  onChange={(e) => updateAppendectomy('preoperative', 'duration', e.target.value)}
+                                />
+                                <div className="text-sm text-gray-600">
+                                  {currentReport.appendectomy.preoperative.startTime && currentReport.appendectomy.preoperative.endTime 
+                                    ? "Auto-calculated" 
+                                    : "Manual entry"}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </CardContent>
                       )}
                     </Card>
 
-                    {/* Section III: Intraoperative Findings */}
+
+                    {/* Section IV: Procedure Details */}
                     <Card className="glass-card-light">
                       <div 
-                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${activeSection === "section3" ? "bg-blue-50" : ""}`}
-                        onClick={() => toggleExpand("section3")}
+                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center ${activeSection === "section4" ? "bg-blue-50" : ""}`}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Intraoperative Findings</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section3 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer flex-1"
+                          onClick={() => toggleExpand("section4")}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Procedure Details</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section4 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoAppendectomy('procedure')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoAppendectomy('procedure')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearAppendectomy('procedure')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
-                      {expanded.section3 && (
+                      {expanded.section4 && (
                         <CardContent className="px-6 py-4">
-                          <div className="space-y-4">
+                          <div className="space-y-6">
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Open', 'Laparoscopic', 'Converted from Laparoscopic to Open'].map(approach => (
+                                  <div className="flex items-center" key={`approach-${approach}`}>
+                                    <Checkbox 
+                                      id={`approach-${approach}`} 
+                                      checked={currentReport.appendectomy?.procedure?.approach?.includes(approach)}
+                                      onCheckedChange={(checked) => {
+                                        const currentApproach = currentReport.appendectomy?.procedure?.approach || [];
+                                        if (checked) {
+                                          updateAppendectomy('procedure', 'approach', [...currentApproach, approach]);
+                                        } else {
+                                          updateAppendectomy('procedure', 'approach', currentApproach.filter(a => a !== approach));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`approach-${approach}`} className="ml-2 block text-sm text-gray-700">{approach}</label>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              {/* Reason for Conversion - only show if "Converted from Laparoscopic to Open" is selected */}
+                              {currentReport.appendectomy?.procedure?.approach?.includes('Converted from Laparoscopic to Open') && (
+                                <div className="mt-3 ml-4">
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Reason for Conversion:</p>
+                                  <div className="flex flex-wrap gap-4 ml-4">
+                                    {['Adhesions', 'Vascular Injury', 'Difficult Visualization', 'Failure to Progress', 'Visceral Injury', 'Difficult Exposure', 'Bleeding', 'Other'].map(reason => (
+                                      <div className="flex items-center" key={`conversion-reason-${reason}`}>
+                                        <Checkbox 
+                                          id={`conversion-reason-${reason}`} 
+                                          checked={currentReport.appendectomy?.procedure?.reasonForConversion?.includes && currentReport.appendectomy?.procedure?.reasonForConversion?.includes(reason)}
+                                          onCheckedChange={(checked) => {
+                                            const currentReasons = Array.isArray(currentReport.appendectomy?.procedure?.reasonForConversion) 
+                                              ? currentReport.appendectomy.procedure.reasonForConversion 
+                                              : currentReport.appendectomy?.procedure?.reasonForConversion 
+                                                ? [currentReport.appendectomy.procedure.reasonForConversion] 
+                                                : [];
+                                            if (checked) {
+                                              updateAppendectomy('procedure', 'reasonForConversion', [...currentReasons, reason]);
+                                            } else {
+                                              updateAppendectomy('procedure', 'reasonForConversion', currentReasons.filter(r => r !== reason));
+                                            }
+                                          }}
+                                          style={{
+                                            accentColor: 'black'
+                                          }}
+                                        />
+                                        <label htmlFor={`conversion-reason-${reason}`} className="ml-2 block text-sm text-gray-700">{reason}</label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Other text input - only show if "Other" is selected */}
+                                  {(Array.isArray(currentReport.appendectomy?.procedure?.reasonForConversion) 
+                                    ? currentReport.appendectomy.procedure.reasonForConversion.includes('Other')
+                                    : currentReport.appendectomy?.procedure?.reasonForConversion === 'Other') && (
+                                    <div className="mt-3 ml-8">
+                                      <Input 
+                                        type="text" 
+                                        className="w-full"
+                                        placeholder="Specify Other Conversion Reason"
+                                        value={currentReport.appendectomy?.procedure?.reasonForConversionOther || ''}
+                                        onChange={(e) => updateAppendectomy('procedure', 'reasonForConversionOther', e.target.value)}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Incision Type - only show if "Open" approach is selected */}
+                            {currentReport.appendectomy?.procedure?.approach?.includes('Open') && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Incision Type:</p>
+                                <div className="flex flex-wrap gap-4 ml-4">
+                                  {['McBurney', 'Lanz', 'Midline', 'Other'].map(incision => (
+                                    <div className="flex items-center" key={`incision-${incision}`}>
+                                      <Checkbox 
+                                        id={`incision-${incision}`} 
+                                        checked={currentReport.appendectomy?.procedure?.incisionType?.includes(incision)}
+                                        onCheckedChange={(checked) => {
+                                          const currentIncisions = currentReport.appendectomy?.procedure?.incisionType || [];
+                                          if (checked) {
+                                            updateAppendectomy('procedure', 'incisionType', [...currentIncisions, incision]);
+                                          } else {
+                                            updateAppendectomy('procedure', 'incisionType', currentIncisions.filter(i => i !== incision));
+                                          }
+                                        }}
+                                      />
+                                      <label htmlFor={`incision-${incision}`} className="ml-2 block text-sm text-gray-700">{incision}</label>
+                                      {incision === 'Other' && (
+                                        <Input 
+                                          type="text" 
+                                          className="ml-2 w-32"
+                                          value={currentReport.appendectomy?.procedure?.incisionOther || ''}
+                                          onChange={(e) => updateAppendectomy('procedure', 'incisionOther', e.target.value)}
+                                        />
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Trocar Number - only show if "Laparoscopic" or "Converted from Laparoscopic to Open" approach is selected */}
+                            {(currentReport.appendectomy?.procedure?.approach?.includes('Laparoscopic') || 
+                              currentReport.appendectomy?.procedure?.approach?.includes('Converted from Laparoscopic to Open')) && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Trocar Number:</p>
+                                <Input 
+                                  type="text" 
+                                  className="ml-4 w-full"
+                                  placeholder="Enter trocar number"
+                                  value={currentReport.appendectomy?.procedure?.trocarPlacement || ''}
+                                  onChange={(e) => updateAppendectomy('procedure', 'trocarPlacement', e.target.value)}
+                                />
+                              </div>
+                            )}
+
+                            {/* Interactive Body Diagram */}
+                            <div>
+                              <h3 className="text-md font-medium text-gray-800 mb-3">Access and Ports</h3>
+                              
+                              {/* Legend/Key */}
+                              <div className="ml-4 mb-4">
+                                <div className="bg-gray-50 p-3 rounded border">
+                                  <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
+                                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-0.5 bg-black"></div>
+                                      <span>Ports (with size label)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-3 h-3 border-2 border-amber-500 rounded-full" style={{borderStyle: 'dashed'}}></div>
+                                      <span>Ileostomy (dashed yellow circle)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-4 h-4 border-2 border-green-600 rounded-full"></div>
+                                      <span>Colostomy (solid green circle)</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-0.5 bg-red-900" style={{backgroundImage: 'repeating-linear-gradient(90deg, #7f1d1d 0, #7f1d1d 4px, transparent 4px, transparent 8px)'}}></div>
+                                      <span>Incisions (dashed dark red line)</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="ml-4">
+                                <Card className="glass-card-light">
+                                  <CardContent>
+                                    <ConditionalDiagramDisplay
+                                      selectedProcedures={['Appendectomy']}
+                                      onGastroscopyUpdate={() => {}}
+                                      onColonoscopyUpdate={(data) => {
+                                        // Handle appendicectomy diagram updates here
+                                        console.log('Appendicectomy diagram update:', data);
+                                      }}
+                                      onProcedureFindingsUpdate={(data) => {
+                                        // Store surgical markings in appendectomy procedureFindings
+                                        updateAppendectomy('procedureFindings', 'findings', data.findings);
+                                        updateAppendectomy('procedureFindings', 'additionalNotes', data.additionalNotes || '');
+                                      }}
+                                      currentProcedureFindings={{ findings: '', additionalNotes: '' }}
+                                      customImage={appendectomyImage}
+                                    />
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            </div>
+
+                            {/* Intraoperative Findings - moved from Section III */}
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Appendix Appearance:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
@@ -1987,187 +3583,11 @@ const Index = () => {
                                 onChange={(e) => updateAppendectomy('intraoperative', 'otherFindings', e.target.value)}
                               />
                             </div>
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
-
-                    {/* Section IV: Procedure Details */}
-                    <Card className="glass-card-light">
-                      <div 
-                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${activeSection === "section4" ? "bg-blue-50" : ""}`}
-                        onClick={() => toggleExpand("section4")}
-                      >
-                        <h2 className="text-lg font-semibold text-gray-800">Procedure Details</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section4 ? "transform rotate-180" : ""}`} />
-                      </div>
-
-                      {expanded.section4 && (
-                        <CardContent className="px-6 py-4">
-                          <div className="space-y-6">
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
-                              <div className="flex flex-wrap gap-4 ml-4">
-                                {['Open', 'Laparoscopic', 'Converted from Laparoscopic to Open'].map(approach => (
-                                  <div className="flex items-center" key={`approach-${approach}`}>
-                                    <Checkbox 
-                                      id={`approach-${approach}`} 
-                                      checked={currentReport.appendectomy?.procedure?.approach?.includes(approach)}
-                                      onCheckedChange={(checked) => {
-                                        const currentApproach = currentReport.appendectomy?.procedure?.approach || [];
-                                        if (checked) {
-                                          updateAppendectomy('procedure', 'approach', [...currentApproach, approach]);
-                                        } else {
-                                          updateAppendectomy('procedure', 'approach', currentApproach.filter(a => a !== approach));
-                                        }
-                                      }}
-                                    />
-                                    <label htmlFor={`approach-${approach}`} className="ml-2 block text-sm text-gray-700">{approach}</label>
-                                  </div>
-                                ))}
-                              </div>
-                              
-                              {/* Reason for Conversion - only show if "Converted from Laparoscopic to Open" is selected */}
-                              {currentReport.appendectomy?.procedure?.approach?.includes('Converted from Laparoscopic to Open') && (
-                                <div className="mt-3 ml-4">
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Reason for Conversion:</p>
-                                  <Input 
-                                    type="text" 
-                                    className="w-full"
-                                    placeholder="Please specify reason for conversion"
-                                    value={currentReport.appendectomy?.procedure?.reasonForConversion || ''}
-                                    onChange={(e) => updateAppendectomy('procedure', 'reasonForConversion', e.target.value)}
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Incision Type - only show if "Open" approach is selected */}
-                            {currentReport.appendectomy?.procedure?.approach?.includes('Open') && (
-                              <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Incision Type:</p>
-                                <div className="flex flex-wrap gap-4 ml-4">
-                                  {['McBurney', 'Lanz', 'Midline', 'Other'].map(incision => (
-                                    <div className="flex items-center" key={`incision-${incision}`}>
-                                      <Checkbox 
-                                        id={`incision-${incision}`} 
-                                        checked={currentReport.appendectomy?.procedure?.incisionType?.includes(incision)}
-                                        onCheckedChange={(checked) => {
-                                          const currentIncisions = currentReport.appendectomy?.procedure?.incisionType || [];
-                                          if (checked) {
-                                            updateAppendectomy('procedure', 'incisionType', [...currentIncisions, incision]);
-                                          } else {
-                                            updateAppendectomy('procedure', 'incisionType', currentIncisions.filter(i => i !== incision));
-                                          }
-                                        }}
-                                      />
-                                      <label htmlFor={`incision-${incision}`} className="ml-2 block text-sm text-gray-700">{incision}</label>
-                                      {incision === 'Other' && (
-                                        <Input 
-                                          type="text" 
-                                          className="ml-2 w-32"
-                                          value={currentReport.appendectomy?.procedure?.incisionOther || ''}
-                                          onChange={(e) => updateAppendectomy('procedure', 'incisionOther', e.target.value)}
-                                        />
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Trocar Placement - only show if "Laparoscopic" approach is selected */}
-                            {currentReport.appendectomy?.procedure?.approach?.includes('Laparoscopic') && (
-                              <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Trocar Placement:</p>
-                                <Input 
-                                  type="text" 
-                                  className="ml-4 w-full"
-                                  value={currentReport.appendectomy?.procedure?.trocarPlacement || ''}
-                                  onChange={(e) => updateAppendectomy('procedure', 'trocarPlacement', e.target.value)}
-                                />
-                              </div>
-                            )}
-
-                            {/* Operation Description Section */}
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                              <Textarea 
-                                className="w-full min-h-[100px]"
-                                placeholder="Please describe the surgical approach and key procedural steps"
-                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
-                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
-                              />
-                            </div>
-
-                            {/* Duration of Operation */}
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Duration of operation (min):</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                placeholder="Enter time in minutes" 
-                                value={currentReport.appendectomy.preoperative.duration}
-                                onChange={(e) => updateAppendectomy('preoperative', 'duration', e.target.value)}
-                              />
-                            </div>
-
-                            {/* Interactive Body Diagram */}
-                            <div>
-                              <h3 className="text-md font-medium text-gray-800 mb-3">Interactive Body Diagram</h3>
-                              
-                              {/* Legend/Key */}
-                              <div className="ml-4 mb-4">
-                                <div className="bg-gray-50 p-3 rounded border">
-                                  <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
-                                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-0.5 bg-black"></div>
-                                      <span>Ports (with size label)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-3 h-3 border-2 border-amber-500 rounded-full" style={{borderStyle: 'dashed'}}></div>
-                                      <span>Ileostomy (dashed yellow circle)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-4 h-4 border-2 border-green-600 rounded-full"></div>
-                                      <span>Colostomy (solid green circle)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-0.5 bg-red-900" style={{backgroundImage: 'repeating-linear-gradient(90deg, #7f1d1d 0, #7f1d1d 4px, transparent 4px, transparent 8px)'}}></div>
-                                      <span>Incisions (dashed dark red line)</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="ml-4">
-                                <Card className="glass-card-light">
-                                  <CardContent>
-                                    <ConditionalDiagramDisplay
-                                      selectedProcedures={['Appendectomy']}
-                                      onGastroscopyUpdate={() => {}}
-                                      onColonoscopyUpdate={(data) => {
-                                        // Handle appendectomy diagram updates here
-                                        console.log('Appendectomy diagram update:', data);
-                                      }}
-                                      onProcedureFindingsUpdate={(data) => {
-                                        // Store surgical markings in appendectomy procedureFindings
-                                        updateAppendectomy('procedureFindings', 'findings', data.findings);
-                                        updateAppendectomy('procedureFindings', 'additionalNotes', data.additionalNotes || '');
-                                      }}
-                                      currentProcedureFindings={{ findings: '', additionalNotes: '' }}
-                                      customImage={appendectomyImage}
-                                    />
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            </div>
 
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Method of Appendiceal Ligation:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
-                                {['Stapler', 'Hemoloc', 'Endoloop', 'Tie', 'Energy device', 'Other'].map(method => (
+                                {['Stapler', 'Hemoloc', 'Endoloop', 'Tie', 'Energy device', 'Diathermy', 'Other'].map(method => (
                                   <div className="flex items-center" key={`division-${method}`}>
                                     <Checkbox 
                                       id={`division-${method}`} 
@@ -2227,7 +3647,7 @@ const Index = () => {
                             </div>
 
                             <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Peritoneal lavage:</p>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Peritoneal Lavage:</p>
                               <div className="flex space-x-4 ml-4">
                                 <div className="flex items-center">
                                   <Checkbox 
@@ -2290,151 +3710,6 @@ const Index = () => {
                                   />
                                   <label htmlFor="drain-no" className="ml-2 block text-sm text-gray-700">No</label>
                                 </div>
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
-
-                    {/* Section V: Closure and Complications */}
-                    <Card className="glass-card-light">
-                      <div 
-                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${activeSection === "section5" ? "bg-blue-50" : ""}`}
-                        onClick={() => toggleExpand("section5")}
-                      >
-                        <h2 className="text-lg font-semibold text-gray-800">Closure</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section5 ? "transform rotate-180" : ""}`} />
-                      </div>
-
-                      {expanded.section5 && (
-                        <CardContent className="px-6 py-4">
-                          <div className="space-y-6">
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Fascial Closure:</p>
-                              <div className="flex flex-wrap gap-4 ml-4">
-                                {['None', '5mm', '10/11mm', '12mm', '15mm', 'Access Incision', 'Other'].map(closure => (
-                                  <div className="flex items-center" key={`fascial-${closure}`}>
-                                    <Checkbox 
-                                      id={`fascial-${closure}`} 
-                                      checked={currentReport.appendectomy?.closure?.fascialClosure?.includes(closure)}
-                                      onCheckedChange={(checked) => {
-                                        const currentClosures = currentReport.appendectomy?.closure?.fascialClosure || [];
-                                        if (checked) {
-                                          updateAppendectomy('closure', 'fascialClosure', [...currentClosures, closure]);
-                                        } else {
-                                          updateAppendectomy('closure', 'fascialClosure', currentClosures.filter(c => c !== closure));
-                                        }
-                                      }}
-                                    />
-                                    <label htmlFor={`fascial-${closure}`} className="ml-2 block text-sm text-gray-700">{closure}</label>
-                                    {closure === 'Other' && (
-                                      <Input 
-                                        type="text" 
-                                        className="ml-2 w-32"
-                                        value={currentReport.appendectomy?.closure?.fascialClosureOther || ''}
-                                        onChange={(e) => updateAppendectomy('closure', 'fascialClosureOther', e.target.value)}
-                                        placeholder="Please Specify"
-                                      />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              {currentReport.appendectomy?.closure?.fascialClosure?.length > 0 && !currentReport.appendectomy?.closure?.fascialClosure?.includes('None') && (
-                                <div className="mt-3">
-                                  <p className="text-sm font-medium text-gray-700 mb-2 ml-4">Material Used:</p>
-                                  <div className="flex flex-wrap gap-4 ml-8">
-                                    {['Nylon', 'Vicryl', 'PDS', 'Maxon', 'Other'].map(material => (
-                                      <div className="flex items-center" key={`fascial-material-${material}`}>
-                                        <Checkbox 
-                                          id={`fascial-material-${material}`} 
-                                          checked={currentReport.appendectomy?.closure?.fascialMaterial?.includes(material)}
-                                          onCheckedChange={(checked) => {
-                                            const currentMaterials = currentReport.appendectomy?.closure?.fascialMaterial || [];
-                                            if (checked) {
-                                              updateAppendectomy('closure', 'fascialMaterial', [...currentMaterials, material]);
-                                            } else {
-                                              updateAppendectomy('closure', 'fascialMaterial', currentMaterials.filter(m => m !== material));
-                                            }
-                                          }}
-                                        />
-                                        <label htmlFor={`fascial-material-${material}`} className="ml-2 block text-sm text-gray-700">{material}</label>
-                                        {material === 'Other' && (
-                                          <Input 
-                                            type="text" 
-                                            className="ml-2 w-32"
-                                            value={currentReport.appendectomy?.closure?.fascialMaterialOther || ''}
-                                            onChange={(e) => updateAppendectomy('closure', 'fascialMaterialOther', e.target.value)}
-                                            placeholder="Please Specify"
-                                          />
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Skin closure:</p>
-                              <div className="flex flex-wrap gap-4 ml-4">
-                                {['Simple suture', 'Staples', 'Subcuticular suture', 'Adhesive strip', 'Tissue glue', 'Other'].map(closure => (
-                                  <div className="flex items-center" key={`skin-${closure}`}>
-                                    <Checkbox 
-                                      id={`skin-${closure}`} 
-                                      checked={currentReport.appendectomy?.closure?.skinClosure?.includes(closure)}
-                                      onCheckedChange={(checked) => {
-                                        const currentClosures = currentReport.appendectomy?.closure?.skinClosure || [];
-                                        if (checked) {
-                                          updateAppendectomy('closure', 'skinClosure', [...currentClosures, closure]);
-                                        } else {
-                                          updateAppendectomy('closure', 'skinClosure', currentClosures.filter(c => c !== closure));
-                                        }
-                                      }}
-                                    />
-                                    <label htmlFor={`skin-${closure}`} className="ml-2 block text-sm text-gray-700">{closure}</label>
-                                    {closure === 'Other' && (
-                                      <Input 
-                                        type="text" 
-                                        className="ml-2 w-32"
-                                        value={currentReport.appendectomy?.closure?.skinOther || ''}
-                                        onChange={(e) => updateAppendectomy('closure', 'skinOther', e.target.value)}
-                                      />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Material Used:</p>
-                              <div className="flex flex-wrap gap-4 ml-4">
-                                {['Nylon', 'Monocryl', 'Vicryl', 'V-Loc', 'Other'].map(material => (
-                                  <div className="flex items-center" key={`skin-material-${material}`}>
-                                    <Checkbox 
-                                      id={`skin-material-${material}`} 
-                                      checked={currentReport.appendectomy?.closure?.skinMaterial?.includes(material)}
-                                      onCheckedChange={(checked) => {
-                                        const currentMaterials = currentReport.appendectomy?.closure?.skinMaterial || [];
-                                        if (checked) {
-                                          updateAppendectomy('closure', 'skinMaterial', [...currentMaterials, material]);
-                                        } else {
-                                          updateAppendectomy('closure', 'skinMaterial', currentMaterials.filter(m => m !== material));
-                                        }
-                                      }}
-                                    />
-                                    <label htmlFor={`skin-material-${material}`} className="ml-2 block text-sm text-gray-700">{material}</label>
-                                    {material === 'Other' && (
-                                      <Input 
-                                        type="text" 
-                                        className="ml-2 w-32"
-                                        value={currentReport.appendectomy?.closure?.skinMaterialOther || ''}
-                                        onChange={(e) => updateAppendectomy('closure', 'skinMaterialOther', e.target.value)}
-                                        placeholder="Please Specify"
-                                      />
-                                    )}
-                                  </div>
-                                ))}
                               </div>
                             </div>
 
@@ -2510,6 +3785,188 @@ const Index = () => {
                                 ))}
                               </div>
                             </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+
+                    {/* Section V: Closure and Complications */}
+                    <Card className="glass-card-light">
+                      <div 
+                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center ${activeSection === "section5" ? "bg-blue-50" : ""}`}
+                      >
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer flex-1"
+                          onClick={() => toggleExpand("section5")}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Closure</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expanded.section5 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoAppendectomy('closure')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoAppendectomy('closure')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearAppendectomy('closure')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {expanded.section5 && (
+                        <CardContent className="px-6 py-4">
+                          <div className="space-y-6">
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Fascial Closure:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['None', '5mm', '10/11mm', '12mm', '15mm', 'Access Incision', 'Other'].map(closure => (
+                                  <div className="flex items-center" key={`fascial-${closure}`}>
+                                    <Checkbox 
+                                      id={`fascial-${closure}`} 
+                                      checked={currentReport.appendectomy?.closure?.fascialClosure?.includes(closure)}
+                                      onCheckedChange={(checked) => {
+                                        const currentClosures = currentReport.appendectomy?.closure?.fascialClosure || [];
+                                        if (checked) {
+                                          updateAppendectomy('closure', 'fascialClosure', [...currentClosures, closure]);
+                                        } else {
+                                          updateAppendectomy('closure', 'fascialClosure', currentClosures.filter(c => c !== closure));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`fascial-${closure}`} className="ml-2 block text-sm text-gray-700">{closure}</label>
+                                    {closure === 'Other' && (
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-32"
+                                        value={currentReport.appendectomy?.closure?.fascialClosureOther || ''}
+                                        onChange={(e) => updateAppendectomy('closure', 'fascialClosureOther', e.target.value)}
+                                        placeholder="Please Specify"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {currentReport.appendectomy?.closure?.fascialClosure?.length > 0 && !currentReport.appendectomy?.closure?.fascialClosure?.includes('None') && (
+                                <div className="mt-3">
+                                  <p className="text-sm font-medium text-gray-700 mb-2 ml-4">Material Used:</p>
+                                  <div className="flex flex-wrap gap-4 ml-8">
+                                    {['Nylon', 'Vicryl', 'PDS', 'Maxon', 'Other'].map(material => (
+                                      <div className="flex items-center" key={`fascial-material-${material}`}>
+                                        <Checkbox 
+                                          id={`fascial-material-${material}`} 
+                                          checked={currentReport.appendectomy?.closure?.fascialMaterial?.includes(material)}
+                                          onCheckedChange={(checked) => {
+                                            const currentMaterials = currentReport.appendectomy?.closure?.fascialMaterial || [];
+                                            if (checked) {
+                                              updateAppendectomy('closure', 'fascialMaterial', [...currentMaterials, material]);
+                                            } else {
+                                              updateAppendectomy('closure', 'fascialMaterial', currentMaterials.filter(m => m !== material));
+                                            }
+                                          }}
+                                        />
+                                        <label htmlFor={`fascial-material-${material}`} className="ml-2 block text-sm text-gray-700">{material}</label>
+                                        {material === 'Other' && (
+                                          <Input 
+                                            type="text" 
+                                            className="ml-2 w-32"
+                                            value={currentReport.appendectomy?.closure?.fascialMaterialOther || ''}
+                                            onChange={(e) => updateAppendectomy('closure', 'fascialMaterialOther', e.target.value)}
+                                            placeholder="Please Specify"
+                                          />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Skin Closure:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Simple Suture', 'Staples', 'Subcuticular Suture', 'Adhesive Strip', 'Tissue Glue', 'Other'].map(closure => (
+                                  <div className="flex items-center" key={`skin-${closure}`}>
+                                    <Checkbox 
+                                      id={`skin-${closure}`} 
+                                      checked={currentReport.appendectomy?.closure?.skinClosure?.includes(closure)}
+                                      onCheckedChange={(checked) => {
+                                        const currentClosures = currentReport.appendectomy?.closure?.skinClosure || [];
+                                        if (checked) {
+                                          updateAppendectomy('closure', 'skinClosure', [...currentClosures, closure]);
+                                        } else {
+                                          updateAppendectomy('closure', 'skinClosure', currentClosures.filter(c => c !== closure));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`skin-${closure}`} className="ml-2 block text-sm text-gray-700">{closure}</label>
+                                    {closure === 'Other' && (
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-32"
+                                        value={currentReport.appendectomy?.closure?.skinOther || ''}
+                                        onChange={(e) => updateAppendectomy('closure', 'skinOther', e.target.value)}
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Material Used - only show when suture options are selected */}
+                            {(currentReport.appendectomy?.closure?.skinClosure?.includes('Simple Suture') || 
+                              currentReport.appendectomy?.closure?.skinClosure?.includes('Subcuticular Suture')) && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Material Used:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Nylon', 'Monocryl', 'Vicryl', 'V-Loc', 'Other'].map(material => (
+                                  <div className="flex items-center" key={`skin-material-${material}`}>
+                                    <Checkbox 
+                                      id={`skin-material-${material}`} 
+                                      checked={currentReport.appendectomy?.closure?.skinMaterial?.includes(material)}
+                                      onCheckedChange={(checked) => {
+                                        const currentMaterials = currentReport.appendectomy?.closure?.skinMaterial || [];
+                                        if (checked) {
+                                          updateAppendectomy('closure', 'skinMaterial', [...currentMaterials, material]);
+                                        } else {
+                                          updateAppendectomy('closure', 'skinMaterial', currentMaterials.filter(m => m !== material));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`skin-material-${material}`} className="ml-2 block text-sm text-gray-700">{material}</label>
+                                    {material === 'Other' && (
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-32"
+                                        value={currentReport.appendectomy?.closure?.skinMaterialOther || ''}
+                                        onChange={(e) => updateAppendectomy('closure', 'skinMaterialOther', e.target.value)}
+                                        placeholder="Please Specify"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            )}
 
                             <div>
                               <h3 className="text-md font-medium text-gray-800 mb-3">Specimen</h3>
@@ -2543,6 +4000,19 @@ const Index = () => {
                                     </div>
                                   </div>
                                 </div>
+
+                                {currentReport.appendectomy?.closure?.pathology === 'Yes' && (
+                                  <div className="mt-4">
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Please Specify Laboratory Sent to:</p>
+                                    <Input
+                                      type="text"
+                                      placeholder="Enter laboratory name"
+                                      className="w-full"
+                                      value={currentReport.appendectomy?.closure?.laboratoryName || ''}
+                                      onChange={(e) => updateAppendectomy('closure', 'laboratoryName', e.target.value)}
+                                    />
+                                  </div>
+                                )}
 
                                 <div>
                                   <p className="text-sm font-medium text-gray-700 mb-2">Other Specimens Taken:</p>
@@ -2654,10 +4124,56 @@ const Index = () => {
                       )}
                     </Card>
 
+                    {/* Additional Notes */}
+                    <Card className="glass-card-light">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <FileText className="h-5 w-5 text-gray-600" />
+                          Additional Notes
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div>
+                            <Textarea
+                              placeholder="Enter any additional notes..."
+                              className="w-full"
+                              rows={4}
+                              value={currentReport.appendectomy?.closure?.additionalNotes || ''}
+                              onChange={(e) => updateAppendectomy('closure', 'additionalNotes', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Post Operative Management */}
+                    <Card className="glass-card-light">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <ClipboardList className="h-5 w-5 text-gray-600" />
+                          Post Operative Management
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div>
+                            <Textarea
+                              placeholder="Enter post operative management instructions..."
+                              className="w-full"
+                              rows={4}
+                              value={currentReport.appendectomy?.closure?.postOperativeManagement || ''}
+                              onChange={(e) => updateAppendectomy('closure', 'postOperativeManagement', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
                     {/* Preview & Export Button */}
                     <div className="flex justify-center mt-8 mb-12">
                       <Button 
-                        className="px-8 py-4 bg-blue-600 hover:bg-blue-700 shadow-md text-md font-medium text-white"
+                        className="px-8 py-4 glass-button text-md"
                         onClick={() => {
                           setCurrentTab('appendectomy');
                           handleExportPDF();
@@ -2679,18 +4195,6 @@ const Index = () => {
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of appendectomy findings</span>
                             </CardTitle>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="glass-button text-xs"
-                                onClick={handleExportPDF}
-                                disabled={isGeneratingPDF}
-                              >
-                                <Download className="h-3 w-3 mr-1" />
-                                {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
-                              </Button>
-                            </div>
                           </div>
                         </CardHeader>
                         <CardContent>
@@ -2763,7 +4267,7 @@ const Index = () => {
                               <Input 
                                 className="w-full" 
                                 type="text" 
-                                placeholder="Enter patient name"
+                                placeholder="Enter Patient Name"
                                 value={currentReport.ventralHernia?.patientInfo?.name || ''}
                                 onChange={(e) => updateReport('ventralHernia', {
                                   ...currentReport.ventralHernia,
@@ -2779,7 +4283,7 @@ const Index = () => {
                               <Input 
                                 className="w-full" 
                                 type="text" 
-                                placeholder="Enter patient ID"
+                                placeholder="Enter Patient ID"
                                 value={currentReport.ventralHernia?.patientInfo?.patientId || ''}
                                 onChange={(e) => updateVentralHernia('patientInfo', 'patientId', e.target.value)}
                               />
@@ -2805,36 +4309,53 @@ const Index = () => {
                               <Input 
                                 className="w-full bg-gray-100" 
                                 type="text" 
-                                placeholder="Calculated from date of birth"
+                                placeholder="Calculated from the Date Of Birth"
                                 value={currentReport.ventralHernia?.patientInfo?.age || ''}
                                 readOnly
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
                               <label className="text-gray-800 font-medium">Sex:</label>
-                              <select 
-                                className="w-full p-2 border border-gray-300 rounded-md"
-                                value={currentReport.ventralHernia?.patientInfo?.sex || ''}
-                                onChange={(e) => updateReport('ventralHernia', {
-                                  ...currentReport.ventralHernia,
-                                  patientInfo: {
-                                    ...currentReport.ventralHernia?.patientInfo,
-                                    sex: e.target.value
-                                  }
-                                })}
-                              >
-                                <option value="">Select sex</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                              </select>
+                              <div className="w-full space-y-2">
+                                <select 
+                                  className="w-full p-2 border border-gray-300 rounded-md"
+                                  value={currentReport.ventralHernia?.patientInfo?.sex || ''}
+                                  onChange={(e) => updateReport('ventralHernia', {
+                                    ...currentReport.ventralHernia,
+                                    patientInfo: {
+                                      ...currentReport.ventralHernia?.patientInfo,
+                                      sex: e.target.value
+                                    }
+                                  })}
+                                >
+                                  <option value="">Select Sex</option>
+                                  <option value="male">Male</option>
+                                  <option value="female">Female</option>
+                                  <option value="other">Other</option>
+                                </select>
+                                {currentReport.ventralHernia?.patientInfo?.sex === 'other' && (
+                                  <Input 
+                                    className="w-full" 
+                                    type="text" 
+                                    placeholder="Please Specify"
+                                    value={currentReport.ventralHernia?.patientInfo?.sexOther || ''}
+                                    onChange={(e) => updateReport('ventralHernia', {
+                                      ...currentReport.ventralHernia,
+                                      patientInfo: {
+                                        ...currentReport.ventralHernia?.patientInfo,
+                                        sexOther: e.target.value
+                                      }
+                                    })}
+                                  />
+                                )}
+                              </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
                               <label className="text-gray-800 font-medium">Weight:</label>
                               <Input 
                                 className="w-full" 
                                 type="text" 
-                                placeholder="Enter weight (kg)"
+                                placeholder="Enter Weight (Kg)"
                                 value={currentReport.ventralHernia?.patientInfo?.weight || ''}
                                 onChange={(e) => updateVentralHernia('patientInfo', 'weight', e.target.value)}
                               />
@@ -2844,7 +4365,7 @@ const Index = () => {
                               <Input 
                                 className="w-full" 
                                 type="text" 
-                                placeholder="Enter height (cm)"
+                                placeholder="Enter Height (Cm)"
                                 value={currentReport.ventralHernia?.patientInfo?.height || ''}
                                 onChange={(e) => updateVentralHernia('patientInfo', 'height', e.target.value)}
                               />
@@ -2854,7 +4375,7 @@ const Index = () => {
                               <Input 
                                 className="w-full bg-gray-100" 
                                 type="text" 
-                                placeholder="Calculated from height and weight"
+                                placeholder="Calculated from Height and Weight"
                                 value={currentReport.ventralHernia?.patientInfo?.bmi || ''}
                                 readOnly
                               />
@@ -3024,19 +4545,70 @@ const Index = () => {
                               </div>
                               <div className="grid grid-cols-2 gap-4 items-center">
                                 <label className="text-gray-800 font-medium">Anaesthetist:</label>
-                                <Input 
-                                  className="w-full" 
-                                  type="text" 
-                                  placeholder="Enter Anaesthetist name"
-                                  value={currentReport.ventralHernia?.preoperative?.anaesthetist || ''}
-                                  onChange={(e) => updateReport('ventralHernia', {
-                                    ...currentReport.ventralHernia,
-                                    preoperative: {
-                                      ...currentReport.ventralHernia?.preoperative,
-                                      anaesthetist: e.target.value
-                                    }
-                                  })}
-                                />
+                                <div className="space-y-2">
+                                  {(currentReport.ventralHernia?.preoperative?.anaesthetists || ['']).map((anaesthetist, index) => (
+                                    <div key={index} className="flex gap-2 items-center">
+                                      <Input 
+                                        className="flex-1" 
+                                        type="text" 
+                                        placeholder="Enter Anaesthetist name"
+                                        value={anaesthetist}
+                                        onChange={(e) => {
+                                          const currentAnaesthetists = currentReport.ventralHernia?.preoperative?.anaesthetists || [''];
+                                          const newAnaesthetists = [...currentAnaesthetists];
+                                          newAnaesthetists[index] = e.target.value;
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            preoperative: {
+                                              ...currentReport.ventralHernia?.preoperative,
+                                              anaesthetists: newAnaesthetists
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      {index === (currentReport.ventralHernia?.preoperative?.anaesthetists || ['']).length - 1 && (
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="text-xs px-2 py-1"
+                                          onClick={() => {
+                                            const currentAnaesthetists = currentReport.ventralHernia?.preoperative?.anaesthetists || [''];
+                                            const newAnaesthetists = [...currentAnaesthetists, ''];
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              preoperative: {
+                                                ...currentReport.ventralHernia?.preoperative,
+                                                anaesthetists: newAnaesthetists
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          +
+                                        </Button>
+                                      )}
+                                      {(currentReport.ventralHernia?.preoperative?.anaesthetists || ['']).length > 1 && (
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="text-xs px-2 py-1 text-red-600 hover:text-red-700"
+                                          onClick={() => {
+                                            const currentAnaesthetists = currentReport.ventralHernia?.preoperative?.anaesthetists || [''];
+                                            const newAnaesthetists = currentAnaesthetists.filter((_, i) => i !== index);
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              preoperative: {
+                                                ...currentReport.ventralHernia?.preoperative,
+                                                anaesthetists: newAnaesthetists
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          −
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
 
@@ -3108,104 +4680,170 @@ const Index = () => {
                             </div>
 
                             <div>
-                              <h3 className="text-md font-medium text-gray-800 mb-3">Operative Findings</h3>
-                              <div className="ml-4 space-y-4">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Hernia type:</p>
-                                  <div className="flex flex-wrap gap-4 ml-4">
-                                    {['Umbilical', 'Epigastric', 'Incisional', 'Spigelian'].map(type => (
-                                      <div className="flex items-center" key={`hernia-type-${type}`}>
-                                        <Checkbox id={`hernia-type-${type}`} />
-                                        <label htmlFor={`hernia-type-${type}`} className="ml-2 text-sm text-gray-700">{type}</label>
-                                      </div>
-                                    ))}
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-type-other" />
-                                      <label htmlFor="hernia-type-other" className="ml-2 text-sm text-gray-700">Other:</label>
-                                      <Input type="text" className="ml-2 w-32" placeholder="Specify" />
-                                    </div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
+                              <div className="space-y-2 ml-4">
+                                {['None', 'Ultrasound', 'CT Scan', 'MRI'].map(imaging => (
+                                  <div className="flex items-center" key={`hernia-imaging-${imaging}`}>
+                                    <Checkbox 
+                                      id={`hernia-imaging-${imaging}`}
+                                      checked={currentReport.ventralHernia?.preoperative?.imaging?.includes(imaging) || false}
+                                      onCheckedChange={(checked) => {
+                                        const currentImaging = currentReport.ventralHernia?.preoperative?.imaging || [];
+                                        let newImaging;
+                                        if (checked) {
+                                          newImaging = [...currentImaging, imaging];
+                                        } else {
+                                          newImaging = currentImaging.filter(i => i !== imaging);
+                                        }
+                                        updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          preoperative: {
+                                            ...currentReport.ventralHernia?.preoperative,
+                                            imaging: newImaging
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <label htmlFor={`hernia-imaging-${imaging}`} className="ml-2 block text-sm text-gray-700">{imaging}</label>
                                   </div>
+                                ))}
+                                <div className="flex items-center">
+                                  <Checkbox 
+                                    id="hernia-imaging-other"
+                                    checked={currentReport.ventralHernia?.preoperative?.imaging?.includes('Other') || false}
+                                    onCheckedChange={(checked) => {
+                                      const currentImaging = currentReport.ventralHernia?.preoperative?.imaging || [];
+                                      let newImaging;
+                                      if (checked) {
+                                        newImaging = [...currentImaging, 'Other'];
+                                      } else {
+                                        newImaging = currentImaging.filter(i => i !== 'Other');
+                                      }
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        preoperative: {
+                                          ...currentReport.ventralHernia?.preoperative,
+                                          imaging: newImaging
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <label htmlFor="hernia-imaging-other" className="ml-2 block text-sm text-gray-700">Other:</label>
+                                  <Input 
+                                    type="text" 
+                                    className="ml-2 w-48" 
+                                    placeholder="Specify other imaging"
+                                    value={currentReport.ventralHernia?.preoperative?.imagingOther || ''}
+                                    onChange={(e) => updateReport('ventralHernia', {
+                                      ...currentReport.ventralHernia,
+                                      preoperative: {
+                                        ...currentReport.ventralHernia?.preoperative,
+                                        imagingOther: e.target.value
+                                      }
+                                    })}
+                                  />
                                 </div>
+                              </div>
+                            </div>
 
+                            {/* Operation Description Section - moved here after Preoperative Imaging */}
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full"
+                                rows={3}
+                                placeholder="Enter operation description"
+                                value={currentReport.ventralHernia?.operative?.operationDescription || ''}
+                                onChange={(e) => updateReport('ventralHernia', {
+                                  ...currentReport.ventralHernia,
+                                  operative: {
+                                    ...currentReport.ventralHernia?.operative,
+                                    operationDescription: e.target.value
+                                  }
+                                })}
+                              />
+                            </div>
+
+                            {/* Duration of operation with Start/End times - moved here after Preoperative Imaging */}
+                            <div className="mt-4">
+                              <label className="text-sm font-medium text-gray-700 mb-2 block">Duration of operation (min):</label>
+                              <div className="grid grid-cols-3 gap-2">
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Site of hernia:</p>
-                                  <div className="grid grid-cols-2 gap-2 ml-4">
-                                    {['Upper midline', 'Lower midline', 'Umbilical/paraumbilical', 'Subcostal', 'Pfannesteil', 'Grid iron / Lanz', 'Parastomal', 'Previous stoma', 'Spigelion', 'Lumbar hernia', 'Laparostomy'].map(site => (
-                                      <div className="flex items-center" key={`hernia-site-${site}`}>
-                                        <Checkbox id={`hernia-site-${site}`} />
-                                        <label htmlFor={`hernia-site-${site}`} className="ml-2 text-sm text-gray-700">{site}</label>
-                                      </div>
-                                    ))}
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-site-other" />
-                                      <label htmlFor="hernia-site-other" className="ml-2 text-sm text-gray-700">Other:</label>
-                                      <Input type="text" className="ml-2 w-24" placeholder="Specify" />
-                                    </div>
-                                  </div>
+                                  <label className="text-xs text-gray-600">Start Time</label>
+                                  <Input
+                                    type="time"
+                                    value={currentReport.ventralHernia?.preoperative?.startTime || ''}
+                                    onChange={(e) => {
+                                      const startTime = e.target.value;
+                                      const endTime = currentReport.ventralHernia?.preoperative?.endTime || '';
+                                      let duration = currentReport.ventralHernia?.preoperative?.duration || '';
+                                      
+                                      // Auto-calculate duration if both start and end times are set
+                                      if (startTime && endTime) {
+                                        const [sh, sm] = startTime.split(':').map(Number);
+                                        const [eh, em] = endTime.split(':').map(Number);
+                                        let minutes = (eh * 60 + em) - (sh * 60 + sm);
+                                        if (minutes < 0) minutes += 24 * 60; // Handle cross-midnight
+                                        duration = String(minutes);
+                                      }
+                                      
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        preoperative: {
+                                          ...currentReport.ventralHernia?.preoperative,
+                                          startTime: startTime,
+                                          duration: duration
+                                        }
+                                      });
+                                    }}
+                                    placeholder="Start Time"
+                                  />
                                 </div>
-
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Total hernia defect size:</p>
-                                  <div className="flex items-center gap-2 ml-4">
-                                    <Input type="text" className="w-20" placeholder="___" />
-                                    <span className="text-sm text-gray-700">cm (length) x</span>
-                                    <Input type="text" className="w-20" placeholder="___" />
-                                    <span className="text-sm text-gray-700">cm (width)</span>
-                                  </div>
+                                  <label className="text-xs text-gray-600">End Time</label>
+                                  <Input
+                                    type="time"
+                                    value={currentReport.ventralHernia?.preoperative?.endTime || ''}
+                                    onChange={(e) => {
+                                      const endTime = e.target.value;
+                                      const startTime = currentReport.ventralHernia?.preoperative?.startTime || '';
+                                      let duration = currentReport.ventralHernia?.preoperative?.duration || '';
+                                      
+                                      // Auto-calculate duration if both start and end times are set
+                                      if (startTime && endTime) {
+                                        const [sh, sm] = startTime.split(':').map(Number);
+                                        const [eh, em] = endTime.split(':').map(Number);
+                                        let minutes = (eh * 60 + em) - (sh * 60 + sm);
+                                        if (minutes < 0) minutes += 24 * 60; // Handle cross-midnight
+                                        duration = String(minutes);
+                                      }
+                                      
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        preoperative: {
+                                          ...currentReport.ventralHernia?.preoperative,
+                                          endTime: endTime,
+                                          duration: duration
+                                        }
+                                      });
+                                    }}
+                                    placeholder="End Time"
+                                  />
                                 </div>
-
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Number of defects:</p>
-                                  <Input type="text" className="ml-4 w-20" placeholder="___" />
-                                </div>
-
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Contents:</p>
-                                  <div className="flex flex-wrap gap-4 ml-4">
-                                    {['Omentum', 'Small Bowel', 'Colon', 'Stomach', 'Pre-peritoneal fat'].map(content => (
-                                      <div className="flex items-center" key={`hernia-contents-${content}`}>
-                                        <Checkbox id={`hernia-contents-${content}`} />
-                                        <label htmlFor={`hernia-contents-${content}`} className="ml-2 text-sm text-gray-700">{content}</label>
-                                      </div>
-                                    ))}
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-contents-other" />
-                                      <label htmlFor="hernia-contents-other" className="ml-2 text-sm text-gray-700">Other:</label>
-                                      <Input type="text" className="ml-2 w-24" placeholder="Specify" />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Strangulation/Ischaemia:</p>
-                                  <div className="flex gap-4 ml-4">
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-strangulation-yes" />
-                                      <label htmlFor="hernia-strangulation-yes" className="ml-2 text-sm text-gray-700">Yes</label>
-                                    </div>
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-strangulation-no" />
-                                      <label htmlFor="hernia-strangulation-no" className="ml-2 text-sm text-gray-700">No</label>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">If recurrent hernia. Does patient have a mesh in situ?</p>
-                                  <div className="flex gap-4 ml-4">
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-mesh-yes" />
-                                      <label htmlFor="hernia-mesh-yes" className="ml-2 text-sm text-gray-700">Yes</label>
-                                    </div>
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-mesh-no" />
-                                      <label htmlFor="hernia-mesh-no" className="ml-2 text-sm text-gray-700">No</label>
-                                    </div>
-                                    <div className="flex items-center">
-                                      <Checkbox id="hernia-mesh-unknown" />
-                                      <label htmlFor="hernia-mesh-unknown" className="ml-2 text-sm text-gray-700">Unknown</label>
-                                    </div>
-                                  </div>
+                                  <label className="text-xs text-gray-600">Total Duration (min)</label>
+                                  <Input
+                                    type="number"
+                                    value={currentReport.ventralHernia?.preoperative?.duration || ''}
+                                    onChange={(e) => updateReport('ventralHernia', {
+                                      ...currentReport.ventralHernia,
+                                      preoperative: {
+                                        ...currentReport.ventralHernia?.preoperative,
+                                        duration: e.target.value
+                                      }
+                                    })}
+                                    placeholder="Total (min)"
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -3275,62 +4913,394 @@ const Index = () => {
                                 {currentReport.ventralHernia?.operative?.approach?.includes('Laparoscopic Converted To Open') && (
                                   <div className="mt-4">
                                     <p className="text-sm font-medium text-gray-700 mb-2">Reason for Conversion:</p>
+                                    <div className="ml-4 flex flex-wrap gap-4">
+                                      {['Adhesions', 'Vascular Injury', 'Difficult Visualization', 'Failure to Progress', 'Visceral Injury', 'Difficult Exposure', 'Bleeding'].map(reason => (
+                                        <div className="flex items-center" key={`conversion-${reason}`}>
+                                          <Checkbox 
+                                            id={`conversion-${reason}`} 
+                                            checked={currentReport.ventralHernia?.operative?.conversionReason?.includes(reason)}
+                                            onCheckedChange={(checked) => {
+                                              const currentReasons = currentReport.ventralHernia?.operative?.conversionReason || [];
+                                              let newReasons;
+                                              if (checked) {
+                                                newReasons = [...currentReasons, reason];
+                                              } else {
+                                                newReasons = currentReasons.filter(r => r !== reason);
+                                              }
+                                              updateReport('ventralHernia', {
+                                                ...currentReport.ventralHernia,
+                                                operative: {
+                                                  ...currentReport.ventralHernia?.operative,
+                                                  conversionReason: newReasons
+                                                }
+                                              });
+                                            }}
+                                            style={{accentColor: 'black'}}
+                                          />
+                                          <label htmlFor={`conversion-${reason}`} className="ml-2 block text-sm text-gray-700">{reason}</label>
+                                        </div>
+                                      ))}
+                                      
+                                      {/* Other option with text input */}
+                                      <div className="flex items-center">
+                                        <Checkbox 
+                                          id="conversion-Other" 
+                                          checked={currentReport.ventralHernia?.operative?.conversionReason?.includes('Other')}
+                                          onCheckedChange={(checked) => {
+                                            const currentReasons = currentReport.ventralHernia?.operative?.conversionReason || [];
+                                            let newReasons;
+                                            if (checked) {
+                                              newReasons = [...currentReasons, 'Other'];
+                                            } else {
+                                              newReasons = currentReasons.filter(r => r !== 'Other');
+                                              // Also clear the other text when unchecking
+                                              updateReport('ventralHernia', {
+                                                ...currentReport.ventralHernia,
+                                                operative: {
+                                                  ...currentReport.ventralHernia?.operative,
+                                                  conversionReason: newReasons,
+                                                  conversionReasonOther: ''
+                                                }
+                                              });
+                                              return;
+                                            }
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              operative: {
+                                                ...currentReport.ventralHernia?.operative,
+                                                conversionReason: newReasons
+                                              }
+                                            });
+                                          }}
+                                          style={{accentColor: 'black'}}
+                                        />
+                                        <label htmlFor="conversion-Other" className="ml-2 block text-sm text-gray-700">Other</label>
+                                        {currentReport.ventralHernia?.operative?.conversionReason?.includes('Other') && (
+                                          <Input 
+                                            type="text" 
+                                            className="ml-2 w-48"
+                                            placeholder="Specify Other Conversion Reason"
+                                            value={currentReport.ventralHernia?.operative?.conversionReasonOther || ''}
+                                            onChange={(e) => updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              operative: {
+                                                ...currentReport.ventralHernia?.operative,
+                                                conversionReasonOther: e.target.value
+                                              }
+                                            })}
+                                          />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Trocar Number - only show if laparoscopic approaches are selected */}
+                                {currentReport.ventralHernia?.operative?.approach?.some(approach => 
+                                  ['Laparoscopic Repair', 'Robotic Repair', 'Laparoscopic Converted To Open'].includes(approach)
+                                ) && (
+                                  <div className="mt-4">
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Trocar Number:</p>
                                     <Input 
                                       type="text" 
                                       className="ml-4 w-full"
-                                      placeholder="Enter reason for conversion"
-                                      value={currentReport.ventralHernia?.operative?.conversionReason || ''}
+                                      placeholder="Enter trocar number"
+                                      value={currentReport.ventralHernia?.operative?.trocarNumber || ''}
                                       onChange={(e) => updateReport('ventralHernia', {
                                         ...currentReport.ventralHernia,
                                         operative: {
                                           ...currentReport.ventralHernia?.operative,
-                                          conversionReason: e.target.value
+                                          trocarNumber: e.target.value
                                         }
                                       })}
                                     />
                                   </div>
                                 )}
 
-                                {/* Operation Description Section */}
-                                <div className="mt-4">
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                                  <Textarea 
-                                    className="ml-4 w-full"
-                                    rows={3}
-                                    placeholder="Enter operation description"
-                                    value={currentReport.ventralHernia?.operative?.operationDescription || ''}
+                              </div>
+                            </div>
+
+                            <div>
+                              <h3 className="text-md font-medium text-gray-800 mb-3">Operative Findings</h3>
+                              <div className="ml-4 space-y-4">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Hernia Type:</p>
+                                  <div className="flex flex-wrap gap-4 ml-4">
+                                    {['Umbilical', 'Epigastric', 'Incisional', 'Spigelian'].map(type => (
+                                      <div className="flex items-center" key={`hernia-type-${type}`}>
+                                        <Checkbox 
+                                          id={`hernia-type-${type}`}
+                                          checked={currentReport.ventralHernia?.operative?.herniaType?.includes(type) || false}
+                                          onCheckedChange={(checked) => {
+                                            const current = currentReport.ventralHernia?.operative?.herniaType || [];
+                                            const updated = checked 
+                                              ? [...current, type]
+                                              : current.filter(t => t !== type);
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              operative: {
+                                                ...currentReport.ventralHernia?.operative,
+                                                herniaType: updated
+                                              }
+                                            });
+                                          }}
+                                        />
+                                        <label htmlFor={`hernia-type-${type}`} className="ml-2 text-sm text-gray-700">{type}</label>
+                                      </div>
+                                    ))}
+                                    <div className="flex items-center">
+                                      <Checkbox 
+                                        id="hernia-type-other"
+                                        checked={currentReport.ventralHernia?.operative?.herniaType?.includes('Other') || false}
+                                        onCheckedChange={(checked) => {
+                                          const current = currentReport.ventralHernia?.operative?.herniaType || [];
+                                          const updated = checked 
+                                            ? [...current, 'Other']
+                                            : current.filter(t => t !== 'Other');
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            operative: {
+                                              ...currentReport.ventralHernia?.operative,
+                                              herniaType: updated
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <label htmlFor="hernia-type-other" className="ml-2 text-sm text-gray-700">Other:</label>
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-32" 
+                                        placeholder="Specify"
+                                        value={currentReport.ventralHernia?.operative?.herniaTypeOther || ''}
+                                        onChange={(e) => updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          operative: {
+                                            ...currentReport.ventralHernia?.operative,
+                                            herniaTypeOther: e.target.value
+                                          }
+                                        })}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Site of Hernia:</p>
+                                  <div className="grid grid-cols-2 gap-2 ml-4">
+                                    {['Upper Midline', 'Lower Midline', 'Umbilical/Paraumbilical', 'Subcostal', 'Pfannesteil', 'Grid iron / Lanz', 'Parastomal', 'Previous Stoma', 'Spigelion', 'Lumbar Hernia', 'Laparostomy'].map(site => (
+                                      <div className="flex items-center" key={`hernia-site-${site}`}>
+                                        <Checkbox 
+                                          id={`hernia-site-${site}`}
+                                          checked={currentReport.ventralHernia?.operative?.herniaSite?.includes(site) || false}
+                                          onCheckedChange={(checked) => {
+                                            const current = currentReport.ventralHernia?.operative?.herniaSite || [];
+                                            const updated = checked 
+                                              ? [...current, site]
+                                              : current.filter(s => s !== site);
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              operative: {
+                                                ...currentReport.ventralHernia?.operative,
+                                                herniaSite: updated
+                                              }
+                                            });
+                                          }}
+                                        />
+                                        <label htmlFor={`hernia-site-${site}`} className="ml-2 text-sm text-gray-700">{site}</label>
+                                      </div>
+                                    ))}
+                                    <div className="flex items-center">
+                                      <Checkbox 
+                                        id="hernia-site-other"
+                                        checked={currentReport.ventralHernia?.operative?.herniaSite?.includes('Other') || false}
+                                        onCheckedChange={(checked) => {
+                                          const current = currentReport.ventralHernia?.operative?.herniaSite || [];
+                                          const updated = checked 
+                                            ? [...current, 'Other']
+                                            : current.filter(s => s !== 'Other');
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            operative: {
+                                              ...currentReport.ventralHernia?.operative,
+                                              herniaSite: updated
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <label htmlFor="hernia-site-other" className="ml-2 text-sm text-gray-700">Other:</label>
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-24" 
+                                        placeholder="Specify"
+                                        value={currentReport.ventralHernia?.operative?.herniaSiteOther || ''}
+                                        onChange={(e) => updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          operative: {
+                                            ...currentReport.ventralHernia?.operative,
+                                            herniaSiteOther: e.target.value
+                                          }
+                                        })}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Total Hernia Defect Size:</p>
+                                  <div className="flex items-center gap-2 ml-4">
+                                    <Input 
+                                      type="text" 
+                                      className="w-20" 
+                                      placeholder="___"
+                                      value={currentReport.ventralHernia?.operative?.herniaDefects || ''}
+                                      onChange={(e) => updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        operative: {
+                                          ...currentReport.ventralHernia?.operative,
+                                          herniaDefects: e.target.value
+                                        }
+                                      })}
+                                    />
+                                    <span className="text-sm text-gray-700">(cm)</span>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Number of Defects:</p>
+                                  <Input 
+                                    type="text" 
+                                    className="ml-4 w-20" 
+                                    placeholder="___"
+                                    value={currentReport.ventralHernia?.operative?.numberOfDefects || ''}
                                     onChange={(e) => updateReport('ventralHernia', {
                                       ...currentReport.ventralHernia,
                                       operative: {
                                         ...currentReport.ventralHernia?.operative,
-                                        operationDescription: e.target.value
+                                        numberOfDefects: e.target.value
                                       }
                                     })}
                                   />
                                 </div>
 
-                                {/* Duration of operation - moved here */}
-                                <div className="mt-4">
-                                  <div className="grid grid-cols-2 gap-4 items-center">
-                                    <label className="text-sm font-medium text-gray-700">Duration of operation (min):</label>
-                                    <Input 
-                                      className="w-full" 
-                                      type="text" 
-                                      placeholder="Enter time in minutes"
-                                      value={currentReport.ventralHernia?.preoperative?.duration || ''}
-                                      onChange={(e) => updateReport('ventralHernia', {
-                                        ...currentReport.ventralHernia,
-                                        preoperative: {
-                                          ...currentReport.ventralHernia?.preoperative,
-                                          duration: e.target.value
-                                        }
-                                      })}
-                                    />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Contents:</p>
+                                  <div className="flex flex-wrap gap-4 ml-4">
+                                    {['Omentum', 'Small Bowel', 'Colon', 'Stomach', 'Pre-peritoneal Fat'].map(content => (
+                                      <div className="flex items-center" key={`hernia-contents-${content}`}>
+                                        <Checkbox 
+                                          id={`hernia-contents-${content}`}
+                                          checked={currentReport.ventralHernia?.operative?.contents?.includes(content) || false}
+                                          onCheckedChange={(checked) => {
+                                            const current = currentReport.ventralHernia?.operative?.contents || [];
+                                            const updated = checked 
+                                              ? [...current, content]
+                                              : current.filter(c => c !== content);
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              operative: {
+                                                ...currentReport.ventralHernia?.operative,
+                                                contents: updated
+                                              }
+                                            });
+                                          }}
+                                        />
+                                        <label htmlFor={`hernia-contents-${content}`} className="ml-2 text-sm text-gray-700">{content}</label>
+                                      </div>
+                                    ))}
+                                    <div className="flex items-center">
+                                      <Checkbox 
+                                        id="hernia-contents-other"
+                                        checked={currentReport.ventralHernia?.operative?.contents?.includes('Other') || false}
+                                        onCheckedChange={(checked) => {
+                                          const current = currentReport.ventralHernia?.operative?.contents || [];
+                                          const updated = checked 
+                                            ? [...current, 'Other']
+                                            : current.filter(c => c !== 'Other');
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            operative: {
+                                              ...currentReport.ventralHernia?.operative,
+                                              contents: updated
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <label htmlFor="hernia-contents-other" className="ml-2 text-sm text-gray-700">Other:</label>
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-24" 
+                                        placeholder="Specify"
+                                        value={currentReport.ventralHernia?.operative?.contentsOther || ''}
+                                        onChange={(e) => updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          operative: {
+                                            ...currentReport.ventralHernia?.operative,
+                                            contentsOther: e.target.value
+                                          }
+                                        })}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
 
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Strangulation/Ischaemia:</p>
+                                  <div className="flex gap-4 ml-4">
+                                    <div className="flex items-center">
+                                      <Checkbox 
+                                        id="hernia-strangulation-yes"
+                                        checked={currentReport.ventralHernia?.operative?.strangulation === 'Yes'}
+                                        onCheckedChange={(checked) => {
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            operative: {
+                                              ...currentReport.ventralHernia?.operative,
+                                              strangulation: checked ? 'Yes' : ''
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <label htmlFor="hernia-strangulation-yes" className="ml-2 text-sm text-gray-700">Yes</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                      <Checkbox 
+                                        id="hernia-strangulation-no"
+                                        checked={currentReport.ventralHernia?.operative?.strangulation === 'No'}
+                                        onCheckedChange={(checked) => {
+                                          updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            operative: {
+                                              ...currentReport.ventralHernia?.operative,
+                                              strangulation: checked ? 'No' : ''
+                                            }
+                                          });
+                                        }}
+                                      />
+                                      <label htmlFor="hernia-strangulation-no" className="ml-2 text-sm text-gray-700">No</label>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">If Recurrent Hernia. Does Patient have a Mesh in Situ?</p>
+                                  <div className="flex gap-4 ml-4">
+                                    <div className="flex items-center">
+                                      <Checkbox id="hernia-mesh-yes" />
+                                      <label htmlFor="hernia-mesh-yes" className="ml-2 text-sm text-gray-700">Yes</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                      <Checkbox id="hernia-mesh-no" />
+                                      <label htmlFor="hernia-mesh-no" className="ml-2 text-sm text-gray-700">No</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                      <Checkbox id="hernia-mesh-unknown" />
+                                      <label htmlFor="hernia-mesh-unknown" className="ml-2 text-sm text-gray-700">Unknown</label>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
+
 
                           </div>
                         </CardContent>
@@ -3348,7 +5318,7 @@ const Index = () => {
                           }
                         }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Hernia Details & Findings</h2>
+                        <h2 className="text-lg font-semibold text-gray-800">Access and Ports</h2>
                         <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section3 ? "transform rotate-180" : ""}`} />
                       </div>
 
@@ -3465,7 +5435,7 @@ const Index = () => {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                      <span className="text-sm text-gray-700">Pre-Peritoneal Fat Dissected Off Sheath</span>
+                                      <span className="text-sm text-gray-700">Pre-peritoneal Fat Dissected Off Sheath</span>
                                       <div className="flex gap-4">
                                         <div className="flex items-center">
                                           <Checkbox 
@@ -3614,16 +5584,58 @@ const Index = () => {
                                     <div className="flex items-center">
                                       <Checkbox 
                                         id="hernia-primary-closure" 
-                                        checked={herniaPrimaryClosure}
-                                        onCheckedChange={(checked) => setHerniaPrimaryClosure(checked as boolean)}
+                                        checked={currentReport.ventralHernia?.procedure?.repairType === 'Primary Suture Closure (Non-Mesh)'}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              procedure: {
+                                                ...currentReport.ventralHernia?.procedure,
+                                                repairType: 'Primary Suture Closure (Non-Mesh)'
+                                              }
+                                            });
+                                            setHerniaPrimaryClosure(true);
+                                            setHerniaMeshRepair(false);
+                                          } else {
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              procedure: {
+                                                ...currentReport.ventralHernia?.procedure,
+                                                repairType: ''
+                                              }
+                                            });
+                                            setHerniaPrimaryClosure(false);
+                                          }
+                                        }}
                                       />
                                       <label htmlFor="hernia-primary-closure" className="ml-2 text-sm text-gray-700">Primary Suture Closure (Non-Mesh)</label>
                                     </div>
                                     <div className="flex items-center">
                                       <Checkbox 
                                         id="hernia-mesh-repair" 
-                                        checked={herniaMeshRepair}
-                                        onCheckedChange={(checked) => setHerniaMeshRepair(checked as boolean)}
+                                        checked={currentReport.ventralHernia?.procedure?.repairType === 'Mesh Repair'}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              procedure: {
+                                                ...currentReport.ventralHernia?.procedure,
+                                                repairType: 'Mesh Repair'
+                                              }
+                                            });
+                                            setHerniaMeshRepair(true);
+                                            setHerniaPrimaryClosure(false);
+                                          } else {
+                                            updateReport('ventralHernia', {
+                                              ...currentReport.ventralHernia,
+                                              procedure: {
+                                                ...currentReport.ventralHernia?.procedure,
+                                                repairType: ''
+                                              }
+                                            });
+                                            setHerniaMeshRepair(false);
+                                          }
+                                        }}
                                       />
                                       <label htmlFor="hernia-mesh-repair" className="ml-2 text-sm text-gray-700">Mesh Repair</label>
                                     </div>
@@ -3778,7 +5790,7 @@ const Index = () => {
 
                                 {herniaPrimaryClosure && (
                                   <div>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Primary Tissue repair:</p>
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Primary Tissue Repair:</p>
                                   <div className="flex flex-wrap gap-4 ml-4">
                                     {['Simple Fascial Suture', 'Sheath Overlap', 'Component Separation'].map(repair => (
                                       <div className="flex items-center" key={`hernia-primary-${repair}`}>
@@ -3917,7 +5929,29 @@ const Index = () => {
                                 </div>
                               </div>
                             </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
 
+                    {/* Section 5: Closure */}
+                    <Card className="glass-card-light">
+                      <div 
+                        className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section5" ? "bg-green-50" : ""}`}
+                        onClick={() => {
+                          setHerniaExpanded(prev => ({ ...prev, section5: !prev.section5 }));
+                          if (!herniaExpanded.section5) {
+                            setHerniaActiveSection("section5");
+                          }
+                        }}
+                      >
+                        <h2 className="text-lg font-semibold text-gray-800">Closure</h2>
+                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section5 ? "transform rotate-180" : ""}`} />
+                      </div>
+
+                      {herniaExpanded.section5 && (
+                        <CardContent className="px-6 py-4">
+                          <div className="space-y-6">
                             <div>
                               <h3 className="text-md font-medium text-gray-800 mb-3">Haemostasis & Closure</h3>
                               <div className="ml-4 space-y-4">
@@ -3939,14 +5973,14 @@ const Index = () => {
                                     <div className="flex items-center">
                                       <Checkbox 
                                         id="hernia-haemostasis-na"
-                                        checked={currentReport.ventralHernia?.procedure?.haemostasis === 'Not applicable'}
+                                        checked={currentReport.ventralHernia?.procedure?.haemostasis === 'Not Applicable'}
                                         onCheckedChange={(checked) => {
                                           if (checked) {
-                                            updateVentralHernia('procedure', 'haemostasis', 'Not applicable');
+                                            updateVentralHernia('procedure', 'haemostasis', 'Not Applicable');
                                           }
                                         }}
                                       />
-                                      <label htmlFor="hernia-haemostasis-na" className="ml-2 text-sm text-gray-700">Not applicable</label>
+                                      <label htmlFor="hernia-haemostasis-na" className="ml-2 text-sm text-gray-700">Not Applicable</label>
                                     </div>
                                   </div>
                                 </div>
@@ -3992,7 +6026,7 @@ const Index = () => {
                                 </div>
 
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Fascial closure:</p>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Fascial Closure:</p>
                                   <div className="flex flex-wrap gap-4 ml-4">
                                     {['None', '5mm', '10/11mm', '12mm', '15mm', 'Access Incision', 'Other'].map(closure => (
                                       <div className="flex items-center" key={`hernia-fascial-${closure}`}>
@@ -4070,7 +6104,7 @@ const Index = () => {
                                 </div>
 
                                 <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Skin closure:</p>
+                                  <p className="text-sm font-medium text-gray-700 mb-2">Skin Closure:</p>
                                   <div className="flex flex-wrap gap-4 ml-4">
                                     {['Sutures', 'Staples', 'Glue', 'Other'].map(closure => (
                                       <div className="flex items-center" key={`hernia-skin-${closure}`}>
@@ -4103,41 +6137,43 @@ const Index = () => {
                                     ))}
                                   </div>
                                   
-                                  {/* Material Used for Skin Closure */}
-                                  <div className="mt-4">
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Material Used:</p>
-                                    <div className="flex flex-wrap gap-4 ml-4">
-                                      {['Nylon', 'Monocryl', 'Vicryl', 'V-Loc', 'Other'].map(material => (
-                                        <div className="flex items-center" key={`skin-material-${material}`}>
-                                          <Checkbox 
-                                            id={`skin-material-${material}`}
-                                            checked={currentReport.ventralHernia?.procedure?.skinClosureMaterial?.includes(material)}
-                                            onCheckedChange={(checked) => {
-                                              const currentMaterials = currentReport.ventralHernia?.procedure?.skinClosureMaterial || [];
-                                              if (checked) {
-                                                updateVentralHernia('procedure', 'skinClosureMaterial', [...currentMaterials, material]);
-                                              } else {
-                                                updateVentralHernia('procedure', 'skinClosureMaterial', currentMaterials.filter(m => m !== material));
-                                                if (material === 'Other') {
-                                                  updateVentralHernia('procedure', 'skinClosureMaterialOther', '');
+                                  {/* Material Used for Skin Closure - only show when Sutures is selected */}
+                                  {currentReport.ventralHernia?.procedure?.skinClosure?.includes('Sutures') && (
+                                    <div className="mt-4">
+                                      <p className="text-sm font-medium text-gray-700 mb-2">Material Used:</p>
+                                      <div className="flex flex-wrap gap-4 ml-4">
+                                        {['Nylon', 'Monocryl', 'Vicryl', 'V-Loc', 'Other'].map(material => (
+                                          <div className="flex items-center" key={`skin-material-${material}`}>
+                                            <Checkbox 
+                                              id={`skin-material-${material}`}
+                                              checked={currentReport.ventralHernia?.procedure?.skinClosureMaterial?.includes(material)}
+                                              onCheckedChange={(checked) => {
+                                                const currentMaterials = currentReport.ventralHernia?.procedure?.skinClosureMaterial || [];
+                                                if (checked) {
+                                                  updateVentralHernia('procedure', 'skinClosureMaterial', [...currentMaterials, material]);
+                                                } else {
+                                                  updateVentralHernia('procedure', 'skinClosureMaterial', currentMaterials.filter(m => m !== material));
+                                                  if (material === 'Other') {
+                                                    updateVentralHernia('procedure', 'skinClosureMaterialOther', '');
+                                                  }
                                                 }
-                                              }
-                                            }}
-                                          />
-                                          <label htmlFor={`skin-material-${material}`} className="ml-2 text-sm text-gray-700">{material}</label>
-                                          {material === 'Other' && currentReport.ventralHernia?.procedure?.skinClosureMaterial?.includes('Other') && (
-                                            <Input 
-                                              type="text" 
-                                              className="ml-2 w-32"
-                                              placeholder="Please Specify"
-                                              value={currentReport.ventralHernia?.procedure?.skinClosureMaterialOther || ''}
-                                              onChange={(e) => updateVentralHernia('procedure', 'skinClosureMaterialOther', e.target.value)}
+                                              }}
                                             />
-                                          )}
-                                        </div>
-                                      ))}
+                                            <label htmlFor={`skin-material-${material}`} className="ml-2 text-sm text-gray-700">{material}</label>
+                                            {material === 'Other' && currentReport.ventralHernia?.procedure?.skinClosureMaterial?.includes('Other') && (
+                                              <Input 
+                                                type="text" 
+                                                className="ml-2 w-32"
+                                                placeholder="Please Specify"
+                                                value={currentReport.ventralHernia?.procedure?.skinClosureMaterialOther || ''}
+                                                onChange={(e) => updateVentralHernia('procedure', 'skinClosureMaterialOther', e.target.value)}
+                                              />
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -4146,17 +6182,108 @@ const Index = () => {
                               <h3 className="text-md font-medium text-gray-800 mb-3">Specimen Sent:</h3>
                               <div className="ml-4 space-y-2">
                                 <div className="flex items-center">
-                                  <Checkbox id="hernia-specimen-none" />
+                                  <Checkbox 
+                                    id="hernia-specimen-none"
+                                    checked={currentReport.ventralHernia?.procedure?.specimenSent?.includes('None') || false}
+                                    onCheckedChange={(checked) => {
+                                      const currentSpecimens = currentReport.ventralHernia?.procedure?.specimenSent || [];
+                                      let newSpecimens;
+                                      if (checked) {
+                                        newSpecimens = [...currentSpecimens, 'None'];
+                                      } else {
+                                        newSpecimens = currentSpecimens.filter(s => s !== 'None');
+                                      }
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        procedure: {
+                                          ...currentReport.ventralHernia?.procedure,
+                                          specimenSent: newSpecimens
+                                        }
+                                      });
+                                    }}
+                                  />
                                   <label htmlFor="hernia-specimen-none" className="ml-2 text-sm text-gray-700">None</label>
                                 </div>
-                                <div className="flex items-center">
-                                  <Checkbox id="hernia-specimen-sac" />
-                                  <label htmlFor="hernia-specimen-sac" className="ml-2 text-sm text-gray-700">Hernia sac</label>
+                                <div className="space-y-2">
+                                  <div className="flex items-center">
+                                    <Checkbox 
+                                      id="hernia-specimen-sac"
+                                      checked={currentReport.ventralHernia?.procedure?.specimenSent?.includes('Hernia Sac') || false}
+                                      onCheckedChange={(checked) => {
+                                        const currentSpecimens = currentReport.ventralHernia?.procedure?.specimenSent || [];
+                                        let newSpecimens;
+                                        if (checked) {
+                                          newSpecimens = [...currentSpecimens, 'Hernia Sac'];
+                                        } else {
+                                          newSpecimens = currentSpecimens.filter(s => s !== 'Hernia Sac');
+                                        }
+                                        updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          procedure: {
+                                            ...currentReport.ventralHernia?.procedure,
+                                            specimenSent: newSpecimens
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <label htmlFor="hernia-specimen-sac" className="ml-2 text-sm text-gray-700">Hernia Sac</label>
+                                  </div>
+                                  {currentReport.ventralHernia?.procedure?.specimenSent?.includes('Hernia Sac') && (
+                                    <div className="ml-6 space-y-2">
+                                      <div className="grid grid-cols-2 gap-4 items-center">
+                                        <label className="text-sm font-medium text-gray-700">Please Specify Laboratory Sent to:</label>
+                                        <Input 
+                                          className="w-full" 
+                                          type="text" 
+                                          placeholder="Enter Laboratory Name"
+                                          value={currentReport.ventralHernia?.procedure?.laboratoryName || ''}
+                                          onChange={(e) => updateReport('ventralHernia', {
+                                            ...currentReport.ventralHernia,
+                                            procedure: {
+                                              ...currentReport.ventralHernia?.procedure,
+                                              laboratoryName: e.target.value
+                                            }
+                                          })}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center">
-                                  <Checkbox id="hernia-specimen-other" />
+                                  <Checkbox 
+                                    id="hernia-specimen-other"
+                                    checked={currentReport.ventralHernia?.procedure?.specimenSent?.includes('Other') || false}
+                                    onCheckedChange={(checked) => {
+                                      const currentSpecimens = currentReport.ventralHernia?.procedure?.specimenSent || [];
+                                      let newSpecimens;
+                                      if (checked) {
+                                        newSpecimens = [...currentSpecimens, 'Other'];
+                                      } else {
+                                        newSpecimens = currentSpecimens.filter(s => s !== 'Other');
+                                      }
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        procedure: {
+                                          ...currentReport.ventralHernia?.procedure,
+                                          specimenSent: newSpecimens
+                                        }
+                                      });
+                                    }}
+                                  />
                                   <label htmlFor="hernia-specimen-other" className="ml-2 text-sm text-gray-700">Other:</label>
-                                  <Input type="text" className="ml-2 w-32" placeholder="Specify" />
+                                  <Input 
+                                    type="text" 
+                                    className="ml-2 w-32" 
+                                    placeholder="Specify"
+                                    value={currentReport.ventralHernia?.procedure?.specimenOther || ''}
+                                    onChange={(e) => updateReport('ventralHernia', {
+                                      ...currentReport.ventralHernia,
+                                      procedure: {
+                                        ...currentReport.ventralHernia?.procedure,
+                                        specimenOther: e.target.value
+                                      }
+                                    })}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -4168,25 +6295,49 @@ const Index = () => {
                                   rows={3}
                                   placeholder="Additional operative notes..."
                                   className="w-full"
+                                  value={currentReport.ventralHernia?.procedure?.additionalNotes || ''}
+                                  onChange={(e) => updateReport('ventralHernia', {
+                                    ...currentReport.ventralHernia,
+                                    procedure: {
+                                      ...currentReport.ventralHernia?.procedure,
+                                      additionalNotes: e.target.value
+                                    }
+                                  })}
                                 />
                               </div>
                             </div>
 
                             <div>
-                              <h3 className="text-md font-medium text-gray-800 mb-3">Post operative Management</h3>
+                              <h3 className="text-md font-medium text-gray-800 mb-3">Post Operative Management</h3>
                               <div className="ml-4">
                                 <Textarea 
                                   rows={3}
                                   placeholder="Post operative management plan..."
                                   className="w-full"
+                                  value={currentReport.ventralHernia?.procedure?.postOperativeManagement || ''}
+                                  onChange={(e) => updateReport('ventralHernia', {
+                                    ...currentReport.ventralHernia,
+                                    procedure: {
+                                      ...currentReport.ventralHernia?.procedure,
+                                      postOperativeManagement: e.target.value
+                                    }
+                                  })}
                                 />
                               </div>
                             </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
 
-                            <div className="border-t pt-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
+                    {/* Standalone Signature Section */}
+                    <Card className="glass-card-light">
+                      <CardContent className="px-6 py-4">
+                        <div className="space-y-6">
+                          <div className="border-t pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
                                   <div className="space-y-2">
                                     <Input 
                                       type="text" 
@@ -4275,13 +6426,12 @@ const Index = () => {
                             </div>
                           </div>
                         </CardContent>
-                      )}
                     </Card>
 
                     {/* Preview & Export Button */}
                     <div className="flex justify-center mt-8 mb-12">
                       <Button 
-                        className="px-8 py-4 bg-green-600 hover:bg-green-700 shadow-md text-md font-medium text-white"
+                        className="px-8 py-4 glass-button text-md"
                         onClick={() => {
                           handleExportPDF('ventralHernia');
                         }}
@@ -4302,20 +6452,6 @@ const Index = () => {
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of your ventral hernia repair report</span>
                             </CardTitle>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="glass-button text-xs"
-                                onClick={() => {
-                                  handleExportPDF('ventralHernia');
-                                }}
-                                disabled={isGeneratingPDF}
-                              >
-                                <Download className="h-3 w-3 mr-1" />
-                                {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
-                              </Button>
-                            </div>
                           </div>
                         </CardHeader>
                         <CardContent className="max-h-[calc(100vh-8rem)] overflow-y-auto" ref={reportPreviewRef}>
@@ -4376,17 +6512,8 @@ const Index = () => {
                         <RectalCancerForm 
                           currentReport={currentReport}
                           updateRectalCancer={updateRectalCancer}
-                        />
-                        
-                        {/* Operative findings - Anatomical Diagram */}
-                        <Card className="glass-card-light">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                              <FileSearch className="h-5 w-5 text-red-600" />
-                              Operative Findings & Anatomical Reference
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
+                          onExportPDF={() => handleExportPDF('rectalCancer')}
+                          diagramElement={
                             <ConditionalDiagramDisplay
                               selectedProcedures={["Rectal Cancer Surgery"]}
                               onGastroscopyUpdate={() => {}}
@@ -4398,33 +6525,19 @@ const Index = () => {
                               }}
                               customImage={appendectomyImage}
                             />
-                          </CardContent>
-                        </Card>
+                          }
+                        />
                       </div>
 
                     {/* Right Column - Live Report Preview */}
                     <div className="2xl:col-span-1">
                       <Card className="shadow-glass-heavy sticky top-6">
                         <CardHeader>
-                          <div className="flex justify-between items-center">
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
-                              Live Report
-                              <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of rectal cancer surgery findings</span>
-                            </CardTitle>
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="glass-button text-xs"
-                                onClick={handleExportPDF}
-                                disabled={isGeneratingPDF}
-                              >
-                                <Download className="h-3 w-3 mr-1" />
-                                {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
-                              </Button>
-                            </div>
-                          </div>
+                          <CardTitle className="flex items-center gap-2 text-sm">
+                            <FileText className="h-4 w-4 text-gray-600" />
+                            Live Report
+                            <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of rectal cancer surgery findings</span>
+                          </CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div ref={reportPreviewRef}>

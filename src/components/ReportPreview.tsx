@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, Trash2, Redo2, X, Save } from "lucide-react";
 import { getFullASAText } from '@/utils/asaDescriptions';
+import { formatDateDDMMYYYY } from '@/utils/dateFormatter';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 
 interface ReportPreviewProps {
@@ -337,7 +338,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
     const month = date.toLocaleDateString('en-US', { month: 'long' });
     const year = date.getFullYear();
     
-    return `${day}${getOrdinalSuffix(day)} - ${month} - ${year}`;
+    return `${day}${getOrdinalSuffix(day)} ${month} ${year}`;
   };
 
   const formatDateTime = (dateString?: string) => {
@@ -907,7 +908,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                 </div>
               ) : (
                 <div className="flex items-center gap-1">
-                  <span className="text-xs">{report.patientInfo.dateOfBirth || 'Not specified'}</span>
+                  <span className="text-xs">{formatDateDDMMYYYY(report.patientInfo.dateOfBirth)}</span>
                   {onEditPatientInfo && (
                     <Button
                       variant="ghost"
@@ -1113,6 +1114,24 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
               )}
             </div>
           </div>
+
+          {/* Preoperative Information */}
+          {(report.patientInfo?.surgeons?.length || report.patientInfo?.assistants?.length || report.patientInfo?.anaesthetists?.length) && (
+            <div className="mt-3">
+              <h6 className="text-xs font-medium text-gray-700 mb-2">Preoperative Information</h6>
+              <div className="grid grid-cols-1 gap-1 text-xs">
+                {report.patientInfo?.surgeons?.filter((s:string)=>s?.trim()).length > 0 && (
+                  <div><span className="font-medium">Surgeon:</span> {report.patientInfo.surgeons.filter((s:string)=>s?.trim()).join(', ')}</div>
+                )}
+                {report.patientInfo?.assistants?.filter((s:string)=>s?.trim()).length > 0 && (
+                  <div><span className="font-medium">Assistant:</span> {report.patientInfo.assistants.filter((s:string)=>s?.trim()).join(', ')}</div>
+                )}
+                {report.patientInfo?.anaesthetists?.filter((s:string)=>s?.trim()).length > 0 && (
+                  <div><span className="font-medium">Anaesthetist:</span> {report.patientInfo.anaesthetists.filter((s:string)=>s?.trim()).join(', ')}</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <Separator />
@@ -1299,10 +1318,64 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                   </div>
                 )}
               </div>
+              {report.patientInfo?.operationDescription && (
+                <div className="group">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="font-medium text-xs">Operation Description:</span>
+                  </div>
+                  <div className="text-xs text-gray-700 break-words">{report.patientInfo.operationDescription}</div>
+                </div>
+              )}
+              {report.patientInfo?.preoperativeImaging && (
+                <div className="flex justify-between items-center group">
+                  <span className="font-medium text-xs">Preoperative Imaging:</span>
+                  <span className="text-xs">{report.patientInfo.preoperativeImaging}</span>
+                </div>
+              )}
+              {(report.patientInfo?.operationStartTime || report.patientInfo?.operationEndTime || report.patientInfo?.operationDuration) && (
+                <div className="group">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-xs">Duration of Operation:</span>
+                    <span className="text-xs">
+                      {report.patientInfo.operationStartTime ? `Start: ${report.patientInfo.operationStartTime}` : ''}
+                      {report.patientInfo.operationEndTime ? `  End: ${report.patientInfo.operationEndTime}` : ''}
+                      {report.patientInfo.operationDuration ? `  Total: ${report.patientInfo.operationDuration} min` : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
+
+        {/* Specimen Section */}
+        {(report.specimen && (report.specimen.sentForPathology || report.specimen.otherSpecimensTaken || report.specimen.laboratoryName || report.specimen.otherSpecimensDetails)) && (
+          <>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-black">SPECIMEN</h4>
+              </div>
+              <div className="space-y-1 text-xs">
+                {report.specimen.sentForPathology && (
+                  <div><span className="font-medium">Specimen Sent for Pathology:</span> {report.specimen.sentForPathology}</div>
+                )}
+                {report.specimen.sentForPathology === 'Yes' && report.specimen.laboratoryName && (
+                  <div><span className="font-medium">Laboratory Sent to:</span> {report.specimen.laboratoryName}</div>
+                )}
+                {report.specimen.otherSpecimensTaken && (
+                  <div>
+                    <span className="font-medium">Other Specimens Taken:</span> {report.specimen.otherSpecimensTaken}
+                    {report.specimen.otherSpecimensTaken === 'Yes' && report.specimen.otherSpecimensDetails && (
+                      <span>{` (Specify: ${report.specimen.otherSpecimensDetails})`}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            <Separator />
+          </>
+        )}
 
         {/* Procedure Findings Section */}
         {report.procedureFindings?.findings && (
@@ -1629,6 +1702,16 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                       {formatMedicalText(report.followUp.notes)}
                     </p>
                   )}
+                </div>
+              )}
+              {report.followUp.postOperativeManagement && (
+                <div className="group">
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-medium text-xs mb-2">Post Operative Management:</h5>
+                  </div>
+                  <p className="text-xs text-gray-700 whitespace-pre-wrap">
+                    {formatMedicalText(report.followUp.postOperativeManagement)}
+                  </p>
                 </div>
               )}
             </div>

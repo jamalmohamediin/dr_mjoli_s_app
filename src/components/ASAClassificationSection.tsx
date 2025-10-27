@@ -17,7 +17,7 @@ const asaClasses = [
   { value: 'II', description: 'Mild Systemic Disease' },
   { value: 'III', description: 'Severe Systemic Disease Limiting Activity' },
   { value: 'IV', description: 'Severe Disease Constant Threat to Life' },
-  { value: 'V', description: 'Moribund, Not Expected to Survive Without Operation' },
+  { value: 'V', description: 'Moribund, Not Expected to Survive With or Without Operation' },
   { value: 'VI', description: 'Brain-Dead, Organ Donor' }
 ];
 

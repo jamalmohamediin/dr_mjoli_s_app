@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { formatDateDDMMYYYY } from "@/utils/dateFormatter";
 
 interface PatientInfoFormProps {
   onUpdate: (data: any) => void;
@@ -18,6 +19,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
     dateOfBirth: currentData?.dateOfBirth || "",
     age: currentData?.age || "",
     sex: currentData?.sex || currentData?.gender || "",
+    sexOther: currentData?.sexOther || "",
     weight: currentData?.weight || "",
     height: currentData?.height || "",
     bmi: currentData?.bmi || "",
@@ -34,6 +36,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         dateOfBirth: currentData.dateOfBirth || "",
         age: currentData.age || "",
         sex: currentData.sex || currentData.gender || "",
+        sexOther: currentData.sexOther || "",
         weight: currentData.weight || "",
         height: currentData.height || "",
         bmi: currentData.bmi || "",
@@ -95,7 +98,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <Input
           value={formData.name}
           onChange={(e) => handleChange('name', e.target.value)}
-          placeholder="Enter patient name"
+          placeholder="Enter Patient Name"
           className="w-full"
         />
       </div>
@@ -105,27 +108,34 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <Input
           value={formData.patientId}
           onChange={(e) => handleChange('patientId', e.target.value)}
-          placeholder="Enter patient ID"
+          placeholder="Enter Patient ID"
           className="w-full"
         />
       </div>
       
       <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Date Of Birth:</Label>
-        <Input
-          type="date"
-          value={formData.dateOfBirth}
-          onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-          className="w-full"
-          placeholder="dd/mm/yyyy"
-        />
+        <Label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</Label>
+        <div className="w-full">
+          <Input
+            type="date"
+            value={formData.dateOfBirth}
+            onChange={(e) => handleChange('dateOfBirth', e.target.value)}
+            className="w-full"
+            placeholder="dd/mm/yyyy"
+          />
+          {formData.dateOfBirth && (
+            <p className="text-xs text-gray-500 mt-1">
+              Display format: {formatDateDDMMYYYY(formData.dateOfBirth)}
+            </p>
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-2 gap-4 items-center">
         <Label className="text-gray-800 font-medium">Age:</Label>
         <Input
           value={formData.age}
-          placeholder="Calculated from date of birth"
+          placeholder="Calculated from the Date Of Birth"
           readOnly
           className="w-full bg-gray-100"
         />
@@ -133,16 +143,26 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
       
       <div className="grid grid-cols-2 gap-4 items-center">
         <Label className="text-gray-800 font-medium">Sex:</Label>
-        <Select value={formData.sex} onValueChange={(value) => handleChange('sex', value)}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select sex" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="male">Male</SelectItem>
-            <SelectItem value="female">Female</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="space-y-2">
+          <Select value={formData.sex} onValueChange={(value) => handleChange('sex', value)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Sex" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {formData.sex === 'other' && (
+            <Input
+              value={formData.sexOther}
+              onChange={(e) => handleChange('sexOther', e.target.value)}
+              placeholder="Please specify"
+              className="w-full"
+            />
+          )}
+        </div>
       </div>
       
       <div className="grid grid-cols-2 gap-4 items-center">
@@ -150,7 +170,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <Input
           value={formData.weight}
           onChange={(e) => handleChange('weight', e.target.value)}
-          placeholder="Enter weight (kg)"
+          placeholder="Enter Weight (Kg)"
           className="w-full"
         />
       </div>
@@ -160,7 +180,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <Input
           value={formData.height}
           onChange={(e) => handleChange('height', e.target.value)}
-          placeholder="Enter height (cm)"
+          placeholder="Enter Height (Cm)"
           className="w-full"
         />
       </div>
@@ -169,7 +189,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <Label className="text-gray-800 font-medium">BMI:</Label>
         <Input
           value={formData.bmi}
-          placeholder="Calculated from height and weight"
+          placeholder="Calculated from Height and Weight"
           readOnly
           className="w-full bg-gray-100"
         />

@@ -19,7 +19,10 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
     preparation: "",
     anesthesia: "",
     indication: "",
-    assistant: ""
+    preoperativeImaging: "",
+    operationStartTime: "",
+    operationEndTime: "",
+    operationDuration: ""
   });
   const [tempIndication, setTempIndication] = useState('');
 
@@ -55,20 +58,38 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
         preparation: initialData.preparation || "",
         anesthesia: initialData.sedation || "",
         indication: initialData.indication || "",
-        assistant: initialData.assistant || ""
+        preoperativeImaging: initialData.preoperativeImaging || "",
+        operationStartTime: initialData.operationStartTime || "",
+        operationEndTime: initialData.operationEndTime || "",
+        operationDuration: initialData.operationDuration || ""
       });
     }
   }, [initialData]);
 
   const handleChange = (field: string, value: string) => {
     const newData = { ...formData, [field]: value };
+
+    // Auto-calc duration when start and end times are set
+    if (field === 'operationStartTime' || field === 'operationEndTime') {
+      const start = field === 'operationStartTime' ? value : newData.operationStartTime;
+      const end = field === 'operationEndTime' ? value : newData.operationEndTime;
+      if (start && end) {
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let minutes = (eh * 60 + em) - (sh * 60 + sm);
+        if (minutes < 0) minutes += 24 * 60; // cross-midnight safeguard
+        newData.operationDuration = String(minutes);
+      }
+    }
     setFormData(newData);
     // Map anesthesia back to sedation for compatibility
-    const reportData = field === 'anesthesia' 
-      ? { ...newData, sedation: value }
-      : newData;
+    const reportData = {
+      ...newData,
+      sedation: newData.anesthesia
+    };
     onUpdate(reportData);
   };
+
 
   return (
     <Card className="p-3 mb-3 glass-card-light">
@@ -134,23 +155,67 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
         </div>
       </div>
       
-      {/* Procedure fields in a row - without procedure type */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-        <div className="space-y-0.5">
-          <Label htmlFor="date" className="text-xs font-medium">Procedure Date</Label>
-          <Input
-            id="date"
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleChange('date', e.target.value)}
-          />
+      {/* Preoperative Imaging - Under Clinical Indication */}
+      <div className="mt-2">
+        <Label className="text-xs font-medium">Preoperative Imaging:</Label>
+        <div className="flex flex-wrap gap-4 mt-1">
+          <label className="flex items-center space-x-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formData.preoperativeImaging === 'none'}
+              onChange={(e) => handleChange('preoperativeImaging', e.target.checked ? 'none' : '')}
+            />
+            <span>None</span>
+          </label>
+          <label className="flex items-center space-x-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formData.preoperativeImaging === 'ultrasound'}
+              onChange={(e) => handleChange('preoperativeImaging', e.target.checked ? 'ultrasound' : '')}
+            />
+            <span>Ultrasound</span>
+          </label>
+          <label className="flex items-center space-x-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formData.preoperativeImaging === 'ct'}
+              onChange={(e) => handleChange('preoperativeImaging', e.target.checked ? 'ct' : '')}
+            />
+            <span>CT Scan</span>
+          </label>
+          <label className="flex items-center space-x-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formData.preoperativeImaging === 'mri'}
+              onChange={(e) => handleChange('preoperativeImaging', e.target.checked ? 'mri' : '')}
+            />
+            <span>MRI</span>
+          </label>
+          <label className="flex items-center space-x-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formData.preoperativeImaging === 'other'}
+              onChange={(e) => handleChange('preoperativeImaging', e.target.checked ? 'other' : '')}
+            />
+            <span>Other (Please Specify):</span>
+            <Input
+              type="text"
+              placeholder="Specify"
+              className="w-24 h-6 text-xs ml-1"
+              disabled={formData.preoperativeImaging !== 'other'}
+            />
+          </label>
         </div>
-        
+      </div>
+
+      
+      {/* Row 1: Preparation and Anesthesia */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-0.5">
           <Label htmlFor="preparation" className="text-xs font-medium">Bowel Preparation</Label>
           <Select value={formData.preparation} onValueChange={(value) => handleChange('preparation', value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Select preparation" />
+              <SelectValue placeholder="Select Preparation" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="excellent">Excellent</SelectItem>
@@ -160,12 +225,11 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
             </SelectContent>
           </Select>
         </div>
-        
         <div className="space-y-0.5">
           <Label htmlFor="anesthesia" className="text-xs font-medium">Type of Anesthesia</Label>
           <Select value={formData.anesthesia} onValueChange={(value) => handleChange('anesthesia', value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Select anesthesia type" />
+              <SelectValue placeholder="Select Anesthesia Type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="conscious">Conscious Sedation</SelectItem>
@@ -175,15 +239,49 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
             </SelectContent>
           </Select>
         </div>
-        
-        <div className="space-y-0.5">
-          <Label htmlFor="assistant" className="text-xs font-medium">Assistant Name</Label>
-          <Input
-            id="assistant"
-            value={formData.assistant}
-            onChange={(e) => handleChange('assistant', e.target.value)}
-            placeholder="Enter assistant name"
-          />
+      </div>
+
+
+      {/* Row 3: Procedure Date and Duration in one row */}
+      <div className="grid grid-cols-1 gap-2 mt-2">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="date" className="text-xs font-medium">Procedure Date:</Label>
+            <Input
+              id="date"
+              type="date"
+              value={formData.date}
+              onChange={(e) => handleChange('date', e.target.value)}
+              placeholder="dd/mm/yyyy"
+            />
+          </div>
+          <div className="space-y-0.5">
+            <Label className="text-xs font-medium">Duration of Operation:</Label>
+            <div className="flex items-center gap-2 text-xs">
+              <span>Start Time:</span>
+              <Input
+                type="time"
+                value={formData.operationStartTime}
+                onChange={(e) => handleChange('operationStartTime', e.target.value)}
+                className="w-20"
+              />
+              <span>End Time:</span>
+              <Input
+                type="time"
+                value={formData.operationEndTime}
+                onChange={(e) => handleChange('operationEndTime', e.target.value)}
+                className="w-20"
+              />
+              <span>Total Duration:</span>
+              <Input
+                type="number"
+                value={formData.operationDuration}
+                onChange={(e) => handleChange('operationDuration', e.target.value)}
+                placeholder="min"
+                className="w-16"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </Card>
