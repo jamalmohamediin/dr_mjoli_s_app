@@ -1,8 +1,52 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
-import { formatDateWithSuffix, formatReportDate, formatDateOnly } from './dateFormatter';
+import { formatDateWithSuffix, formatReportDate, formatDateOnly, formatDateDDMMYYYY, formatDateTimeWithColon } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
 import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
+
+// Helper function to render label and value with different font weights
+const renderLabelValue = (pdf: any, label: string, value: string, x: number, y: number) => {
+  // Render label in semi-bold
+  pdf.setFont('helvetica', 'bold');
+  pdf.text(label + ':', x, y);
+  
+  // Calculate the width of the label to position the value
+  const labelWidth = pdf.getTextWidth(label + ': ');
+  
+  // Render value in normal weight
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(value, x + labelWidth, y);
+  
+  return y; // Return current Y position
+};
+
+// Function to calculate signature dimensions while maintaining aspect ratio
+const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function() {
+      const maxWidthMm = 45;
+      const maxHeightMm = 15;
+      
+      const naturalWidth = this.naturalWidth;
+      const naturalHeight = this.naturalHeight;
+      const aspectRatio = naturalWidth / naturalHeight;
+      
+      let finalWidth = maxWidthMm;
+      let finalHeight = maxWidthMm / aspectRatio;
+      
+      // If height exceeds max, scale by height instead
+      if (finalHeight > maxHeightMm) {
+        finalHeight = maxHeightMm;
+        finalWidth = maxHeightMm * aspectRatio;
+      }
+      
+      resolve({ width: finalWidth, height: finalHeight });
+    };
+    img.onerror = () => resolve({ width: 45, height: 15 }); // Fallback dimensions
+    img.src = imageDataUrl;
+  });
+};
 
 // Function to create surgical diagram canvas with markings
 const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | null> => {
@@ -31,17 +75,17 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
         if (marking.type === 'port') {
           // Draw port marking: black line with size label
           ctx.save();
-          ctx.font = 'bold 14px Arial';
+          ctx.font = 'bold 10px Arial';
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 5);
+          ctx.fillText(marking.size, marking.x, marking.y - 3);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 15, marking.y);
-          ctx.lineTo(marking.x + 15, marking.y);
+          ctx.moveTo(marking.x - 10, marking.y);
+          ctx.lineTo(marking.x + 10, marking.y);
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 2;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
@@ -56,7 +100,7 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
             ctx.stroke();
           } else { // colostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 25, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
             ctx.strokeStyle = '#16a34a'; // Green
             ctx.lineWidth = 4;
             ctx.setLineDash([]); // Continuous line
@@ -98,8 +142,29 @@ export const generateRectalCancerPDF = async (
     console.log('=== GENERATING RECTAL CANCER PDF ===');
     console.log('Rectal cancer data received:', rectalCancerData);
     
+    // Debug logging to verify field data
+    console.log('=== FIELD DEBUG INFO ===');
+    console.log('IMV Ligation:', rectalCancerData?.mobilizationAndResection?.imvLigation);
+    console.log('Vessel Hemostasis Technique:', rectalCancerData?.mobilizationAndResection?.hemostasisTechnique);
+    console.log('Vessel Hemostasis Other:', rectalCancerData?.mobilizationAndResection?.hemostasisTechniqueOther);
+    console.log('Wound Protector:', rectalCancerData?.operativeEvents?.woundProtector);
+    console.log('Reason for Stoma:', rectalCancerData?.reconstruction?.stomaDetails?.reasonForStoma);
+    console.log('Reason for Stoma Other:', rectalCancerData?.reconstruction?.stomaDetails?.reasonForStomaOther);
+    console.log('Drain Exit Site:', rectalCancerData?.operativeEvents?.drainExitSite);
+    console.log('Drain Exit Site Other:', rectalCancerData?.operativeEvents?.drainExitSiteOther);
+    console.log('Suture Material:', rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterial);
+    console.log('Suture Material Other:', rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterialOther);
+    console.log('ICG Test:', rectalCancerData?.reconstruction?.anastomoticTesting?.icgTest);
+    console.log('Reconstruction Type:', rectalCancerData?.reconstruction?.reconstructionType);
+    
     // Map new structure to old structure for backward compatibility
     const mappedData = mapNewStructureToOld(rectalCancerData);
+    
+    // Process surgical diagram
+    let diagramCanvas: string | null = null;
+    if (diagrams && diagrams.length > 0) {
+      diagramCanvas = await createSurgicalDiagramCanvas(diagrams);
+    }
     
     const pdf = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = 210;
@@ -108,48 +173,22 @@ export const generateRectalCancerPDF = async (
     let y = margin;
     let currentPage = 1;
     
-    // Helper function to add footer to a page
-    const addFooter = (pageNum: number) => {
-      const footerY = pageHeight - 15;
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      const footerDate = new Date();
-      const footerDateStr = formatReportDate(footerDate);
-      
-      const footerText = `Dr. Monde Mjoli - Specialist Surgeon\nPractice Number: 0560812\nReport Date: ${footerDateStr} | Page ${pageNum} of {{totalPages}}`;
-      const footerLines = footerText.split('\n');
-      
-      footerLines.forEach((line, index) => {
-        pdf.text(line, pageWidth / 2, footerY + (index * 4), { align: 'center' });
-      });
-    };
+    // Column positions for layout consistency
+    const pageCenter = pageWidth / 2;
+    const leftColumnX = margin;
+    const rightColumnX = pageCenter + 2;
     
-    // Add footer to first page
-    addFooter(currentPage);
-    
-    // Helper function to check page break
-    const checkPageBreak = (neededSpace: number) => {
-      if (y + neededSpace > pageHeight - 25) { // Leave space for footer
-        currentPage++;
+    // Helper function to check if we need a new page
+    const checkPageBreak = (requiredHeight: number) => {
+      if (y + requiredHeight > pageHeight - 30) {
         pdf.addPage();
-        addFooter(currentPage);
-        y = margin;
+        y = margin + 10;
         return true;
       }
       return false;
     };
     
-    // Helper function to draw section
-    const drawSection = (title: string, content: () => void) => {
-      checkPageBreak(20);
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(title, margin, y);
-      y += 7;
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      content();
-    };
+    // No separate footer function needed - footer will be added at the end
     
     // HEADER - Three column layout
     const headerStartY = y;
@@ -172,12 +211,6 @@ export const generateRectalCancerPDF = async (
     y += 3.5;
     pdf.text('Cell: 082 417 2630', margin, y);
     
-    // CENTER COLUMN - Report Title
-    let centerY = headerStartY;
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('RECTAL CANCER SURGERY REPORT', pageWidth / 2, centerY, { align: 'center' });
-    
     // RIGHT COLUMN - Practice Address
     let rightY = headerStartY;
     pdf.setFontSize(9);
@@ -194,649 +227,839 @@ export const generateRectalCancerPDF = async (
     rightY += 3.5;
     pdf.text('Fax: 043 743 6653', pageWidth - margin, rightY, { align: 'right' });
     
-    // Set y position to after the header
-    y = Math.max(y, centerY, rightY) + 10;
-    
-    // Case Identification
-    drawSection('CASE IDENTIFICATION', () => {
-      const details = [
-        `Patient Name: ${patientInfo?.name || patientName || 'Not specified'}`,
-        `Patient ID: ${patientInfo?.patientId || patientId || 'N/A'}`,
-        `Date: ${mappedData?.caseIdentification?.date || rectalCancerData?.section1?.date || 'Not specified'}`,
-        `Surgeon: ${mappedData?.caseIdentification?.surgeon || rectalCancerData?.section1?.surgeons?.[0] || 'Not specified'}`,
-        `Assistant: ${mappedData?.caseIdentification?.assistant || rectalCancerData?.section1?.assistant1 || 'Not specified'}`
-      ];
-      
-      details.forEach((detail, index) => {
-        if (index % 2 === 0 && index > 0) {
-          y += 5;
-        }
-        const x = index % 2 === 0 ? margin : pageWidth / 2;
-        pdf.text(detail, x, y);
-      });
-      y += 10;
-    });
-    
-    // Patient Demographics (Single Column)
-    drawSection('PATIENT DEMOGRAPHICS', () => {
-      const details = [
-        `Date Of Birth: ${patientInfo?.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : 'Not specified'}`,
-        `Age: ${patientInfo?.age || 'Not specified'}`,
-        `Sex: ${patientInfo?.sex ? patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase() : 'Not specified'}`,
-        `Weight: ${patientInfo?.weight ? patientInfo.weight + ' kg' : 'Not specified'}`,
-        `Height: ${patientInfo?.height ? patientInfo.height + ' cm' : 'Not specified'}`,
-        `BMI: ${patientInfo?.bmi || 'Not specified'}`,
-        `ASA Score: ${patientInfo?.asaScore ? getFullASAText(patientInfo.asaScore) : 'Not specified'}`
-      ];
-      
-      // Single column layout for patient info
-      details.forEach((detail) => {
-        pdf.text(detail, margin, y);
-        y += 5;
-      });
-      
-      // Add ASA Notes if present
-      if (patientInfo?.asaNotes) {
-        y += 2;
-        pdf.text(`ASA Notes: ${patientInfo.asaNotes}`, margin, y);
-        y += 5;
-      }
-      
-      y += 5;
-    });
-    
-    // Surgical Diagram (if available)
-    if (diagrams && diagrams.length > 0) {
-      checkPageBreak(100);
-      drawSection('SURGICAL DIAGRAM', () => {
-        // Create the surgical diagram with markings
-        createSurgicalDiagramCanvas(diagrams).then(diagramDataUrl => {
-          if (diagramDataUrl) {
-            const imgWidth = 120;
-            const imgHeight = 90;
-            const imgX = (pageWidth - imgWidth) / 2;
-            pdf.addImage(diagramDataUrl, 'PNG', imgX, y, imgWidth, imgHeight);
-            y += imgHeight + 10;
-          }
-        });
-        
-        // Add markings legend if present
-        const hasMarkings = diagrams.some(d => d.type);
-        if (hasMarkings) {
-          pdf.setFontSize(9);
-          pdf.text('Markings:', margin, y);
-          y += 5;
-          
-          const legendItems = [
-            { type: 'port', label: 'Port Sites' },
-            { type: 'stoma', label: 'Stoma Sites' },
-            { type: 'incision', label: 'Incisions' }
-          ];
-          
-          legendItems.forEach(item => {
-            if (diagrams.some(d => d.type === item.type)) {
-              pdf.text(`• ${item.label}`, margin + 5, y);
-              y += 4;
-            }
-          });
-          
-          pdf.setFontSize(10);
-          y += 5;
-        }
-      });
-    }
-    
-    // Add separator line
+    // Separator line
+    y = Math.max(y, rightY) + 5;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.5);
     pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    y += 6;
     
-    // Two-column layout starts here
-    checkPageBreak(80);
-    const startY = y;
-    const columnWidth = (pageWidth - 3 * margin) / 2;
-    const leftColumnX = margin;
-    const rightColumnX = margin + columnWidth + margin;
-    
-    // LEFT COLUMN - Preoperative & Surgical Details
-    let leftY = startY;
-    
-    // Preoperative Details
-    pdf.setFontSize(12);
+    // Add the Report Title
+    pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('PREOPERATIVE DETAILS', leftColumnX, leftY);
-    leftY += 7;
-    pdf.setFontSize(10);
+    pdf.text('RECTAL CANCER SURGERY REPORT', pageWidth / 2, y, { align: 'center' });
+    y += 8;
+    
+    // PATIENT INFORMATION Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PATIENT INFORMATION', margin, y);
+    y += 6;
+    
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    const preop = mappedData?.preoperativeDetails || {};
-    const preopLines = [
-      `Indication: ${preop.indication?.join(', ') || rectalCancerData?.section1?.indication?.join(', ') || 'Not specified'}`,
-      `Tumor Location: ${preop.tumorLocation || 'Not specified'}`,
-      `Staging: T${preop.preoperativeStaging?.tStage || 'x'}N${preop.preoperativeStaging?.nStage || 'x'}M${preop.preoperativeStaging?.mStage || 'x'}`,
-      `Neoadjuvant Therapy: ${preop.neoadjuvantTherapy || 'Not specified'}`,
-    ];
+    // Establish consistent column positions for three-column layout
+    const col1X = margin;
+    const col2X = margin + 65; // Better spacing for three columns
+    const col3X = margin + 130; // Better spacing for three columns
+    const twoCol2X = margin + 95; // For two-column layouts
     
-    if (preop.neoadjuvantTherapy === 'Yes') {
-      if (preop.radiationDetails) {
-        preopLines.push(`Radiation: ${preop.radiationDetails}`);
-      }
-      if (preop.chemotherapyRegimen) {
-        preopLines.push(`Chemotherapy: ${preop.chemotherapyRegimen}`);
-      }
-    }
+    // Row 1: Name and Patient ID
+    let currentX = margin;
+    const lineSpacing = 5; // Increased for better readability and spacing
     
-    preopLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, leftColumnX, leftY);
-        leftY += 5;
-      });
-    });
+    pdf.text(`Name: ${patientInfo?.name || patientName || ''}`, col1X, y);
+    pdf.text(`Patient ID: ${patientInfo?.patientId || patientId || ''}`, col2X, y);
+    y += lineSpacing;
     
-    leftY += 5;
+    // Row 2: Date Of Birth, Age, Sex
+    pdf.text(`Date Of Birth: ${patientInfo?.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : ''}`, col1X, y);
+    pdf.text(`Age: ${patientInfo?.age || ''}`, col2X, y);
+    const sexValue = patientInfo?.sex ? (patientInfo.sex === 'other' && patientInfo.sexOther ? patientInfo.sexOther : patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase()) : '';
+    pdf.text(`Sex: ${sexValue}`, col3X, y);
+    y += lineSpacing;
     
-    // Surgical Approach (left column)
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('SURGICAL APPROACH', leftColumnX, leftY);
-    leftY += 7;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
+    // Row 3: Weight, Height, BMI
+    pdf.text(`Weight: ${patientInfo?.weight || ''}`, col1X, y);
+    pdf.text(`Height: ${patientInfo?.height || ''}`, col2X, y);
+    pdf.text(`BMI: ${patientInfo?.bmi || ''}`, col3X, y);
+    y += lineSpacing;
     
-    const approach = mappedData?.surgicalApproach || {};
-    const approachLines = [
-      `Approach: ${approach.approach || rectalCancerData?.section2?.approach?.join(', ') || 'Not specified'}`,
-      `Resection Type: ${approach.resectionType || 'Not specified'}`,
-    ];
+    // Row 4: ASA Score
+    pdf.text(`ASA Score: ${patientInfo?.asaScore ? getFullASAText(patientInfo.asaScore) : ''}`, col1X, y);
+    y += lineSpacing;
     
-    if (approach.conversionToOpen === 'Yes') {
-      approachLines.push(`Converted to Open: Yes`);
-      if (approach.conversionReason) {
-        approachLines.push(`Reason: ${approach.conversionReason.join(', ')}`);
-      }
-    }
+    // Row 5: ASA Notes (below ASA Score)
+    pdf.text(`ASA Notes: ${patientInfo?.asaNotes || ''}`, col1X, y);
+    y += 8;
     
-    approachLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, leftColumnX, leftY);
-        leftY += 5;
-      });
-    });
-    
-    // RIGHT COLUMN - Intraoperative Findings & Resection Details
-    let rightY1 = startY;
-    
-    // Intraoperative Findings
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('INTRAOPERATIVE FINDINGS', rightColumnX, rightY1);
-    rightY1 += 7;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    
-    const findings = mappedData?.intraoperativeFindings || {};
-    const findingsLines = [
-      `Tumor Site: ${findings.tumorSite || 'Not specified'}`,
-      `Distance from AV: ${findings.distanceFromAnalVerge ? findings.distanceFromAnalVerge + ' cm' : 'N/S'}`,
-      `Fixation: ${findings.fixation || 'Not specified'}`,
-      `Adjacent Organ Invasion: ${findings.invasionToAdjacentOrgans || 'No'}`,
-    ];
-    
-    if (findings.invasionToAdjacentOrgans === 'Yes' && findings.adjacentOrgansInvolved) {
-      findingsLines.push(`Organs: ${findings.adjacentOrgansInvolved.join(', ')}`);
-    }
-    
-    findingsLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, rightColumnX, rightY1);
-        rightY1 += 5;
-      });
-    });
-    
-    rightY1 += 5;
-    
-    // Resection Details (right column)
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('RESECTION DETAILS', rightColumnX, rightY1);
-    rightY1 += 7;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    
-    const resection = mappedData?.resectionDetails || {};
-    const resectionLines = [
-      `Vessel Ligation: ${resection.vesselLigation || 'Not specified'}`,
-      `TME Quality: ${resection.mesorectalExcisionCompleteness || 'N/S'}`,
-      `Margins: D${resection.distalMargin || '?'}cm C${resection.circumferentialMargin || '?'}mm`,
-      `En Bloc: ${resection.enBlocResection || 'No'}`,
-    ];
-    
-    resectionLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, rightColumnX, rightY1);
-        rightY1 += 5;
-      });
-    });
-    
-    // Move y position to after both columns
-    y = Math.max(leftY, rightY1) + 10;
-    
-    // Add separator line
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
     pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    y += 6;
     
-    // Reconstruction Details (full width)
-    drawSection('RECONSTRUCTION DETAILS', () => {
-      const resection = mappedData?.resectionDetails || {};
-      const lines = [
-        `Vessel Ligation: ${resection.vesselLigation || 'Not specified'}`,
-        `Mesorectal Excision Completeness: ${resection.mesorectalExcisionCompleteness || 'Not specified'}`,
-        `Distal Margin: ${resection.distalMargin ? resection.distalMargin + ' cm' : 'Not specified'}`,
-        `Circumferential Margin: ${resection.circumferentialMargin ? resection.circumferentialMargin + ' mm' : 'Not specified'}`,
-        `En Bloc Resection: ${resection.enBlocResection || 'Not specified'}`,
-      ];
-      
-      if (resection.enBlocResection === 'Yes' && resection.enBlocOrgans) {
-        lines.push(`En Bloc Organs: ${resection.enBlocOrgans.join(', ')}`);
-      }
-      
-      lines.push(`Anastomosis Performed: ${resection.anastomosisPerformed || 'Not specified'}`);
-      
-      if (resection.anastomosisPerformed === 'Yes') {
-        lines.push(`Anastomosis Method: ${resection.anastomosisMethod || 'Not specified'}`);
-        lines.push(`Anastomosis Level: ${resection.anastomosisLevel || 'Not specified'}`);
-        lines.push(`Leak Test Performed: ${resection.leakTestPerformed || 'Not specified'}`);
-        if (resection.leakTestPerformed === 'Yes') {
-          lines.push(`Leak Test Result: ${resection.leakTestResult || 'Not specified'}`);
-        }
-      } else {
-        lines.push(`End Stoma Created: ${resection.endStomaCreated || 'Not specified'}`);
-      }
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        const splitLines = pdf.splitTextToSize(line, pageWidth - 2 * margin);
-        splitLines.forEach((splitLine: string) => {
-          pdf.text(splitLine, margin, y);
-          y += 5;
-        });
-      });
-      y += 5;
-    });
+    // PREOPERATIVE INFORMATION Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PREOPERATIVE INFORMATION', margin, y);
+    y += 6;
     
-    // Perineal Details (for APR)
-    if (mappedData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' && mappedData?.perinealDetails) {
-      drawSection('PERINEAL PHASE DETAILS', () => {
-        const perineal = mappedData.perinealDetails;
-        const lines = [
-          `Perineal Wound Closure: ${perineal.perinealWoundClosure || 'Not specified'}`,
-          `Drains: ${perineal.drains || 'Not specified'}`,
-          `Flap Used: ${perineal.flapUsed || 'Not specified'}`,
-        ];
-        
-        if (perineal.flapUsed === 'Yes' && perineal.flapType) {
-          lines.push(`Flap Type: ${perineal.flapType}`);
-        }
-        
-        lines.forEach(line => {
-          checkPageBreak(5);
-          pdf.text(line, margin, y);
-          y += 5;
-        });
-        y += 5;
-      });
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Row 1: Surgeon, Assistant, Anaesthetist (perfectly aligned three columns)
+    const surgeonText = rectalCancerData?.surgicalTeam?.surgeons?.filter(s => s.trim()).join(', ') || '';
+    const assistantText = rectalCancerData?.surgicalTeam?.assistants?.filter(a => a.trim()).join(', ') || '';
+    const anaesthetistText = rectalCancerData?.surgicalTeam?.anaesthetists?.filter(a => a.trim()).join(', ') || rectalCancerData?.surgicalTeam?.anaesthetist || '';
+    
+    pdf.text(`Surgeon: ${surgeonText}`, col1X, y);
+    pdf.text(`Assistant: ${assistantText}`, col2X, y);
+    pdf.text(`Anaesthetist: ${anaesthetistText}`, col3X, y);
+    y += lineSpacing;
+    
+    // Row 2: Start Time, End Time, Total Duration (perfectly aligned three columns)
+    const startTime = rectalCancerData?.procedureDetails?.startTime || '';
+    const endTime = rectalCancerData?.procedureDetails?.endTime || '';
+    const totalDuration = rectalCancerData?.procedureDetails?.duration ? `${rectalCancerData.procedureDetails.duration} minutes` : '';
+    
+    pdf.text(`Start Time: ${startTime}`, col1X, y);
+    pdf.text(`End Time: ${endTime}`, col2X, y);
+    pdf.text(`Total Duration: ${totalDuration}`, col3X, y);
+    y += lineSpacing;
+    
+    // Row 3: Procedure Urgency under Start Time, Preoperative Imaging under End Time, and Neoadjuvant Treatment under Total Duration
+    const procedureUrgency = rectalCancerData?.procedureDetails?.procedureUrgency || '';
+    const imagingText = rectalCancerData?.procedureDetails?.preoperativeImaging?.map(imaging => 
+      imaging === 'Other' && rectalCancerData.procedureDetails.preoperativeImagingOther 
+        ? `Other: ${rectalCancerData.procedureDetails.preoperativeImagingOther}` 
+        : imaging
+    ).join(', ') || '';
+    const neoadjuvantTreatment = rectalCancerData?.operationType?.neoadjuvantTreatment || '';
+    
+    pdf.text(`Procedure Urgency: ${procedureUrgency}`, col1X, y);
+    pdf.text(`Preoperative Imaging: ${imagingText}`, col2X, y);
+    pdf.text(`Neoadjuvant Treatment: ${neoadjuvantTreatment}`, col3X, y);
+    y += 8;
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // TWO-COLUMN LAYOUT: PROCEDURE DETAILS (Left) | PORTS AND INCISIONS (Right)
+    const procedureStartY = y;
+    
+    // Column 1: PROCEDURE DETAILS
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PROCEDURE DETAILS', margin, y);
+    
+    // Column 2: PORTS AND INCISIONS (at same Y level)
+    const portsCol1X = pageCenter + 10;
+    pdf.text('PORTS AND INCISIONS', portsCol1X, y);
+    
+    y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // RESTRUCTURED PROCEDURE DETAILS - Consistent two-column layout
+    
+    // Prepare all field values
+    const operationDescription = rectalCancerData?.procedureDetails?.operationDescription || '';
+    const primaryApproach = rectalCancerData?.surgicalApproach?.primaryApproach || '';
+    const operationTypeText = rectalCancerData?.operationType?.type?.join(', ') || '';
+    
+    // Prepare conversion data
+    const isConverted = primaryApproach?.toLowerCase().includes('converted') || 
+                       primaryApproach?.toLowerCase().includes('conversion') ||
+                       primaryApproach?.toLowerCase().includes('laparoscopic converted to open');
+    const conversionReason = rectalCancerData?.surgicalApproach?.conversionReason?.join(', ') || '';
+    const conversionOther = rectalCancerData?.surgicalApproach?.conversionReasonOther ? `, ${rectalCancerData.surgicalApproach.conversionReasonOther}` : '';
+    const conversionText = isConverted ? `${conversionReason}${conversionOther}` : '';
+    
+    // Prepare rectum operation types
+    const rectumOpsText = rectalCancerData?.operationType?.rectumOperationType?.join(', ') || '';
+    const rectumOtherText = rectalCancerData?.operationType?.rectumOperationOther ? `, Other: ${rectalCancerData.operationType.rectumOperationOther}` : '';
+    const rectumFullText = `${rectumOpsText}${rectumOtherText}`;
+    const rectumOperationTypes = (rectumFullText && rectumFullText.trim() && rectumFullText.trim() !== ', Other: ') ? rectumFullText : '';
+    
+    // Prepare trocar number
+    const isMinimallyInvasive = (primaryApproach?.toLowerCase().includes('laparoscopic') || 
+                                primaryApproach?.toLowerCase().includes('robotic')) &&
+                               !primaryApproach?.toLowerCase().includes('open');
+    const trocarNumber = (isMinimallyInvasive || isConverted) ? (rectalCancerData?.surgicalApproach?.trocarNumber || '') : '';
+    
+    // Prepare other fields
+    const pointsOfDifficulty = rectalCancerData?.operativeEvents?.pointsOfDifficulty?.join(', ') || '';
+    const difficultyOther = rectalCancerData?.operativeEvents?.pointsOfDifficultyOther ? `, ${rectalCancerData.operativeEvents.pointsOfDifficultyOther}` : '';
+    const pointsOfDifficultyText = `${pointsOfDifficulty}${difficultyOther}`;
+    const pointsOfDifficultyFinal = (pointsOfDifficultyText && pointsOfDifficultyText.trim() && pointsOfDifficultyText.trim() !== ', ') ? pointsOfDifficultyText : '';
+    
+    const findings = rectalCancerData?.findings?.description || '';
+    const intraOpEvents = rectalCancerData?.operativeEvents?.intraoperativeEvents?.join(', ') || '';
+    const location = rectalCancerData?.findings?.location?.join(', ') || '';
+    const mesorectalCompleteness = rectalCancerData?.findings?.mesorectalCompleteness || '';
+    const completenessOfResection = rectalCancerData?.operationType?.resectionCompleteness || rectalCancerData?.findings?.completenessOfTumourResection || '';
+    
+    // Render in the requested structured format with proper two-column layout
+    
+    // REORDERED PROCEDURE DETAILS FIELDS AS REQUESTED:
+    
+    // Row 1: Findings (single column)
+    if (findings) {
+      pdf.text(`Findings: ${findings}`, col1X, y);
+      y += lineSpacing;
     }
     
-    // Stoma Details
-    if ((mappedData?.resectionDetails?.anastomosisPerformed === 'No' || 
-         mappedData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' ||
-         mappedData?.surgicalApproach?.resectionType === 'Hartmann\'s Procedure') && 
-         mappedData?.stomaDetails) {
-      drawSection('STOMA DETAILS', () => {
-        const stoma = mappedData.stomaDetails;
-        const lines = [
-          `Stoma Type: ${stoma.stomaType || 'Not specified'}`,
-          `Stoma Location: ${stoma.stomaLocation || 'Not specified'}`,
-        ];
-        
-        if (stoma.coveringStoma) {
-          lines.push(`Covering Stoma: ${stoma.coveringStoma}`);
-        }
-        
-        lines.forEach(line => {
-          checkPageBreak(5);
-          pdf.text(line, margin, y);
-          y += 5;
-        });
-        y += 5;
-      });
+    // Row 2: Location (single column)
+    if (location) {
+      pdf.text(`Location: ${location}`, col1X, y);
+      y += lineSpacing;
     }
     
-    // Specimen Handling
-    drawSection('SPECIMEN HANDLING', () => {
-      const specimen = mappedData?.specimenHandling || {};
-      const lines = [
-        `Specimen Orientation: ${specimen.specimenOrientation || 'Not specified'}`,
-        `Specimen Labelling: ${specimen.specimenLabelling || 'Not specified'}`,
-        `Sent to Histology: ${specimen.sentToHistology || 'Not specified'}`,
-        `Resection Margins Marked: ${specimen.resectionMarginsMarked || 'Not specified'}`,
-        `Ink Color Used: ${specimen.inkColorUsed || 'Not specified'}`,
-        `Lymph Nodes Retrieved: ${specimen.lymphNodesRetrieved || 'Not specified'}`,
-      ];
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        const splitLines = pdf.splitTextToSize(line, pageWidth - 2 * margin);
-        splitLines.forEach((splitLine: string) => {
-          pdf.text(splitLine, margin, y);
-          y += 5;
-        });
-      });
-      y += 5;
-    });
-    
-    // Postoperative Plan
-    drawSection('POSTOPERATIVE PLAN', () => {
-      const postop = mappedData?.postoperativePlan || {};
-      const lines = [
-        `Destination: ${postop.destination || 'Not specified'}`,
-        `Analgesia Type: ${postop.analgesiaType || 'Not specified'}`,
-        `Antibiotics: ${postop.antibiotics || 'Not specified'}`,
-        `Follow-up Plan: ${postop.followUpPlan || 'Not specified'}`,
-        `Intraoperative Complications: ${postop.intraopComplications || 'None'}`,
-      ];
-      
-      if (postop.intraopComplications === 'Yes') {
-        lines.push(`Complication Details: ${postop.complicationDetails || 'Not specified'}`);
-        lines.push(`Clavien-Dindo Grade: ${postop.clavienDindoGrade || 'Not specified'}`);
-      }
-      
-      lines.forEach(line => {
-        checkPageBreak(5);
-        const splitLines = pdf.splitTextToSize(line, pageWidth - 2 * margin);
-        splitLines.forEach((splitLine: string) => {
-          pdf.text(splitLine, margin, y);
-          y += 5;
-        });
-      });
-      y += 10;
-    });
-    
-    // Legacy Section Data
-    if (rectalCancerData?.section1 || rectalCancerData?.section2 || rectalCancerData?.section3 || rectalCancerData?.section4 || rectalCancerData?.section5) {
-      drawSection('ADDITIONAL OPERATIVE DETAILS', () => {
-        // Section 1 - Preoperative details
-        if (rectalCancerData?.section1) {
-          const s1 = rectalCancerData.section1;
-          if (s1.indication?.length > 0) {
-            pdf.text(`Indications: ${s1.indication.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s1.asaScore) {
-            pdf.text(`ASA Score: ${getFullASAText(s1.asaScore)}`, margin, y);
-            y += 5;
-          }
-          if (s1.antibiotic || s1.dvtProphylaxis || s1.bowelPrep || s1.position) {
-            if (s1.antibiotic) pdf.text(`Antibiotic Prophylaxis: ${s1.antibiotic}`, margin, y), y += 5;
-            if (s1.dvtProphylaxis) pdf.text(`DVT Prophylaxis: ${s1.dvtProphylaxis}`, margin, y), y += 5;
-            if (s1.bowelPrep) pdf.text(`Bowel Preparation: ${s1.bowelPrep}`, margin, y), y += 5;
-            if (s1.position) pdf.text(`Patient Position: ${s1.position}`, margin, y), y += 5;
-          }
-        }
-        
-        // Section 2 - Approach details
-        if (rectalCancerData?.section2?.approach?.length > 0) {
-          pdf.text(`Surgical Approaches: ${rectalCancerData.section2.approach.join(', ')}`, margin, y);
-          y += 5;
-        }
-        
-        // Section 3 - Mobilization details
-        if (rectalCancerData?.section3) {
-          const s3 = rectalCancerData.section3;
-          if (s3.vesselLigation?.length > 0) {
-            pdf.text(`Vessel Ligation: ${s3.vesselLigation.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s3.nervePreservation?.length > 0) {
-            pdf.text(`Nerve Preservation: ${s3.nervePreservation.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s3.resectionType?.length > 0) {
-            pdf.text(`Resection Types: ${s3.resectionType.join(', ')}`, margin, y);
-            y += 5;
-          }
-        }
-        
-        // Section 4 - Reconstruction
-        if (rectalCancerData?.section4) {
-          const s4 = rectalCancerData.section4;
-          if (s4.reconstructionType) {
-            pdf.text(`Reconstruction Type: ${s4.reconstructionType}`, margin, y);
-            y += 5;
-          }
-          if (s4.anastomosisMethod?.length > 0) {
-            pdf.text(`Anastomosis Method: ${s4.anastomosisMethod.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s4.leakTest) {
-            pdf.text(`Leak Test: ${s4.leakTest}`, margin, y);
-            y += 5;
-          }
-          if (s4.protectiveStoma) {
-            pdf.text(`Protective Stoma: ${s4.protectiveStoma}`, margin, y);
-            y += 5;
-          }
-        }
-        
-        // Section 5 - Closure
-        if (rectalCancerData?.section5) {
-          const s5 = rectalCancerData.section5;
-          if (s5.abdominalClosure?.length > 0) {
-            pdf.text(`Abdominal Closure: ${s5.abdominalClosure.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s5.drainageTube) {
-            pdf.text(`Drainage Tube: ${s5.drainageTube}`, margin, y);
-            y += 5;
-          }
-          if (s5.skinClosure?.length > 0) {
-            pdf.text(`Skin Closure: ${s5.skinClosure.join(', ')}`, margin, y);
-            y += 5;
-          }
-          if (s5.woundDressing) {
-            pdf.text(`Wound Dressing: ${s5.woundDressing}`, margin, y);
-            y += 5;
-          }
-        }
-        
-        y += 5;
-      });
+    // Row 3: Mesorectal Completeness (single column)
+    const mesorectalCompletenessStr = String(mesorectalCompleteness || '');
+    if (mesorectalCompletenessStr && mesorectalCompletenessStr.trim()) {
+      pdf.text(`Mesorectal Completeness: ${mesorectalCompletenessStr}`, col1X, y);
+      y += lineSpacing;
     }
     
-    // Procedure Findings - Additional Notes
-    if (rectalCancerData?.procedureFindings?.additionalNotes) {
-      drawSection('ADDITIONAL SURGICAL NOTES', () => {
-        const notes = rectalCancerData.procedureFindings.additionalNotes;
-        const splitLines = pdf.splitTextToSize(notes, pageWidth - 2 * margin);
-        splitLines.forEach((splitLine: string) => {
-          checkPageBreak(5);
-          pdf.text(splitLine, margin, y);
-          y += 5;
-        });
-        y += 10;
-      });
+    // Row 4: Completeness of Tumour Resection (single column)
+    const completenessOfResectionStr = String(completenessOfResection || '');
+    if (completenessOfResectionStr && completenessOfResectionStr.trim()) {
+      pdf.text(`Completeness of Tumour Resection: ${completenessOfResectionStr}`, col1X, y);
+      y += lineSpacing;
     }
     
-    // Synoptic Summary
-    drawSection('SYNOPTIC OPERATIVE SUMMARY', () => {
-      const summary = generateSynopticSummary(rectalCancerData);
-      const splitLines = pdf.splitTextToSize(summary, pageWidth - 2 * margin);
-      splitLines.forEach((splitLine: string) => {
-        checkPageBreak(5);
-        pdf.text(splitLine, margin, y);
-        y += 5;
-      });
-      y += 10;
-    });
+    // Row 5: Operation Description (single column)
+    if (operationDescription) {
+      pdf.text(`Operation Description: ${operationDescription}`, col1X, y);
+      y += lineSpacing;
+    }
     
-    // Surgical Diagram Section
-    if (diagrams && diagrams.length > 0) {
-      checkPageBreak(80); // More space needed for image
-      
-      drawSection('SURGICAL DIAGRAM', () => {
-        pdf.text('Surgical markings documented on diagram:', margin, y);
-        y += 7;
+    // Row 6: Operation Type (single column)
+    if (operationTypeText) {
+      pdf.text(`Operation Type: ${operationTypeText}`, col1X, y);
+      y += lineSpacing;
+    }
+    
+    // Row 7: Rectum Operation Types (single column)
+    if (rectumOperationTypes) {
+      pdf.text(`Rectum Operation Types: ${rectumOperationTypes}`, col1X, y);
+      y += lineSpacing;
+    }
+    
+    // Row 8: Primary Approach (single column)
+    if (primaryApproach) {
+      pdf.text(`Primary Approach: ${primaryApproach}`, col1X, y);
+      y += lineSpacing;
+    }
+    
+    // Row 9: Reason for Conversion (single column)
+    if (isConverted && conversionText) {
+      pdf.text(`Reason for Conversion: ${conversionText}`, col1X, y);
+      y += lineSpacing;
+    }
+    
+    // Row 10: Trocar Number (single column)
+    if (trocarNumber) {
+      pdf.text(`Trocar Number: ${trocarNumber}`, col1X, y);
+      y += lineSpacing;
+    }
+    
+    // RIGHT COLUMN: PORTS AND INCISIONS content (moved from later section)
+    let portsY = procedureStartY + 6; // Start right after the title
+    
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Legend:', portsCol1X, portsY);
+    portsY += 4;
+    
+    pdf.setFontSize(6);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Define column positions for legend
+    const legendCol1X = portsCol1X;
+    const legendCol2X = portsCol1X + 40;
+    
+    // ROW 1: Ports and Ileostomy
+    let legendRow1Y = portsY;
+    
+    // Ports icon (left side)
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(1);
+    pdf.line(legendCol1X, legendRow1Y, legendCol1X + 6, legendRow1Y);
+    pdf.setFontSize(4);
+    pdf.text('12mm', legendCol1X + 1, legendRow1Y - 0.5);
+    pdf.setFontSize(6);
+    pdf.text('Ports (with size)', legendCol1X + 8, legendRow1Y + 1);
+    
+    // Ileostomy icon (right side)
+    pdf.setDrawColor(245, 158, 11); // Gold/Yellow
+    pdf.setLineWidth(1);
+    pdf.setLineDash([1.5, 1]);
+    pdf.circle(legendCol2X + 3, legendRow1Y, 1.5, 'S');
+    pdf.setLineDash([]);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.text('Ileostomy', legendCol2X + 6, legendRow1Y + 1);
+    
+    portsY += 4;
+    
+    // ROW 2: Incisions and Colostomy
+    let legendRow2Y = portsY;
+    
+    // Incisions icon (left side)
+    pdf.setDrawColor(139, 0, 0); // Dark red
+    pdf.setLineWidth(1);
+    pdf.setLineDash([2, 1.5]);
+    pdf.line(legendCol1X, legendRow2Y, legendCol1X + 6, legendRow2Y);
+    pdf.setLineDash([]);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.text('Incisions', legendCol1X + 8, legendRow2Y + 1);
+    
+    // Colostomy icon (right side)
+    pdf.setDrawColor(22, 163, 74); // Green
+    pdf.setLineWidth(1);
+    pdf.circle(legendCol2X + 3, legendRow2Y, 1.5, 'S');
+    pdf.setDrawColor(0, 0, 0);
+    pdf.text('Colostomy', legendCol2X + 6, legendRow2Y + 1);
+    
+    portsY += 6;
+    
+    // Diagram box
+    const diagramWidth = 80;
+    const diagramHeight = 60;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.rect(portsCol1X, portsY, diagramWidth, diagramHeight);
+    
+    // Diagram content
+    if (diagramCanvas) {
+      try {
+        // Get image properties to preserve aspect ratio
+        const imgProperties = pdf.getImageProperties(diagramCanvas);
+        const imgWidth = imgProperties.width;
+        const imgHeight = imgProperties.height;
+        const aspectRatio = imgWidth / imgHeight;
         
-        // Add legend/key
-        pdf.setFontSize(9);
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Legend:', margin, y);
-        y += 5;
+        // Calculate optimal size while preserving aspect ratio
+        let finalWidth = diagramWidth - 4;
+        let finalHeight = (diagramWidth - 4) / aspectRatio;
         
-        pdf.setFont('helvetica', 'normal');
+        // If calculated height exceeds available space, scale based on height instead
+        if (finalHeight > diagramHeight - 4) {
+          finalHeight = diagramHeight - 4;
+          finalWidth = (diagramHeight - 4) * aspectRatio;
+        }
+        
+        // Center the diagram in the available space
+        const centerX = portsCol1X + (diagramWidth - finalWidth) / 2;
+        const centerY = portsY + (diagramHeight - finalHeight) / 2;
+        
+        pdf.addImage(diagramCanvas, 'PNG', centerX, centerY, finalWidth, finalHeight);
+      } catch (error) {
+        console.error('Error adding diagram to PDF:', error);
         pdf.setFontSize(8);
-        const legendItems = [
-          '• Ports: Black horizontal lines with size labels',
-          '• Ileostomy: Dashed yellow/gold circles (smaller)',
-          '• Colostomy: Solid green circles (larger)', 
-          '• Incisions: Dashed dark red lines'
-        ];
-        
-        legendItems.forEach(item => {
-          pdf.text(item, margin + 5, y);
-          y += 4;
-        });
-        
-        y += 5;
-        pdf.setFontSize(10);
-      });
-
-      // Render the actual diagram with markings
-      const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
-      if (diagramImageData) {
-        checkPageBreak(120); // Space for image
-        
-        // Calculate image size to maintain aspect ratio like live report
-        const img = new Image();
-        img.src = diagramImageData;
-        
-        // Use similar proportions as live report (300px max height)
-        const maxWidth = pageWidth - (margin * 2);
-        const maxHeight = 120; // Increased from 60 to 120mm for better visibility
-        
-        // Calculate proper aspect ratio
-        let width = maxWidth;
-        let height = maxHeight;
-        
-        // If we have image dimensions, maintain aspect ratio
-        if (img.naturalWidth && img.naturalHeight) {
-          const aspectRatio = img.naturalWidth / img.naturalHeight;
-          if (width / height > aspectRatio) {
-            width = height * aspectRatio;
-          } else {
-            height = width / aspectRatio;
-          }
+        pdf.text('RECTAL CANCER DIAGRAM', portsCol1X + 15, portsY + 25);
+        pdf.text('(Error loading diagram)', portsCol1X + 18, portsY + 35);
+      }
+    } else {
+      pdf.setFontSize(8);
+      pdf.text('RECTAL CANCER DIAGRAM', portsCol1X + 15, portsY + 25);
+      pdf.text('(No surgical markings)', portsCol1X + 18, portsY + 35);
+    }
+    
+    // Coordinate Y position properly - make sure we're below both columns
+    const diagramEndY = portsY + diagramHeight + 10;
+    const procedureEndY = y;
+    y = Math.max(diagramEndY, procedureEndY);
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // TWO COLUMN LAYOUT: MOBILIZATION AND RESECTION | RECONSTRUCTION
+    // Use consistent column positioning with rest of document
+    const mobilizationCol1X = col1X; // Same as established col1X
+    const reconstructionCol2X = twoCol2X; // Same as established two-column position
+    
+    const startSectionY = y;
+    let col1Y = y;
+    let col2Y = y;
+    
+    // LEFT COLUMN: MOBILIZATION AND RESECTION - Dynamic rendering
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('MOBILIZATION AND RESECTION', mobilizationCol1X, col1Y);
+    col1Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Apply strict conditional rendering to each field
+    const extentMobilization = rectalCancerData?.mobilizationAndResection?.extentOfMobilization?.join(', ') || '';
+    if (extentMobilization && extentMobilization.trim()) {
+      pdf.text(`Extent of Mobilization: ${extentMobilization}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    // VESSEL LIGATION GROUP - Always show structure as requested
+    const vesselLigation = rectalCancerData?.mobilizationAndResection?.vesselLigation?.join(', ') || '';
+    const imvLigation = rectalCancerData?.mobilizationAndResection?.imvLigation || ''; // FIXED: correct field name
+    const vesselHemostasis = rectalCancerData?.mobilizationAndResection?.hemostasisTechnique || [];
+    const vesselHemostasisOther = rectalCancerData?.mobilizationAndResection?.hemostasisTechniqueOther || '';
+    
+    // Check if any vessel-related fields have content
+    let vesselHemostasisText = '';
+    if (Array.isArray(vesselHemostasis) && vesselHemostasis.length > 0) {
+      vesselHemostasisText = vesselHemostasis.map(technique => 
+        technique === 'Other' && vesselHemostasisOther ? `Other: ${vesselHemostasisOther}` : technique
+      ).join(', ');
+    }
+    
+    const hasAnyVesselContent = vesselLigation || imvLigation || vesselHemostasisText;
+    
+    if (hasAnyVesselContent) {
+      // 1. Vessel Ligation (main field)
+      pdf.text(`Vessel Ligation: ${vesselLigation || ''}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+      
+      // 2. Inferior Mesenteric Vein Ligation (always show after Vessel Ligation)
+      pdf.text(`Inferior Mesenteric Vein Ligation: ${imvLigation || ''}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+      
+      // 3. Vessel Hemostasis Technique (always show after IMV Ligation)
+      pdf.text(`Vessel Hemostasis Technique: ${vesselHemostasisText || ''}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    const lnd = rectalCancerData?.mobilizationAndResection?.lymphNodeDissection || '';
+    const lndStr = String(lnd || '');
+    if (lndStr && lndStr.trim()) {
+      pdf.text(`Lymph Node Dissection (LND): ${lndStr}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    const proximalSite = rectalCancerData?.mobilizationAndResection?.proximalTransection || '';
+    const proximalSiteStr = String(proximalSite || '');
+    if (proximalSiteStr && proximalSiteStr.trim()) {
+      pdf.text(`Proximal Transection Site: ${proximalSiteStr}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    const distalSite = rectalCancerData?.mobilizationAndResection?.distalTransection || '';
+    const distalSiteStr = String(distalSite || '');
+    if (distalSiteStr && distalSiteStr.trim()) {
+      pdf.text(`Distal Transection Site: ${distalSiteStr}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    const analCanalTransection = rectalCancerData?.mobilizationAndResection?.analCanalTransection || '';
+    const analCanalTransectionStr = String(analCanalTransection || '');
+    if (analCanalTransectionStr && analCanalTransectionStr.trim()) {
+      pdf.text(`Anal Canal Transection level: ${analCanalTransectionStr}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    const enBlocResection = rectalCancerData?.mobilizationAndResection?.enBlocResection?.join(', ') || '';
+    if (enBlocResection && enBlocResection.trim()) {
+      pdf.text(`Excised En-Bloc resection: ${enBlocResection}`, mobilizationCol1X, col1Y);
+      col1Y += lineSpacing;
+    }
+    
+    // RIGHT COLUMN: RECONSTRUCTION - Dynamic rendering
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('RECONSTRUCTION', reconstructionCol2X, col2Y);
+    col2Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    const reconstructionType = rectalCancerData?.reconstruction?.reconstructionType || '';
+    
+    // Handle both string and array formats for reconstruction type
+    let reconstructionTypeText = '';
+    let isStoma = false;
+    let hasAnastomosis = false;
+    
+    if (Array.isArray(reconstructionType)) {
+      reconstructionTypeText = reconstructionType.join(', ');
+      isStoma = reconstructionType.includes('Stoma');
+      hasAnastomosis = reconstructionType.includes('Anastomosis');
+    } else if (reconstructionType && reconstructionType.trim()) {
+      reconstructionTypeText = reconstructionType;
+      isStoma = reconstructionType?.toLowerCase() === 'stoma';
+      hasAnastomosis = reconstructionType?.toLowerCase().includes('anastomosis') || 
+                       reconstructionType?.toLowerCase().includes('colorectal') ||
+                       reconstructionType?.toLowerCase().includes('coloanal');
+    }
+    
+    if (reconstructionTypeText && reconstructionTypeText.trim()) {
+      pdf.text(`Reconstruction Type: ${reconstructionTypeText}`, reconstructionCol2X, col2Y);
+      col2Y += lineSpacing;
+    }
+    
+    if (hasAnastomosis) {
+      const anastomosisSite = rectalCancerData?.reconstruction?.anastomosisDetails?.site || '';
+      if (anastomosisSite && anastomosisSite.trim()) {
+        pdf.text(`Site of Anastomosis: ${anastomosisSite}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      const configuration = rectalCancerData?.reconstruction?.anastomosisDetails?.configuration || '';
+      if (configuration && configuration.trim()) {
+        pdf.text(`Configuration: ${configuration}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      const technique = rectalCancerData?.reconstruction?.anastomosisDetails?.technique || '';
+      if (technique && technique.trim()) {
+        pdf.text(`Anastomotic Technique: ${technique}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      // Suture Material field (array with Other option)
+      const sutureMaterial = rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterial || [];
+      const sutureMaterialOther = rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterialOther || '';
+      
+      let sutureMaterialText = '';
+      if (Array.isArray(sutureMaterial) && sutureMaterial.length > 0) {
+        sutureMaterialText = sutureMaterial.map(material => 
+          material === 'Other' && sutureMaterialOther ? `Other: ${sutureMaterialOther}` : material
+        ).join(', ');
+      }
+      
+      if (sutureMaterialText && sutureMaterialText.trim()) {
+        pdf.text(`Suture Material: ${sutureMaterialText}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      // Show stapler sizes only if technique is "Stapled"
+      const techniqueStr = String(technique || '').toLowerCase();
+      const isStapledTechnique = techniqueStr.includes('stapled') || techniqueStr === 'stapled';
+      if (isStapledTechnique) {
+        // Linear stapler sizes (array) + optional Other text
+        const linearSizes: string[] = rectalCancerData?.reconstruction?.anastomosisDetails?.linearStaplerSize || [];
+        const linearOther: string = rectalCancerData?.reconstruction?.anastomosisDetails?.linearStaplerSizeOther || '';
+        let linearDisplay = '';
+        if (Array.isArray(linearSizes) && linearSizes.length > 0) {
+          const mapped = linearSizes.map((s: string) => (s === 'Other' && linearOther ? `Other: ${linearOther}` : s));
+          linearDisplay = mapped.join(', ');
         }
-        
+        if (linearDisplay && linearDisplay.trim()) {
+          pdf.text(`Linear Stapler Sizes: ${linearDisplay}`, reconstructionCol2X, col2Y);
+          col2Y += lineSpacing;
+        }
+
+        // Circular stapler sizes (array) + optional Other text
+        const circularSizes: string[] = rectalCancerData?.reconstruction?.anastomosisDetails?.circularStaplerSize || [];
+        const circularOther: string = rectalCancerData?.reconstruction?.anastomosisDetails?.circularStaplerSizeOther || '';
+        let circularDisplay = '';
+        if (Array.isArray(circularSizes) && circularSizes.length > 0) {
+          const mapped = circularSizes.map((s: string) => (s === 'Other' && circularOther ? `Other: ${circularOther}` : s));
+          circularDisplay = mapped.join(', ');
+        }
+        if (circularDisplay && circularDisplay.trim()) {
+          pdf.text(`Circular Stapler Sizes: ${circularDisplay}`, reconstructionCol2X, col2Y);
+          col2Y += lineSpacing;
+        }
+      }
+      
+      const anastomoticHeight = rectalCancerData?.reconstruction?.anastomosisDetails?.anastomoticHeight || '';
+      const anastomoticHeightStr = String(anastomoticHeight || '');
+      if (anastomoticHeightStr && anastomoticHeightStr.trim()) {
+        pdf.text(`Anastomotic Height: ${anastomoticHeightStr}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      const doughnutAssessment = rectalCancerData?.reconstruction?.anastomosisDetails?.doughnutAssessment || '';
+      const doughnutAssessmentStr = String(doughnutAssessment || '');
+      if (doughnutAssessmentStr && doughnutAssessmentStr.trim()) {
+        pdf.text(`Doughnut Assessment: ${doughnutAssessmentStr}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      const airLeakTest = rectalCancerData?.reconstruction?.anastomosisDetails?.airLeakTest || '';
+      const airLeakTestStr = String(airLeakTest || '');
+      if (airLeakTestStr && airLeakTestStr.trim()) {
+        pdf.text(`Air Leak Test: ${airLeakTestStr}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      // ICG Test field - conditional rendering (from anastomoticTesting)
+      const icgTest = rectalCancerData?.reconstruction?.anastomoticTesting?.icgTest || '';
+      const icgTestStr = String(icgTest || '');
+      if (icgTestStr && icgTestStr.trim()) {
+        pdf.text(`Indocyanine Green (ICG) Test: ${icgTestStr}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+    }
+    
+    // Show stoma details if reconstruction type is specifically "Stoma"
+    if (isStoma) {
+      const stomaConfiguration = rectalCancerData?.reconstruction?.stomaDetails?.configuration || '';
+      if (stomaConfiguration && stomaConfiguration.trim()) {
+        pdf.text(`Stoma Configuration: ${stomaConfiguration}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+      
+      // Add Reason for Stoma field
+      const reasonForStoma = rectalCancerData?.reconstruction?.stomaDetails?.reasonForStoma || '';
+      const reasonForStomaOther = rectalCancerData?.reconstruction?.stomaDetails?.reasonForStomaOther || '';
+      
+      let reasonForStomaText = '';
+      if (Array.isArray(reasonForStoma)) {
+        reasonForStomaText = reasonForStoma.map(reason => 
+          reason === 'Other' && reasonForStomaOther ? `Other: ${reasonForStomaOther}` : reason
+        ).join(', ');
+      } else {
+        reasonForStomaText = String(reasonForStoma || '');
+        if (reasonForStomaText === 'Other' && reasonForStomaOther) {
+          reasonForStomaText = `Other: ${reasonForStomaOther}`;
+        }
+      }
+      
+      if (reasonForStomaText && reasonForStomaText.trim()) {
+        pdf.text(`Reason for Stoma: ${reasonForStomaText}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+    }
+    
+    // Handle "Other" reconstruction type details
+    const hasOtherReconstruction = Array.isArray(reconstructionType) 
+      ? reconstructionType.includes('Other') 
+      : reconstructionType?.toLowerCase() === 'other';
+    
+    if (hasOtherReconstruction) {
+      const reconstructionOther = rectalCancerData?.reconstruction?.reconstructionOther || '';
+      if (reconstructionOther && reconstructionOther.trim()) {
+        pdf.text(`Other Reconstruction Details: ${reconstructionOther}`, reconstructionCol2X, col2Y);
+        col2Y += lineSpacing;
+      }
+    }
+    
+    // Move to next section after the two columns
+    y = Math.max(col1Y, col2Y) + 10; // Increased spacing
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // Force page break for remaining sections to ensure they show
+    checkPageBreak(200);
+    
+    // NEW RESTRUCTURED THREE-COLUMN LAYOUT: COMPLICATIONS | SPECIMEN | (empty third column)
+    const comp1X = col1X;
+    const comp2X = twoCol2X;
+    const comp3X = pageWidth - margin - 65; // Third column position
+    
+    const newSectionStartY = y;
+    let comp1Y = y;
+    let comp2Y = y;
+    let comp3Y = y;
+    
+    // COLUMN 1: COMPLICATIONS
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('COMPLICATIONS', comp1X, comp1Y);
+    comp1Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Points of Difficulty
+    if (pointsOfDifficultyFinal) {
+      pdf.text(`Points of Difficulty: ${pointsOfDifficultyFinal}`, comp1X, comp1Y);
+      comp1Y += lineSpacing;
+    }
+    
+    // Intraoperative Events/Complications
+    if (intraOpEvents) {
+      pdf.text(`Intraoperative Events/Complications: ${intraOpEvents}`, comp1X, comp1Y);
+      comp1Y += lineSpacing;
+    }
+    
+    comp1Y += 6; // Space before CLOSURE
+    
+    // CLOSURE section (moved from later)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('CLOSURE', comp1X, comp1Y);
+    comp1Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Complete closure fields - always show labels for structure visibility
+    const woundProtector = rectalCancerData?.operativeEvents?.woundProtector || '';
+    pdf.text(`Wound Protector Used: ${woundProtector}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const drainInsertion = rectalCancerData?.operativeEvents?.drainInsertion || '';
+    pdf.text(`Drain Insertion: ${drainInsertion}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    // Handle drain type display - show only selected types, not the additional details
+    const drainTypes = rectalCancerData?.operativeEvents?.drainType || [];
+    const drainTypeDisplay = Array.isArray(drainTypes) ? drainTypes.join(', ') : drainTypes;
+    pdf.text(`Type of Drain: ${drainTypeDisplay}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const intraPeritoneal = rectalCancerData?.operativeEvents?.intraPeritonealPlacement || '';
+    pdf.text(`Intra-Peritoneal Placement: ${intraPeritoneal}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const exitSite = Array.isArray(rectalCancerData?.operativeEvents?.drainExitSite) 
+      ? rectalCancerData.operativeEvents.drainExitSite.join(', ') 
+      : (rectalCancerData?.operativeEvents?.drainExitSite || '');
+    pdf.text(`Exit Site: ${exitSite}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const fascialClosure = Array.isArray(rectalCancerData?.closure?.fascialClosure) 
+      ? rectalCancerData.closure.fascialClosure.join(', ') 
+      : (rectalCancerData?.closure?.fascialClosure || '');
+    pdf.text(`Fascial Closure: ${fascialClosure}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const fascialMaterial = Array.isArray(rectalCancerData?.closure?.fascialClosureMaterial) 
+      ? rectalCancerData.closure.fascialClosureMaterial.join(', ') 
+      : (rectalCancerData?.closure?.fascialClosureMaterial || '');
+    pdf.text(`Fascial Material Used: ${fascialMaterial}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const skinClosure = Array.isArray(rectalCancerData?.closure?.skinClosure) 
+      ? rectalCancerData.closure.skinClosure.join(', ') 
+      : (rectalCancerData?.closure?.skinClosure || '');
+    pdf.text(`Skin Closure: ${skinClosure}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    const skinMaterial = Array.isArray(rectalCancerData?.closure?.skinClosureMaterial) 
+      ? rectalCancerData.closure.skinClosureMaterial.join(', ') 
+      : (rectalCancerData?.closure?.skinClosureMaterial || '');
+    pdf.text(`Skin Material Used: ${skinMaterial}`, comp1X, comp1Y);
+    comp1Y += lineSpacing;
+    
+    // COLUMN 2: SPECIMEN
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SPECIMEN', comp2X, comp2Y);
+    comp2Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Specimen fields - always show labels for structure visibility
+    const specimenExtraction = rectalCancerData?.operativeEvents?.specimenExtraction || '';
+    pdf.text(`Specimen Extraction Site: ${specimenExtraction}`, comp2X, comp2Y);
+    comp2Y += lineSpacing;
+    
+    const specimenSent = rectalCancerData?.operativeEvents?.specimenSentToLab || '';
+    pdf.text(`Specimen Sent to Laboratory: ${specimenSent}`, comp2X, comp2Y);
+    comp2Y += lineSpacing;
+    
+    const labName = rectalCancerData?.operativeEvents?.laboratoryName || '';
+    pdf.text(`Specify Laboratory Sent to: ${labName}`, comp2X, comp2Y);
+    comp2Y += lineSpacing;
+    
+    // Move to next section after the columns
+    y = Math.max(comp1Y, comp2Y, comp3Y) + 10;
+    
+    // Force page break for final sections to ensure they show
+    checkPageBreak(100);
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // NOTES and POST OPERATIVE MANAGEMENT side-by-side layout
+    const notesStartY = y;
+    const notesCol1X = margin;
+    const notesCol2X = pageCenter + 2;
+    let notesCol1Y = notesStartY;
+    let notesCol2Y = notesStartY;
+    
+    // Left Column - NOTES Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('NOTES', notesCol1X, notesCol1Y);
+    notesCol1Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    const additionalNotes = rectalCancerData?.additionalInfo?.additionalInformation || '';
+    pdf.text(`Additional Notes: ${additionalNotes}`, notesCol1X, notesCol1Y);
+    notesCol1Y += lineSpacing;
+    
+    // Right Column - POST OPERATIVE MANAGEMENT Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('POST OPERATIVE MANAGEMENT', notesCol2X, notesCol2Y);
+    notesCol2Y += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    const postOpManagement = rectalCancerData?.additionalInfo?.postOperativeManagement || '';
+    pdf.text(`Post Operative Management: ${postOpManagement}`, notesCol2X, notesCol2Y);
+    notesCol2Y += lineSpacing;
+    
+    // Update Y position to max of both columns
+    y = Math.max(notesCol1Y, notesCol2Y) + 10;
+    
+    // Force page break for signature section to ensure it shows
+    if (!checkPageBreak(40)) {
+      y += 15; // Add spacing only if staying on same page
+    }
+    
+    // SURGEON'S SIGNATURE Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text("SURGEON'S SIGNATURE", margin, y);
+    y += 15; // Increased spacing to avoid signature image hiding title
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Signature and Date on same line - Fixed alignment
+    pdf.text("Surgeon's Signature:", margin, y);
+    pdf.text("Date & Time:", notesCol2X, y);
+    
+    // Handle signature (if available) - Fixed field path
+    if (rectalCancerData?.additionalInfo?.surgeonSignature) {
+      if (rectalCancerData.additionalInfo.surgeonSignature.startsWith('data:image')) {
         try {
-          pdf.addImage(diagramImageData, 'PNG', margin, y, width, height);
-          y += height + 10;
+          // Calculate proper dimensions asynchronously
+          const dimensions = await calculateSignatureDimensions(rectalCancerData.additionalInfo.surgeonSignature);
+          
+          pdf.addImage(
+            rectalCancerData.additionalInfo.surgeonSignature, 
+            'PNG', 
+            margin + 45, 
+            y - dimensions.height + 3, 
+            dimensions.width, 
+            dimensions.height
+          );
         } catch (error) {
-          console.error('Error adding surgical diagram to PDF:', error);
-          pdf.text('Surgical diagram could not be rendered', margin, y);
-          y += 7;
+          console.error('Error adding signature image:', error);
+          pdf.text('[Signature]', margin + 45, y);
         }
       } else {
-        // Fallback to text summary if diagram rendering fails
-        const markingSummary = {
-          ports: diagrams.filter(m => m.type === 'port'),
-          stomas: diagrams.filter(m => m.type === 'stoma'),
-          incisions: diagrams.filter(m => m.type === 'incision')
-        };
-        
-        if (markingSummary.ports.length > 0) {
-          pdf.text(`• Ports (${markingSummary.ports.length}): ${markingSummary.ports.map(p => p.size).join(', ')}`, margin + 5, y);
-          y += 5;
-        }
-        
-        if (markingSummary.stomas.length > 0) {
-          pdf.text(`• Stomas (${markingSummary.stomas.length}): ${markingSummary.stomas.map(s => s.stomaType).join(', ')}`, margin + 5, y);
-          y += 5;
-        }
-        
-        if (markingSummary.incisions.length > 0) {
-          pdf.text(`• Access incisions: ${markingSummary.incisions.length} marked on diagram`, margin + 5, y);
-          y += 5;
-        }
-        
-        y += 5;
+        pdf.text(rectalCancerData.additionalInfo.surgeonSignature, margin + 45, y);
       }
     }
     
-    // Signature Section
-    checkPageBreak(40);
-    drawSection('SURGEON\'S SIGNATURE & COMPLETION', () => {
-      // Check for typed signature
-      if (rectalCancerData?.closure?.surgeonSignatureText) {
-        pdf.text(`Surgeon: ${rectalCancerData.closure.surgeonSignatureText}`, margin, y);
-        y += 7;
-      }
-      
-      // Check for uploaded signature
-      if (rectalCancerData?.closure?.surgeonSignature) {
-        checkPageBreak(30);
-        try {
-          // Add uploaded signature image
-          pdf.addImage(rectalCancerData.closure.surgeonSignature, 'PNG', margin, y, 60, 20);
-          y += 25;
-        } catch (error) {
-          console.error('Error adding signature to PDF:', error);
-          pdf.text('Surgeon Signature:', margin, y);
-          pdf.line(margin + 35, y, margin + 100, y);
-          y += 10;
-        }
-      } else if (!rectalCancerData?.closure?.surgeonSignatureText) {
-        // Default signature line
-        pdf.text('Surgeon Signature:', margin, y);
-        pdf.line(margin + 35, y, margin + 100, y);
-        y += 10;
-      }
-      
-      // Date/Time
-      const dateTime = rectalCancerData?.closure?.dateTime || new Date().toISOString();
-      pdf.text(`Date/Time: ${formatReportDate(new Date(dateTime))}`, margin, y);
-      y += 5;
-    });
+    // Add current date - Fixed alignment and format
+    const currentDate = rectalCancerData?.additionalInfo?.dateTime 
+      ? formatDateTimeWithColon(rectalCancerData.additionalInfo.dateTime)
+      : formatDateTimeWithColon(new Date());
     
-    // Update total pages in all footers
-    const totalPages = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      pdf.setPage(i);
-      // Find and replace {{totalPages}} placeholder
-      const footerY = pageHeight - 15;
-      const footerText = `Report Date: ${formatReportDate(new Date())} | Page ${i} of ${totalPages}`;
-      
-      // Cover the old page number text
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, footerY - 2, pageWidth, 10, 'F');
-      
-      // Redraw the footer with correct page numbers
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      const footerLines = [
-        'Dr. Monde Mjoli - Specialist Surgeon',
-        'Practice Number: 0560812',
-        footerText
-      ];
-      
-      footerLines.forEach((line, index) => {
-        pdf.text(line, pageWidth / 2, footerY + (index * 4), { align: 'center' });
-      });
-    }
+    // Calculate proper spacing for the date value
+    const dateTimeLabelWidth = pdf.getTextWidth('Date & Time: ');
+    pdf.text(currentDate, notesCol2X + dateTimeLabelWidth, y);
     
+    // Generate PDF and return
     return {
       success: true,
       blob: pdf.output('blob')
@@ -849,224 +1072,6 @@ export const generateRectalCancerPDF = async (
       error: error.message || 'Failed to generate PDF'
     };
   }
-};
-
-// Helper function to generate synoptic summary
-const generateSynopticSummary = (rectalCancerData: any): string => {
-  let summary = [];
-  
-  // Date and location
-  if (rectalCancerData?.caseIdentification?.date) {
-    summary.push(`On ${formatDateOnly(rectalCancerData.caseIdentification.date)}`);
-  }
-  
-  // Surgical team
-  if (rectalCancerData?.caseIdentification?.surgeon) {
-    summary.push(`Dr. ${rectalCancerData.caseIdentification.surgeon}`);
-    if (rectalCancerData?.caseIdentification?.assistant) {
-      summary.push(`assisted by ${rectalCancerData.caseIdentification.assistant}`);
-    }
-  }
-  
-  
-  summary.push('performed');
-  
-  // Procedure type
-  if (rectalCancerData?.surgicalApproach?.resectionType) {
-    summary.push(`a ${rectalCancerData.surgicalApproach.resectionType}`);
-  } else if (rectalCancerData?.section3?.resectionType?.length > 0) {
-    summary.push(`a ${rectalCancerData.section3.resectionType[0]}`);
-  }
-  
-  // Surgical approach
-  if (rectalCancerData?.surgicalApproach?.approach) {
-    summary.push(`via ${rectalCancerData.surgicalApproach.approach.toLowerCase()} approach`);
-  } else if (rectalCancerData?.section2?.approach?.length > 0) {
-    summary.push(`via ${rectalCancerData.section2.approach[0].toLowerCase()} approach`);
-  }
-  
-  // Indication
-  const indication = rectalCancerData?.preoperativeDetails?.indication?.[0] || rectalCancerData?.section1?.indication?.[0];
-  if (indication) {
-    if (indication === 'Other' && (rectalCancerData?.preoperativeDetails?.indicationOther || rectalCancerData?.section1?.indicationOther)) {
-      summary.push(`for ${rectalCancerData?.preoperativeDetails?.indicationOther || rectalCancerData?.section1?.indicationOther}`);
-    } else {
-      summary.push(`for ${indication.toLowerCase()}`);
-    }
-  }
-  
-  // Tumor location and distance
-  if (rectalCancerData?.preoperativeDetails?.tumorLocation) {
-    summary.push(`located in the ${rectalCancerData.preoperativeDetails.tumorLocation.toLowerCase()}`);
-  }
-  
-  if (rectalCancerData?.intraoperativeFindings?.distanceFromAnalVerge) {
-    summary.push(`${rectalCancerData.intraoperativeFindings.distanceFromAnalVerge}cm from the anal verge`);
-  }
-  
-  // Staging
-  const staging = rectalCancerData?.preoperativeDetails?.preoperativeStaging;
-  if (staging && (staging.tStage || staging.nStage || staging.mStage)) {
-    summary.push(`(staging: T${staging.tStage || 'x'}N${staging.nStage || 'x'}M${staging.mStage || 'x'})`);
-  }
-  
-  // Neoadjuvant therapy
-  if (rectalCancerData?.preoperativeDetails?.neoadjuvantTherapy === 'Yes') {
-    summary.push(`following neoadjuvant therapy`);
-    if (rectalCancerData?.preoperativeDetails?.radiationDetails || rectalCancerData?.preoperativeDetails?.chemotherapyRegimen) {
-      const therapyDetails = [];
-      if (rectalCancerData?.preoperativeDetails?.radiationDetails) {
-        therapyDetails.push(rectalCancerData.preoperativeDetails.radiationDetails);
-      }
-      if (rectalCancerData?.preoperativeDetails?.chemotherapyRegimen) {
-        therapyDetails.push(`${rectalCancerData.preoperativeDetails.chemotherapyRegimen} chemotherapy`);
-      }
-      summary.push(`(${therapyDetails.join(' with ')})`);
-    }
-  }
-  
-  // Conversion
-  if (rectalCancerData?.surgicalApproach?.conversionToOpen === 'Yes') {
-    const reasons = [...(rectalCancerData.surgicalApproach.conversionReason || [])];
-    if (rectalCancerData?.surgicalApproach?.conversionReasonOther) {
-      reasons.push(rectalCancerData.surgicalApproach.conversionReasonOther);
-    }
-    summary.push(`The procedure was converted to open due to ${reasons.join(', ') || 'unspecified reasons'}`);
-  }
-  
-  // Intraoperative findings
-  if (rectalCancerData?.intraoperativeFindings?.fixation) {
-    summary.push(`The tumor was ${rectalCancerData.intraoperativeFindings.fixation.toLowerCase()}`);
-  }
-  
-  if (rectalCancerData?.intraoperativeFindings?.invasionToAdjacentOrgans === 'Yes' && rectalCancerData?.intraoperativeFindings?.adjacentOrgansInvolved?.length > 0) {
-    summary.push(`with invasion to ${rectalCancerData.intraoperativeFindings.adjacentOrgansInvolved.join(', ')}`);
-  }
-  
-  // Metastatic disease
-  const metastases = [];
-  if (rectalCancerData?.intraoperativeFindings?.peritonealDeposits === 'Yes') {
-    metastases.push('peritoneal deposits');
-  }
-  if (rectalCancerData?.intraoperativeFindings?.liverMetastasis === 'Yes') {
-    metastases.push('liver metastasis');
-  }
-  if (metastases.length > 0) {
-    summary.push(`Metastatic disease was found (${metastases.join(' and ')})`);
-    if (rectalCancerData?.intraoperativeFindings?.biopsyTaken === 'Yes') {
-      summary.push('and biopsies were taken');
-    }
-  }
-  
-  // Vessel ligation
-  const vesselLigation = rectalCancerData?.resectionDetails?.vesselLigation || rectalCancerData?.section3?.vesselLigation?.[0];
-  if (vesselLigation) {
-    summary.push(`The inferior mesenteric vessels were ligated (${vesselLigation.toLowerCase()})`);
-  }
-  
-  // Nerve preservation
-  if (rectalCancerData?.section3?.nervePreservation?.length > 0) {
-    summary.push(`with ${rectalCancerData.section3.nervePreservation.join(' and ').toLowerCase()}`);
-  }
-  
-  // TME
-  if (rectalCancerData?.resectionDetails?.mesorectalExcisionCompleteness) {
-    summary.push(`${rectalCancerData.resectionDetails.mesorectalExcisionCompleteness} mesorectal excision was achieved`);
-  }
-  
-  // Margins
-  const margins = [];
-  if (rectalCancerData?.resectionDetails?.distalMargin) {
-    margins.push(`distal margin ${rectalCancerData.resectionDetails.distalMargin}cm`);
-  }
-  if (rectalCancerData?.resectionDetails?.circumferentialMargin) {
-    margins.push(`CRM ${rectalCancerData.resectionDetails.circumferentialMargin}mm`);
-  }
-  if (margins.length > 0) {
-    summary.push(`with ${margins.join(' and ')}`);
-  }
-  
-  // En bloc resection
-  if (rectalCancerData?.resectionDetails?.enBlocResection === 'Yes' && rectalCancerData?.resectionDetails?.enBlocOrgans?.length > 0) {
-    summary.push(`En bloc resection included ${rectalCancerData.resectionDetails.enBlocOrgans.join(', ')}`);
-  }
-  
-  // Anastomosis
-  if (rectalCancerData?.resectionDetails?.anastomosisPerformed === 'Yes') {
-    const method = rectalCancerData.resectionDetails.anastomosisMethod || rectalCancerData?.section4?.anastomosisMethod?.[0] || '';
-    const level = rectalCancerData.resectionDetails.anastomosisLevel || 'anastomosis';
-    summary.push(`A ${method} ${level} was performed`.trim());
-    if (rectalCancerData?.resectionDetails?.leakTestPerformed === 'Yes') {
-      const result = rectalCancerData.resectionDetails.leakTestResult || rectalCancerData?.section4?.leakTest || '';
-      summary.push(`Leak test: ${result.toLowerCase() || 'performed'}`);
-    }
-  } else if (rectalCancerData?.resectionDetails?.endStomaCreated === 'Yes') {
-    summary.push('No anastomosis was performed');
-  }
-  
-  // Stoma
-  if (rectalCancerData?.stomaDetails?.stomaType || rectalCancerData?.section4?.protectiveStoma === 'Yes') {
-    const stomaType = rectalCancerData?.stomaDetails?.stomaType || 'protective stoma';
-    const location = rectalCancerData?.stomaDetails?.stomaLocation || rectalCancerData?.section4?.stomaLocation;
-    summary.push(`A ${stomaType} was created${location ? ` at ${location}` : ''}`);
-  }
-  
-  // Perineal phase (for APR)
-  if (rectalCancerData?.surgicalApproach?.resectionType === 'Abdominoperineal Resection' && rectalCancerData?.perinealDetails) {
-    if (rectalCancerData.perinealDetails.perinealWoundClosure) {
-      summary.push(`Perineal wound closed by ${rectalCancerData.perinealDetails.perinealWoundClosure}`);
-    }
-    if (rectalCancerData.perinealDetails.flapUsed === 'Yes' && rectalCancerData.perinealDetails.flapType) {
-      summary.push(`with ${rectalCancerData.perinealDetails.flapType} flap`);
-    }
-  }
-  
-  // Specimen handling
-  if (rectalCancerData?.specimenHandling?.sentToHistology === 'Yes') {
-    const specimenDetails = [];
-    if (rectalCancerData?.specimenHandling?.specimenOrientation) {
-      specimenDetails.push('oriented');
-    }
-    if (rectalCancerData?.specimenHandling?.resectionMarginsMarked) {
-      specimenDetails.push('margins marked');
-      if (rectalCancerData?.specimenHandling?.inkColorUsed) {
-        specimenDetails.push(`with ${rectalCancerData.specimenHandling.inkColorUsed} ink`);
-      }
-    }
-    summary.push(`The specimen was ${specimenDetails.join(', ') || 'prepared'} and sent for histopathology`);
-    if (rectalCancerData?.specimenHandling?.lymphNodesRetrieved) {
-      summary.push(`(${rectalCancerData.specimenHandling.lymphNodesRetrieved} lymph nodes retrieved)`);
-    }
-  }
-  
-  // Closure (legacy)
-  if (rectalCancerData?.section5?.abdominalClosure?.length > 0) {
-    summary.push(`Abdominal closure: ${rectalCancerData.section5.abdominalClosure.join(', ')}`);
-  }
-  
-  // Drains
-  if (rectalCancerData?.perinealDetails?.drains || rectalCancerData?.section5?.drainageTube) {
-    const drains = rectalCancerData?.perinealDetails?.drains || rectalCancerData?.section5?.drainageTube;
-    summary.push(`Drains: ${drains}`);
-  }
-  
-  // Complications
-  if (rectalCancerData?.postoperativePlan?.intraopComplications === 'Yes' && rectalCancerData?.postoperativePlan?.complicationDetails) {
-    summary.push(`Intraoperative complications: ${rectalCancerData.postoperativePlan.complicationDetails}`);
-    if (rectalCancerData?.postoperativePlan?.clavienDindoGrade) {
-      summary.push(`(Clavien-Dindo grade ${rectalCancerData.postoperativePlan.clavienDindoGrade})`);
-    }
-  }
-  
-  // Postoperative plan
-  if (rectalCancerData?.postoperativePlan?.destination) {
-    summary.push(`The patient was transferred to ${rectalCancerData.postoperativePlan.destination}`);
-  }
-  if (rectalCancerData?.postoperativePlan?.analgesiaType) {
-    summary.push(`with ${rectalCancerData.postoperativePlan.analgesiaType} analgesia`);
-  }
-  
-  return summary.filter(s => s).join('. ') + '.';
 };
 
 // For saving drafts

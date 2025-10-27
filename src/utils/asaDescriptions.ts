@@ -3,7 +3,7 @@ export const asaClassDescriptions: Record<string, string> = {
   'II': 'Mild Systemic Disease',
   'III': 'Severe Systemic Disease Limiting Activity',
   'IV': 'Severe Disease Constant Threat to Life',
-  'V': 'Moribund, Not Expected to Survive Without Operation',
+  'V': 'Moribund, Not Expected to Survive With or Without Operation',
   'VI': 'Brain-Dead, Organ Donor'
 };
 

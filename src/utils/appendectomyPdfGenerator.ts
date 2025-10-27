@@ -1,7 +1,40 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
-import { formatDateWithSuffix, formatReportDate, formatDateOnly } from './dateFormatter';
+import { formatDateWithSuffix, formatReportDate, formatDateOnly, formatDateDDMMYYYY, formatDateTimeWithColon } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
+
+// Function to calculate signature dimensions while maintaining aspect ratio
+const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = function() {
+      const maxWidthMm = 45;
+      const maxHeightMm = 15;
+      
+      const naturalWidth = this.naturalWidth;
+      const naturalHeight = this.naturalHeight;
+      const aspectRatio = naturalWidth / naturalHeight;
+      
+      let finalWidth = maxWidthMm;
+      let finalHeight = maxWidthMm / aspectRatio;
+      
+      // If height exceeds max, scale by height instead
+      if (finalHeight > maxHeightMm) {
+        finalHeight = maxHeightMm;
+        finalWidth = maxHeightMm * aspectRatio;
+      }
+      
+      resolve({ width: finalWidth, height: finalHeight });
+    };
+    
+    img.onerror = () => {
+      console.warn('Failed to load signature image, using default dimensions');
+      resolve({ width: 35, height: 12 });
+    };
+    
+    img.src = imageDataUrl;
+  });
+};
 
 // Function to create surgical diagram canvas with markings
 const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | null> => {
@@ -99,35 +132,17 @@ export const generateAppendectomyPDF = async (
     const pdf = new jsPDF('portrait', 'mm', 'a4');
     const pageWidth = 210;
     const pageHeight = 297;
-    const margin = 15;
+    const margin = 12;
     let y = margin;
     let currentPage = 1;
     
-    // Helper function to add footer to a page
-    const addFooter = (pageNum: number) => {
-      const footerY = pageHeight - 15;
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      const footerDate = new Date();
-      const footerDateStr = formatReportDate(footerDate);
-      
-      const footerText = `Dr. Monde Mjoli - Specialist Surgeon\nPractice Number: 0560812\nReport Date: ${footerDateStr} | Page ${pageNum} of {{totalPages}}`;
-      const footerLines = footerText.split('\n');
-      
-      footerLines.forEach((line, index) => {
-        pdf.text(line, pageWidth / 2, footerY + (index * 4), { align: 'center' });
-      });
-    };
-    
-    // Add footer to first page
-    addFooter(currentPage);
+    // Helper function to add footer to a page (removed - will add single footer at end)
     
     // Helper function to check page break
     const checkPageBreak = (neededSpace: number) => {
-      if (y + neededSpace > pageHeight - 25) { // Leave space for footer
+      if (y + neededSpace > pageHeight - 40) { // Leave space for footer
         currentPage++;
         pdf.addPage();
-        addFooter(currentPage);
         y = margin;
         return true;
       }
@@ -144,6 +159,27 @@ export const generateAppendectomyPDF = async (
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       content();
+    };
+    
+    // Helper function to format field labels with semi-bold (using bold) and values with normal weight
+    const formatFieldLine = (label: string, value: string): string => {
+      return `${label} ${value}`;
+    };
+    
+    // Helper function to draw field line with semi-bold label
+    const drawFieldLine = (label: string, value: string, x: number, currentY: number) => {
+      if (!value || value === 'Not specified' || value === 'None') return currentY;
+      
+      // Draw label in bold (semi-bold effect)
+      pdf.setFont('helvetica', 'bold');
+      const labelWidth = pdf.getTextWidth(label);
+      pdf.text(label, x, currentY);
+      
+      // Draw value in normal weight
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(value, x + labelWidth, currentY);
+      
+      return currentY + 4;
     };
     
     // HEADER - Three column layout
@@ -167,14 +203,7 @@ export const generateAppendectomyPDF = async (
     y += 3.5;
     pdf.text('Cell: 082 417 2630', margin, y);
     
-    // CENTER COLUMN - Letterhead Title
-    let centerY = headerStartY;
-    pdf.setFontSize(14);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Appendicectomy', pageWidth / 2, centerY, { align: 'center' });
-    // Add underline
-    const textWidth = pdf.getTextWidth('Appendicectomy');
-    pdf.line((pageWidth / 2) - (textWidth / 2), centerY + 1, (pageWidth / 2) + (textWidth / 2), centerY + 1);
+    // CENTER COLUMN - Reserved for main title (removed duplicate)
     
     // RIGHT COLUMN - Practice Address
     let rightY = headerStartY;
@@ -192,384 +221,554 @@ export const generateAppendectomyPDF = async (
     rightY += 3.5;
     pdf.text('Fax: 043 743 6653', pageWidth - margin, rightY, { align: 'right' });
     
-    // Add the Report Title below letterheading, inline with Cell phone
-    const cellPhoneY = headerStartY + 20.5; // Position inline with Cell: 082 417 2630
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('APPENDECTOMY REPORT', pageWidth / 2, cellPhoneY, { align: 'center' });
+    // Title will be placed after separator line
     
     // Set y position to after the header
-    y = Math.max(y, centerY + 5, rightY) + 15;
-    
-    // PATIENT INFORMATION (Single Column)
-    drawSection('PATIENT INFORMATION', () => {
-      const patientInfo = appendectomyData?.patientInfo || {};
-      const details = [
-        `Name: ${patientInfo.name || 'Not specified'}`,
-        `Patient ID: ${patientInfo.patientId || patientId || 'N/A'}`,
-        `Date Of Birth: ${patientInfo.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : 'Not specified'}`,
-        `Age: ${patientInfo.age || 'Not specified'}`,
-        `Sex: ${patientInfo.sex ? patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase() : 'Not specified'}`,
-        `Weight: ${patientInfo.weight || 'Not specified'}`,
-        `Height: ${patientInfo.height || 'Not specified'}`,
-        `BMI: ${patientInfo.bmi || 'Not specified'}`,
-        `ASA Score: ${patientInfo.asaScore ? getFullASAText(patientInfo.asaScore) : 'Not specified'}`
-      ];
-      
-      details.forEach((detail, index) => {
-        if (index % 3 === 0 && index > 0) {
-          y += 5;
-        }
-        const x = margin + (index % 3) * 60;
-        pdf.text(detail, x, y);
-      });
-      
-      // Add ASA Notes if present
-      if (patientInfo.asaNotes) {
-        y += 5;
-        pdf.text(`ASA Notes: ${patientInfo.asaNotes}`, margin, y);
-      }
-      
-      y += 10;
-    });
+    y = Math.max(y, headerStartY + 30, rightY) + 5;
     
     // Add separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.3);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 10;
     
-    // Two-column layout: PREOPERATIVE INFORMATION | INTRAOPERATIVE FINDINGS
-    checkPageBreak(50);
-    const startY = y;
-    const columnWidth = (pageWidth - 3 * margin) / 2;
-    const leftColumnX = margin;
-    const rightColumnX = margin + columnWidth + margin;
-    
-    // LEFT COLUMN - Preoperative Information
-    let leftY = startY;
-    pdf.setFontSize(12);
+    // Add title below separator line - centered, no underline
+    pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('PREOPERATIVE INFORMATION', leftColumnX, leftY);
-    leftY += 7;
-    pdf.setFontSize(10);
+    pdf.text('APPENDICECTOMY REPORT', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+    
+    // PATIENT INFORMATION section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PATIENT INFORMATION', margin, y);
+    y += 8;
+    
+    const patientInfo = appendectomyData?.patientInfo || {};
+    pdf.setFontSize(9);
+    
+    // Set up 3-column grid system
+    const col1X = margin;
+    const col2X = margin + 62;
+    const col3X = margin + 124;
+    
+    // Row 1: Name, Patient ID
+    const row1Y = y;
+    const name = patientInfo.name || '';
+    const patientIdValue = patientInfo.patientId || patientId || '';
+    
     pdf.setFont('helvetica', 'normal');
+    pdf.text(`Name: ${name}`, col1X, row1Y);
+    pdf.text(`Patient ID: ${patientIdValue}`, col2X, row1Y);
+    y += 6;
+    
+    // Row 2: Date Of Birth, Age, Sex
+    const row2Y = y;
+    const dob = patientInfo.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : '';
+    const age = patientInfo.age || '';
+    const sex = patientInfo.sex ? (patientInfo.sex === 'other' && patientInfo.sexOther ? patientInfo.sexOther : patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase()) : '';
+    
+    pdf.text(`Date Of Birth: ${dob}`, col1X, row2Y);
+    pdf.text(`Age: ${age}`, col2X, row2Y);
+    pdf.text(`Sex: ${sex}`, col3X, row2Y);
+    y += 6;
+    
+    // Row 3: Weight, Height, BMI
+    const row3Y = y;
+    const weight = patientInfo.weight ? `${patientInfo.weight} kg` : '';
+    const height = patientInfo.height ? `${patientInfo.height} cm` : '';
+    const bmi = patientInfo.bmi || '';
+    
+    pdf.text(`Weight: ${weight}`, col1X, row3Y);
+    pdf.text(`Height: ${height}`, col2X, row3Y);
+    pdf.text(`BMI: ${bmi}`, col3X, row3Y);
+    y += 6;
+    
+    // Row 4: ASA Score
+    const row4Y = y;
+    const asaScore = patientInfo.asaScore ? getFullASAText(patientInfo.asaScore) : '';
+    
+    pdf.text(`ASA Score: ${asaScore}`, col1X, row4Y);
+    y += 6;
+    
+    // Row 5: ASA Notes (below ASA Score)
+    const row5Y = y;
+    const asaNotes = patientInfo.asaNotes || '';
+    
+    pdf.text(`ASA Notes: ${asaNotes}`, col1X, row5Y);
+    y += 8;
+    
+    // Add separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 8;
+    
+    // PREOPERATIVE INFORMATION section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PREOPERATIVE INFORMATION', margin, y);
+    y += 8;
     
     const preop = appendectomyData?.preoperative || {};
-    const preopLines = [
-      `Surgeon: ${preop.surgeons?.filter(s => s.trim()).join(', ') || 'Not specified'}`,
-      `Assistant: ${preop.assistants?.filter(a => a.trim()).join(', ') || preop.assistant1 || preop.assistant2 || 'Not specified'}`,
-      `Anaesthetist: ${preop.anaesthetist || 'Not specified'}`,
-      `Indication: ${preop.indication?.join(', ') || 'Not specified'}`,
-    ];
+    pdf.setFontSize(9);
     
-    if (preop.indicationOther) {
-      preopLines.push(`Other Indication: ${preop.indicationOther}`);
-    }
+    // Row 1: Surgeon, Assistant, Anaesthetist
+    const preRow1Y = y;
+    const surgeon = preop.surgeons?.filter(s => s.trim()).join(', ') || '';
+    const assistant = preop.assistants?.filter(a => a.trim()).join(', ') || preop.assistant1 || preop.assistant2 || '';
+    const anaesthetist = preop.anaesthetists?.filter(a => a.trim()).join(', ') || preop.anaesthetist || '';
     
-    preopLines.push(`Imaging: ${preop.imaging?.join(', ') || 'Not specified'}`);
-    
-    if (preop.imagingOther) {
-      preopLines.push(`Other Imaging: ${preop.imagingOther}`);
-    }
-    
-    preopLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, leftColumnX, leftY);
-        leftY += 5;
-      });
-    });
-    
-    // RIGHT COLUMN - Intraoperative Findings
-    let rightY1 = startY;
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('INTRAOPERATIVE FINDINGS', rightColumnX, rightY1);
-    rightY1 += 7;
-    pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
+    pdf.text(`Surgeon: ${surgeon}`, col1X, preRow1Y);
+    pdf.text(`Assistant: ${assistant}`, col2X, preRow1Y);
+    pdf.text(`Anaesthetist: ${anaesthetist}`, col3X, preRow1Y);
+    y += 6;
     
-    const intraop = appendectomyData?.intraoperative || {};
-    const intraopLines = [
-      `Appendix Appearance: ${intraop.appendixAppearance?.join(', ') || 'Not specified'}`,
-      `Abscess: ${intraop.abscess || 'Not specified'}`,
-      `Peritonitis: ${intraop.peritonitis?.join(', ') || 'Not specified'}`,
-    ];
+    // Row 2: Start Time, End Time, Total Duration
+    const preRow2Y = y;
+    const startTime = preop.startTime || '';
+    const endTime = preop.endTime || '';
+    const totalDuration = preop.duration ? `${preop.duration} minutes` : '';
     
-    if (intraop.otherFindings) {
-      intraopLines.push(`Other Findings: ${intraop.otherFindings}`);
-    }
+    pdf.text(`Start Time: ${startTime}`, col1X, preRow2Y);
+    pdf.text(`End Time: ${endTime}`, col2X, preRow2Y);
+    pdf.text(`Total Duration: ${totalDuration}`, col3X, preRow2Y);
+    y += 6;
     
-    intraopLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, columnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, rightColumnX, rightY1);
-        rightY1 += 5;
-      });
-    });
+    // Row 3: Indication for Surgery (col1), Preoperative Imaging (col2) - same row
+    const preRow3Y = y;
+    const indication = preop.indication?.join(', ') || '';
+    const imaging = preop.imaging?.join(', ') || '';
     
-    // Move y position to after both columns
-    y = Math.max(leftY, rightY1) + 10;
+    pdf.text(`Indication for Surgery: ${indication}`, col1X, preRow3Y);
+    pdf.text(`Preoperative Imaging: ${imaging}`, col2X, preRow3Y);
+    y += 8;
     
     // Add separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.3);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 10;
-    
-    // Two-column layout: PROCEDURE DETAILS | DIAGRAM
-    checkPageBreak(50);
-    const startY2 = y;
-    
-    // Define column widths
-    const procedureColumnWidth = (pageWidth - 3 * margin) * 0.55; // 55% for procedure
-    const diagramColumnWidth = (pageWidth - 3 * margin) * 0.45; // 45% for diagram
-    const diagramColumnX = margin + procedureColumnWidth + margin;
-    
-    // LEFT COLUMN - Procedure Details
-    let leftY2 = startY2;
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('PROCEDURE DETAILS', leftColumnX, leftY2);
-    leftY2 += 7;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
     
     const procedure = appendectomyData?.procedure || {};
-    const procedureLines = [
-      `Approach: ${procedure.approach?.join(', ') || 'Not specified'}`,
-    ];
+    const intraop = appendectomyData?.intraoperative || {};
     
-    if (procedure.approach?.includes('Converted from Laparoscopic to Open') && procedure.reasonForConversion) {
-      procedureLines.push(`Reason for Conversion: ${procedure.reasonForConversion}`);
-    }
+    // Two-column layout: PROCEDURE DETAILS | PORTS AND INCISIONS
+    const sectionStartY = y;
+    const procedureColumnWidth = col2X + 20 - col1X; // Give more space to procedure column
+    const diagramColumnWidth = pageWidth - margin - (col2X + 25); // Move diagram more to the right
     
-    procedureLines.push(`Incision Type: ${procedure.incisionType?.join(', ') || 'Not specified'}`);
+    const procedureX = col1X;
+    const diagramX = col2X + 25; // Move diagram further right
     
-    if (procedure.incisionOther) {
-      procedureLines.push(`Other Incision: ${procedure.incisionOther}`);
-    }
+    // PROCEDURE DETAILS Section
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PROCEDURE DETAILS', procedureX, sectionStartY);
     
-    procedureLines.push(`Trocar Placement: ${procedure.trocarPlacement || 'Not specified'}`);
+    // PORTS AND INCISIONS Section  
+    pdf.text('PORTS AND INCISIONS', diagramX, sectionStartY);
     
-    if (procedure.operationDescription) {
-      procedureLines.push(`Operation Description: ${procedure.operationDescription}`);
-    }
+    let procedureY = sectionStartY + 8;
+    let diagramY = sectionStartY + 8;
     
-    procedureLines.push(`Duration: ${preop.duration || 'Not specified'} minutes`);
-    procedureLines.push(`Method of Appendiceal Ligation: ${procedure.divisionMethod?.join(', ') || 'Not specified'}`);
+    // PROCEDURE DETAILS Content (Left Column)
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
     
-    if (procedure.divisionOther) {
-      procedureLines.push(`Other Division Method: ${procedure.divisionOther}`);
-    }
+    // Helper function to add content only if it exists and advance Y position
+    const addContentLine = (text: string, spacing: number = 6) => {
+      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
+        pdf.text(text, procedureX, procedureY);
+        procedureY += spacing;
+        return true;
+      }
+      return false;
+    };
     
-    procedureLines.push(`Method of Appendiceal Vessel Ligation: ${procedure.mesenteryControl?.join(', ') || 'Not specified'}`);
+    const addContentBlock = (label: string, value: string, spacing: number = 8) => {
+      if (value && value.trim() && value !== 'Not specified' && value !== 'None') {
+        pdf.text(label, procedureX, procedureY);
+        pdf.text(value, procedureX, procedureY + 4);
+        procedureY += spacing;
+        return true;
+      }
+      return false;
+    };
     
-    if (procedure.mesenteryOther) {
-      procedureLines.push(`Other Mesentery Control: ${procedure.mesenteryOther}`);
-    }
+    // Operation Description
+    const operationDescription = procedure.operationDescription || '';
+    addContentLine(`Operation Description: ${operationDescription}`, 8);
     
-    procedureLines.push(`Lavage: ${procedure.lavage || 'Not specified'}`);
-    procedureLines.push(`Drain Placement: ${procedure.drainPlacement || 'Not specified'}`);
+    // Surgical Approach
+    const surgicalApproach = procedure.approach?.join(', ') || '';
+    addContentLine(`Surgical Approach: ${surgicalApproach}`, 6);
     
-    if (procedure.drainPlacement === 'Yes' && procedure.drainLocation) {
-      procedureLines.push(`Drain Location: ${procedure.drainLocation}`);
-    }
+    // Conditional fields based on surgical approach - only render if they have content
+    const isLaparoscopic = surgicalApproach.toLowerCase().includes('laparoscopic');
+    const isOpen = surgicalApproach.toLowerCase().includes('open');
+    const isConverted = surgicalApproach.toLowerCase().includes('converted from laparoscopic to open');
     
-    procedureLines.forEach(line => {
-      const splitLines = pdf.splitTextToSize(line, procedureColumnWidth);
-      splitLines.forEach((splitLine: string) => {
-        pdf.text(splitLine, leftColumnX, leftY2);
-        leftY2 += 5;
-      });
-    });
-    
-    // RIGHT COLUMN - Diagram
-    let rightY2 = startY2;
-    if (diagrams && diagrams.length > 0) {
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('PORT SITES AND INCISIONS', diagramColumnX, rightY2);
-      rightY2 += 7;
+    // Show Reason for Conversion only when "Converted from Laparoscopic to Open" is selected
+    if (isConverted) {
+      // Handle reasonForConversion as array of strings
+      let conversionReasons = [];
+      const reasonForConversion = procedure.reasonForConversion || procedure.conversionReason;
       
-      // Render the diagram
+      if (Array.isArray(reasonForConversion)) {
+        conversionReasons = [...reasonForConversion];
+      } else if (reasonForConversion) {
+        conversionReasons = [reasonForConversion];
+      }
+      
+      // Add custom "Other" reason if provided
+      if (conversionReasons.includes('Other') && procedure.reasonForConversionOther) {
+        // Replace "Other" with the custom text
+        const otherIndex = conversionReasons.indexOf('Other');
+        conversionReasons[otherIndex] = `Other: ${procedure.reasonForConversionOther}`;
+      }
+      
+      const conversionReasonText = conversionReasons.join(', ');
+      addContentLine(`Reason for Conversion: ${conversionReasonText}`, 6);
+      
+      // Show Trocar Number after Reason for Conversion when converted
+      const trocarPlacement = procedure.trocarPlacement || '';
+      addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
+    }
+    
+    if (isOpen && !isConverted) {
+      // Show Incision Type for pure open approach
+      const incisionType = procedure.incisionType?.join(', ') || '';
+      addContentLine(`Incision Type: ${incisionType}`, 6);
+    }
+    
+    if (isLaparoscopic && !isConverted) {
+      // Show Trocar Number for pure laparoscopic
+      const trocarPlacement = procedure.trocarPlacement || '';
+      addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
+    }
+    
+    // Appendix Appearance
+    const appendixAppearance = intraop.appendixAppearance?.join(', ') || '';
+    addContentLine(`Appendix Appearance: ${appendixAppearance}`, 6);
+    
+    // Presence of Abscess
+    const abscess = intraop.abscess || '';
+    addContentLine(`Presence of Abscess: ${abscess}`, 6);
+    
+    // Presence of Peritonitis
+    const peritonitis = intraop.peritonitis?.join(', ') || '';
+    addContentLine(`Presence of Peritonitis: ${peritonitis}`, 6);
+    
+    // Other Intra-abdominal Findings
+    const otherFindings = intraop.otherFindings || '';
+    addContentLine(`Other Intra-abdominal Findings: ${otherFindings}`, 6);
+    
+    // Method of Appendiceal Ligation
+    const ligationMethod = procedure.divisionMethod?.join(', ') || '';
+    addContentLine(`Method of Appendiceal Ligation: ${ligationMethod}`, 6);
+    
+    // Method of Appendiceal Vessel Ligation
+    const vesselLigation = procedure.mesenteryControl?.join(', ') || '';
+    addContentLine(`Method of Appendiceal Vessel Ligation: ${vesselLigation}`, 6);
+    
+    // Peritoneal Lavage
+    const lavage = procedure.lavage || '';
+    addContentLine(`Peritoneal Lavage: ${lavage}`, 6);
+    
+    // Drain Placement
+    const drainPlacement = procedure.drainPlacement || '';
+    const drainText = drainPlacement + (procedure.drainLocation ? ` (${procedure.drainLocation})` : '');
+    addContentLine(`Drain Placement: ${drainText}`, 6);
+    
+    // Intra-Operative Difficulty
+    const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
+    addContentLine(`Intra-Operative Difficulty: ${difficulty}`, 6);
+    
+    // Intra-Operative Complications
+    const complications = Array.isArray(appendectomyData?.closure?.complications) 
+      ? appendectomyData.closure.complications.join(', ') 
+      : appendectomyData?.closure?.complications || '';
+    addContentLine(`Intra-Operative Complications: ${complications}`, 6);
+    
+    // PORTS AND INCISIONS Content (Right Column)
+    // Legend with visual indicators in two rows - smaller and neater icons
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Legend:', diagramX, diagramY);
+    diagramY += 5;
+    
+    // Row 1: Ports and Ileostomy
+    const legendCol1X = diagramX;
+    const legendCol2X = diagramX + 45;
+    
+    // Ports legend with smaller visual indicator
+    pdf.text('Ports (with size label)', legendCol1X + 6, diagramY);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.8);
+    pdf.line(legendCol1X, diagramY - 1, legendCol1X + 4, diagramY - 1);
+    pdf.setFontSize(4);
+    pdf.text('5mm', legendCol1X + 0.5, diagramY - 2);
+    pdf.setFontSize(8);
+    
+    // Ileostomy legend with smaller visual indicator
+    pdf.text('Ileostomy (dashed yellow circle)', legendCol2X + 6, diagramY);
+    pdf.setDrawColor(245, 158, 11); // Yellow/Gold color
+    pdf.setLineWidth(0.8);
+    pdf.setLineDash([1.5, 1]);
+    pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
+    pdf.setLineDash([]);
+    
+    diagramY += 5;
+    
+    // Row 2: Incisions and Colostomy
+    // Incisions legend with smaller visual indicator
+    pdf.text('Incisions (dashed dark red line)', legendCol1X + 6, diagramY);
+    pdf.setDrawColor(139, 0, 0); // Dark red color
+    pdf.setLineWidth(0.8);
+    pdf.setLineDash([2, 1.5]);
+    pdf.line(legendCol1X, diagramY - 1, legendCol1X + 4, diagramY - 1);
+    pdf.setLineDash([]);
+    
+    // Colostomy legend with smaller visual indicator
+    pdf.text('Colostomy (solid green circle)', legendCol2X + 6, diagramY);
+    pdf.setDrawColor(22, 163, 74); // Green color
+    pdf.setLineWidth(1.2);
+    pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
+    
+    diagramY += 6;
+    
+    // Reset draw color
+    pdf.setDrawColor(0, 0, 0);
+    
+    // Space before diagram
+    diagramY += 2;
+    
+    // Draw diagram box - maintain proper aspect ratio for better quality
+    const diagramBoxHeight = 55; // Increased slightly for better proportions
+    pdf.setLineWidth(0.5);
+    pdf.rect(diagramX, diagramY, diagramColumnWidth, diagramBoxHeight);
+    
+    // Add diagram if available
+    if (diagrams && diagrams.length > 0) {
       const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
       if (diagramImageData) {
-        // Calculate smaller diagram size for column
-        const maxDiagramWidth = diagramColumnWidth - 5;
-        const maxDiagramHeight = 60; // Smaller height to fit in column
-        
-        const img = new Image();
-        img.src = diagramImageData;
-        
-        let width = maxDiagramWidth;
-        let height = maxDiagramHeight;
-        
-        if (img.naturalWidth && img.naturalHeight) {
-          const aspectRatio = img.naturalWidth / img.naturalHeight;
-          if (width / height > aspectRatio) {
-            width = height * aspectRatio;
-          } else {
-            height = width / aspectRatio;
-          }
-        }
-        
         try {
-          pdf.addImage(diagramImageData, 'PNG', diagramColumnX, rightY2, width, height);
-          rightY2 += height + 5;
+          // Maintain aspect ratio to prevent vertical squishing
+          const diagramPadding = 2;
+          const availableWidth = diagramColumnWidth - (diagramPadding * 2);
+          const availableHeight = diagramBoxHeight - (diagramPadding * 2);
+          
+          // Use square aspect ratio for appendectomy diagram to prevent distortion
+          const diagramSize = Math.min(availableWidth, availableHeight);
+          const centerX = diagramX + (diagramColumnWidth - diagramSize) / 2;
+          const centerY = diagramY + (diagramBoxHeight - diagramSize) / 2;
+          
+          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, diagramSize, diagramSize);
         } catch (error) {
-          console.error('Error adding surgical diagram to PDF:', error);
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
-          pdf.text('Diagram could not be rendered', diagramColumnX, rightY2);
-          rightY2 += 7;
+          pdf.setFontSize(9);
+          pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 - 5, { align: 'center' });
+          pdf.text('(LEAVE CURRENT Diagram Size', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
+          pdf.text('AS IT IS)', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 + 5, { align: 'center' });
         }
       }
+    } else {
+      pdf.setFontSize(9);
+      pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 - 5, { align: 'center' });
+      pdf.text('(LEAVE CURRENT Diagram Size', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
+      pdf.text('AS IT IS)', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 + 5, { align: 'center' });
     }
+    
+    diagramY += diagramBoxHeight + 8;
+    
+    // Move y position to after both columns - Page 1 ends here
+    y = Math.max(procedureY, diagramY) + 5;
+    
+    // Start Page 2 for CLOSURE and POST OPERATIVE MANAGEMENT
+    pdf.addPage();
+    currentPage++;
+    y = margin;
+    
+    // Two-column layout: CLOSURE | NOTES
+    const closureSectionY = y;
+    const closureColX = col1X;
+    const notesColX = col2X + 15;
+    
+    // CLOSURE Section (Left Column)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('CLOSURE', closureColX, closureSectionY);
+    
+    // NOTES Section (Right Column)
+    pdf.text('NOTES', notesColX, closureSectionY);
+    
+    let closureY = closureSectionY + 8;
+    let notesY = closureSectionY + 8;
+    
+    // CLOSURE Content (Left Column)
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    const closure = appendectomyData?.closure || {};
+    
+    // Helper function for closure content
+    const addClosureContentLine = (text: string, spacing: number = 6) => {
+      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
+        pdf.text(text, closureColX, closureY);
+        closureY += spacing;
+        return true;
+      }
+      return false;
+    };
+    
+    const addNotesContentLine = (text: string, spacing: number = 6) => {
+      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
+        pdf.text(text, notesColX, notesY);
+        notesY += spacing;
+        return true;
+      }
+      return false;
+    };
+    
+    const addNotesContentBlock = (label: string, value: string, spacing: number = 8) => {
+      if (value && value.trim() && value !== 'Not specified' && value !== 'None') {
+        pdf.text(label, notesColX, notesY);
+        pdf.text(value, notesColX, notesY + 4);
+        notesY += spacing;
+        return true;
+      }
+      return false;
+    };
+    
+    // Fascial Closure
+    const fascialClosure = Array.isArray(closure.fascialClosure) ? closure.fascialClosure.join(', ') : closure.fascialClosure || '';
+    addClosureContentLine(`Fascial Closure: ${fascialClosure}`, 6);
+    
+    // Fascial Material Used
+    const fascialMaterial = Array.isArray(closure.fascialMaterial) ? closure.fascialMaterial.join(', ') : closure.fascialMaterial || '';
+    addClosureContentLine(`Fascial Material Used: ${fascialMaterial}`, 6);
+    
+    // Skin Closure
+    const skinClosureField = Array.isArray(closure.skinClosure) ? closure.skinClosure.join(', ') : closure.skinClosure || '';
+    addClosureContentLine(`Skin Closure: ${skinClosureField}`, 6);
+    
+    // Skin Material Used
+    const skinMaterial = Array.isArray(closure.skinMaterial) ? closure.skinMaterial.join(', ') : closure.skinMaterial || '';
+    addClosureContentLine(`Skin Material Used: ${skinMaterial}`, 6);
+    
+    // Specimen Sent for Pathology
+    const pathology = closure.pathology || '';
+    addClosureContentLine(`Specimen Sent for Pathology: ${pathology}`, 6);
+    
+    // Specify Laboratory Sent to
+    const laboratory = closure.laboratoryName || '';
+    addClosureContentLine(`Specify Laboratory Sent to: ${laboratory}`, 6);
+    
+    // Other Specimens Taken
+    const otherSpecimens = closure.otherSpecimens || '';
+    addClosureContentLine(`Other Specimens Taken: ${otherSpecimens}`, 8);
+    
+    // NOTES Content (Right Column)
+    // Additional Notes under NOTES section
+    const additionalNotes = closure.additionalNotes || '';
+    addNotesContentLine(`Additional Notes: ${additionalNotes}`, 10);
+    
+    // Add POST OPERATIVE MANAGEMENT as a subsection
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('POST OPERATIVE MANAGEMENT', notesColX, notesY);
+    notesY += 8;
+    
+    // Post Operative Management content
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    const postOpManagement = closure.postOperativeManagement || '';
+    addNotesContentBlock('Post Operative Management:', postOpManagement, 10);
     
     // Move y position to after both columns
-    y = Math.max(leftY2, rightY2) + 10;
+    y = Math.max(closureY, notesY) + 15;
     
-    // Add separator line
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    // Signature Section - matching template format
+    const signatureY = y + 5;
+    const signatureLineWidth = 100;
+    const dateTimeLineWidth = 100;
+    const dateTimeX = pageWidth - margin - dateTimeLineWidth;
     
-    // CLOSURE Section (Full width)
-    checkPageBreak(50);
-    drawSection('CLOSURE', () => {
-      const closure = appendectomyData?.closure || {};
-      const closureItems = [];
-      
-      // Fascial Closure
-      closureItems.push(`Fascial Closure: ${closure.fascialClosure?.join(', ') || 'Not specified'}`);
-      if (closure.fascialClosureOther) {
-        closureItems.push(`Other Fascial Closure: ${closure.fascialClosureOther}`);
-      }
-      
-      if (closure.fascialClosure?.length > 0 && !closure.fascialClosure?.includes('None')) {
-        closureItems.push(`Fascial Material Used: ${closure.fascialMaterial?.join(', ') || 'Not specified'}`);
-        if (closure.fascialMaterialOther) {
-          closureItems.push(`Other Fascial Material: ${closure.fascialMaterialOther}`);
-        }
-      }
-      
-      // Skin Closure
-      closureItems.push(`Skin Closure: ${closure.skinClosure?.join(', ') || 'Not specified'}`);
-      if (closure.skinOther) {
-        closureItems.push(`Other Skin Closure: ${closure.skinOther}`);
-      }
-      
-      closureItems.push(`Skin Material Used: ${closure.skinMaterial?.join(', ') || 'Not specified'}`);
-      if (closure.skinMaterialOther) {
-        closureItems.push(`Other Skin Material: ${closure.skinMaterialOther}`);
-      }
-      
-      // Complications
-      closureItems.push(`Intra-Operative Difficulty: ${closure.operativeDifficulty?.join(', ') || 'None'}`);
-      if (closure.operativeDifficultyOther) {
-        closureItems.push(`Other Difficulty: ${closure.operativeDifficultyOther}`);
-      }
-      
-      closureItems.push(`Intra-Operative Complications: ${closure.complications?.join(', ') || 'None'}`);
-      if (closure.visceralInjuryDetail) {
-        closureItems.push(`Visceral Injury Detail: ${closure.visceralInjuryDetail}`);
-      }
-      if (closure.complicationOther) {
-        closureItems.push(`Other Complications: ${closure.complicationOther}`);
-      }
-      
-      // Pathology
-      closureItems.push(`Pathology Sent: ${closure.pathology || 'Not specified'}`);
-      closureItems.push(`Other Specimens: ${closure.otherSpecimens || 'None'}`);
-      if (closure.otherSpecimens === 'Yes' && closure.specimenDetails) {
-        closureItems.push(`Specimen Details: ${closure.specimenDetails}`);
-      }
-      
-      // Print closure items in 2 columns
-      const halfPoint = Math.ceil(closureItems.length / 2);
-      const leftItems = closureItems.slice(0, halfPoint);
-      const rightItems = closureItems.slice(halfPoint);
-      
-      let maxLines = Math.max(leftItems.length, rightItems.length);
-      for (let i = 0; i < maxLines; i++) {
-        if (i < leftItems.length) {
-          const leftText = pdf.splitTextToSize(leftItems[i], columnWidth);
-          leftText.forEach(line => {
-            pdf.text(line, margin, y);
-            if (i < rightItems.length && leftText.indexOf(line) === leftText.length - 1) {
-              // Don't increment y until we print the right side
-            } else {
-              y += 5;
-            }
-          });
-        }
-        if (i < rightItems.length) {
-          const rightText = pdf.splitTextToSize(rightItems[i], columnWidth);
-          rightText.forEach(line => {
-            pdf.text(line, rightColumnX, y);
-            y += 5;
-          });
-        }
-      }
-    });
-    
-    // Signature Section
-    checkPageBreak(30);
+    // Surgeon's Signature
     pdf.setFontSize(10);
-    const signatureY = y;
-    pdf.text('Surgeon Signature:', margin, signatureY);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Surgeon\'s Signature:', margin, signatureY);
     
-    // Handle signature - check for text first, then image
-    if (appendectomyData?.closure?.surgeonSignatureText) {
-      // Use text signature if provided
-      pdf.text(appendectomyData.closure.surgeonSignatureText, margin + 40, signatureY);
-    } else if (appendectomyData?.closure?.surgeonSignature) {
-      // If signature is a data URL (uploaded image), add it as image
+    // Date & Time
+    pdf.text('Date & Time:', dateTimeX - 5, signatureY);
+    
+    // Add signature if available
+    if (appendectomyData?.closure?.surgeonSignature) {
       if (appendectomyData.closure.surgeonSignature.startsWith('data:image')) {
         try {
-          pdf.addImage(appendectomyData.closure.surgeonSignature, 'JPEG', margin + 40, signatureY - 8, 80, 20);
+          // Calculate proper dimensions asynchronously
+          const dimensions = await calculateSignatureDimensions(appendectomyData.closure.surgeonSignature);
+          
+          pdf.addImage(
+            appendectomyData.closure.surgeonSignature, 
+            'PNG', 
+            margin + 40, 
+            signatureY - dimensions.height + 3, 
+            dimensions.width, 
+            dimensions.height
+          );
         } catch (error) {
           console.error('Error adding signature image:', error);
-          pdf.text('[Signature Image]', margin + 40, signatureY);
+          pdf.text('[Signature]', margin + 40, signatureY);
         }
       } else {
-        // If it's text, display as text
         pdf.text(appendectomyData.closure.surgeonSignature, margin + 40, signatureY);
       }
-    } else {
-      pdf.line(margin + 40, signatureY, margin + 120, signatureY);
     }
     
-    const dateTimeY = signatureY + 20;
-    pdf.text('Date:', margin, dateTimeY);
+    // Add date/time if available
     if (appendectomyData?.closure?.dateTime) {
-      pdf.text(formatDateOnly(appendectomyData.closure.dateTime), margin + 30, dateTimeY);
+      pdf.text(formatDateTimeWithColon(appendectomyData.closure.dateTime), dateTimeX + 25, signatureY);
     } else {
-      pdf.text(formatDateOnly(new Date()), margin + 30, dateTimeY);
+      pdf.text(formatDateTimeWithColon(new Date()), dateTimeX + 25, signatureY);
     }
     
-    // Update total pages in all footers
+    y = signatureY + 15;
+    
+    // Calculate total pages and add footer to each page properly
     const totalPages = pdf.internal.getNumberOfPages();
+    
+    const currentDate = new Date();
+    const day = currentDate.getDate();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const month = monthNames[currentDate.getMonth()];
+    const year = currentDate.getFullYear();
+    const dateWithSuffix = `${day}${day === 1 || day === 21 || day === 31 ? 'st' : 
+                            day === 2 || day === 22 ? 'nd' : 
+                            day === 3 || day === 23 ? 'rd' : 'th'} ${month} ${year}`;
+    
+    // Add footer to each page
     for (let i = 1; i <= totalPages; i++) {
       pdf.setPage(i);
-      // Find and replace {{totalPages}} placeholder
-      const footerY = pageHeight - 15;
-      const footerText = `Report Date: ${formatReportDate(new Date())} | Page ${i} of ${totalPages}`;
+      const footerY = pageHeight - 20;
       
-      // Cover the old page number text
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, footerY - 2, pageWidth, 10, 'F');
-      
-      // Redraw the footer with correct page numbers
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'normal');
-      const footerLines = [
-        'Dr. Monde Mjoli - Specialist Surgeon',
-        'Practice Number: 0560812',
-        footerText
-      ];
       
-      footerLines.forEach((line, index) => {
-        pdf.text(line, pageWidth / 2, footerY + (index * 4), { align: 'center' });
-      });
+      if (i === 1) {
+        // Page 1 footer with practice info
+        pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
+        pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 4, { align: 'center' });
+        pdf.text(`Report Date: ${dateWithSuffix} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 8, { align: 'center' });
+      } else {
+        // Subsequent pages - minimal footer
+        pdf.text(`Report Date: ${dateWithSuffix} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 4, { align: 'center' });
+      }
     }
+    
+    // Return to last page
+    pdf.setPage(totalPages);
     
     return {
       success: true,

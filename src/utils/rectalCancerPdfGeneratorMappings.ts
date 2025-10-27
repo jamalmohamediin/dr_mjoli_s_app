@@ -7,7 +7,7 @@ export const mapNewStructureToOld = (rectalCancerData: any) => {
     caseIdentification: {
       ...rectalCancerData.caseIdentification,
       surgeon: rectalCancerData.surgicalTeam?.surgeons?.[0] || rectalCancerData.caseIdentification?.surgeon,
-      assistant: rectalCancerData.surgicalTeam?.assistant1 || rectalCancerData.caseIdentification?.assistant,
+      assistant: rectalCancerData.surgicalTeam?.assistants?.[0] || rectalCancerData.caseIdentification?.assistant,
       date: rectalCancerData.additionalInfo?.dateTime || rectalCancerData.caseIdentification?.date
     },
     
@@ -15,7 +15,13 @@ export const mapNewStructureToOld = (rectalCancerData: any) => {
     preoperativeDetails: {
       ...rectalCancerData.preoperativeDetails,
       indication: rectalCancerData.operationType?.type || rectalCancerData.preoperativeDetails?.indication,
-      tumorLocation: rectalCancerData.findings?.location?.join(', ') || rectalCancerData.preoperativeDetails?.tumorLocation,
+      tumorLocation: rectalCancerData.findings?.location?.map(loc => {
+        // Map new location names to old format if needed
+        if (loc === 'Upper Third') return 'High';
+        if (loc === 'Middle Third') return 'Middle';
+        if (loc === 'Lower Third') return 'Low';
+        return loc;
+      }).join(', ') || rectalCancerData.preoperativeDetails?.tumorLocation,
       preoperativeStaging: {
         tStage: rectalCancerData.findings?.tClassification || rectalCancerData.preoperativeDetails?.preoperativeStaging?.tStage,
         nStage: rectalCancerData.findings?.nClassification || rectalCancerData.preoperativeDetails?.preoperativeStaging?.nStage,

@@ -100,3 +100,45 @@ export const formatDateOnly = (date: Date | string | null | undefined): string =
   
   return `${day}${suffix} ${month} ${year}`;
 };
+
+// Format date in dd/mm/yyyy format (for date of birth display)
+export const formatDateDDMMYYYY = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  
+  const d = typeof date === 'string' ? new Date(date) : date;
+  
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+};
+
+// Format date for filename (replace invalid filename characters)
+export const formatDOBForFilename = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  
+  const d = typeof date === 'string' ? new Date(date) : date;
+  
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  
+  return `${day}-${month}-${year}`;
+};
+
+// Format date and time with colon separator (for PDF signatures)
+export const formatDateTimeWithColon = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  
+  const d = typeof date === 'string' ? new Date(date) : date;
+  
+  const day = d.getDate();
+  const suffix = getOrdinalSuffix(day);
+  const month = d.toLocaleString('en-US', { month: 'long' });
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  
+  return `${day}${suffix} ${month} ${year} at ${hours}:${minutes}`;
+};
