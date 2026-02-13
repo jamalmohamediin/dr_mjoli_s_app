@@ -27,6 +27,8 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
     asaNotes: currentData?.asaNotes || ""
   });
 
+  
+
   // Sync local state when prop changes (from live report edits)
   useEffect(() => {
     if (currentData) {
@@ -43,6 +45,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         asaScore: currentData.asaScore || "",
         asaNotes: currentData.asaNotes || ""
       });
+      
     }
   }, [currentData]);
 
@@ -118,6 +121,7 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
         <div className="w-full">
           <Input
             type="date"
+            lang="en-GB"
             value={formData.dateOfBirth}
             onChange={(e) => handleChange('dateOfBirth', e.target.value)}
             className="w-full"

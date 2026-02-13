@@ -12,12 +12,112 @@ interface RectalCancerReportPreviewProps {
       dateOfBirth?: string;
       age?: string;
       sex?: string;
+      sexOther?: string;
       weight?: string;
       height?: string;
       bmi?: string;
       asaScore?: string;
+      asaNotes?: string;
     };
     rectalCancer?: {
+      patientInfo?: {
+        name?: string;
+        patientId?: string;
+        dateOfBirth?: string;
+        age?: string;
+        sex?: string;
+        sexOther?: string;
+        weight?: string;
+        height?: string;
+        bmi?: string;
+        asaScore?: string;
+      };
+      surgicalTeam?: {
+        surgeons?: string[];
+        assistants?: string[];
+        anaesthetists?: string[];
+        anaesthetist?: string;
+      };
+      operationType?: {
+        type?: string[];
+        rectumOperationType?: string[];
+        rectumOperationOther?: string;
+        neoadjuvantTreatment?: string;
+        radiationDetails?: string;
+        chemotherapyRegimen?: string;
+        staging?: {
+          t?: string;
+          n?: string;
+          m?: string;
+        };
+      };
+      findings?: {
+        description?: string;
+        location?: string[];
+        tClassification?: string;
+        nClassification?: string;
+        mClassification?: string;
+        mesorectalCompleteness?: string;
+        completenessOfTumourResection?: string;
+      };
+      mobilizationAndResection?: {
+        extentOfMobilization?: string[];
+        extentOfMobilizationOther?: string;
+        vesselLigation?: string[];
+        enBlocResection?: string[];
+      };
+      reconstruction?: {
+        reconstructionType?: string;
+        anastomosisDetails?: {
+          site?: string;
+          configuration?: string;
+          technique?: string;
+          airLeakTest?: string;
+        };
+        stomaDetails?: {
+          configuration?: string;
+          reasonForStoma?: string[];
+        };
+      };
+      operativeEvents?: {
+        pointsOfDifficulty?: string[];
+        intraoperativeComplications?: string[];
+        intraoperativeEvents?: string[]; // Added
+        specimenExtraction?: string; // Added
+        specimenExtractionOther?: string; // Added
+        specimenSentToLab?: string; // Added
+        laboratoryName?: string; // Added
+        drainInsertion?: string; // Added
+        drainType?: string[]; // Added
+      };
+      closure?: {
+        fascialClosure?: string[];
+        fascialSutureMaterial?: string[];
+        fascialSutureMaterialOther?: string;
+        skinClosure?: string[];
+        skinClosureMaterial?: string[];
+        skinClosureMaterialOther?: string;
+      };
+      additionalInfo?: {
+        additionalInformation?: string;
+        postOperativeManagement?: string;
+        surgeonSignatureText?: string;
+        surgeonSignature?: string;
+        dateTime?: string;
+      };
+      procedureDetails?: {
+        operationDescription?: string;
+        startTime?: string;
+        endTime?: string;
+        duration?: string;
+        preoperativeImaging?: string[];
+        preoperativeImagingOther?: string;
+        procedureUrgency?: string;
+      };
+      procedureFindings?: {
+        findings?: string;
+        additionalNotes?: string;
+      };
       // Case Identification
       caseIdentification?: {
         surgeon?: string;
@@ -47,6 +147,8 @@ interface RectalCancerReportPreviewProps {
       // Surgical Approach
       surgicalApproach?: {
         approach?: string; // Open/Laparoscopic/Robotic
+        primaryApproach?: string | string[];
+        trocarNumber?: string;
         conversionToOpen?: string; // Yes/No - triggers branching
         conversionReason?: string[];
         conversionReasonOther?: string;
@@ -123,6 +225,11 @@ interface RectalCancerReportPreviewProps {
 
 export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewProps) => {
   const rectalCancer = report.rectalCancer;
+  const primaryApproachList = Array.isArray(rectalCancer?.surgicalApproach?.primaryApproach)
+    ? rectalCancer?.surgicalApproach?.primaryApproach || []
+    : rectalCancer?.surgicalApproach?.primaryApproach
+      ? [rectalCancer.surgicalApproach.primaryApproach]
+      : [];
   
   // Helper function to determine visibility based on branching logic
   const shouldShowSection = (section: string): boolean => {
@@ -155,7 +262,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
   
   // Generate synoptic summary based on all the data
   const generateSynopticSummary = (): string => {
-    let summary = [];
+    const summary: string[] = [];
     
     // Date and location
     if (rectalCancer?.caseIdentification?.date) {
@@ -216,7 +323,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     if (rectalCancer?.preoperativeDetails?.neoadjuvantTherapy === 'Yes') {
       summary.push(`following neoadjuvant therapy`);
       if (rectalCancer?.preoperativeDetails?.radiationDetails || rectalCancer?.preoperativeDetails?.chemotherapyRegimen) {
-        const therapyDetails = [];
+        const therapyDetails: string[] = [];
         if (rectalCancer?.preoperativeDetails?.radiationDetails) {
           therapyDetails.push(rectalCancer.preoperativeDetails.radiationDetails);
         }
@@ -246,7 +353,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     }
     
     // Metastatic disease
-    const metastases = [];
+    const metastases: string[] = [];
     if (rectalCancer?.intraoperativeFindings?.peritonealDeposits === 'Yes') {
       metastases.push('peritoneal deposits');
     }
@@ -277,7 +384,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     }
     
     // Margins
-    const margins = [];
+    const margins: string[] = [];
     if (rectalCancer?.resectionDetails?.distalMargin) {
       margins.push(`distal margin ${rectalCancer.resectionDetails.distalMargin}cm`);
     }
@@ -325,7 +432,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     
     // Specimen handling
     if (rectalCancer?.specimenHandling?.sentToHistology === 'Yes') {
-      const specimenDetails = [];
+      const specimenDetails: string[] = [];
       if (rectalCancer?.specimenHandling?.specimenOrientation) {
         specimenDetails.push('oriented');
       }
@@ -377,7 +484,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     rectalCancer?.patientInfo?.name ||
     rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim()) ||
     rectalCancer?.operationType?.type?.length > 0 ||
-    rectalCancer?.surgicalApproach?.primaryApproach ||
+    primaryApproachList.length > 0 ||
     rectalCancer?.findings?.description ||
     rectalCancer?.mobilizationAndResection?.vesselLigation?.length > 0 ||
     rectalCancer?.reconstruction?.reconstructionType ||
@@ -415,7 +522,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             
             {/* Center Column - Report Title */}
             <div className="text-center space-y-2">
-              <h4 className="text-sm font-bold">RECTAL CANCER SURGERY REPORT</h4>
+              <h4 className="text-sm font-bold">COLON AND RECTUM RESECTION REPORT</h4>
             </div>
             
             {/* Right Column - Practice Address */}
@@ -727,13 +834,13 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
         )}
         
         {/* Surgical Approach Section - New Structure */}
-        {rectalCancer?.surgicalApproach?.primaryApproach && (
+        {primaryApproachList.length > 0 && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Surgical Approach</h5>
             <p className="text-xs text-gray-700">
-              <span className="font-medium">Primary Approach:</span> {rectalCancer.surgicalApproach.primaryApproach}
+              <span className="font-medium">Primary Approach:</span> {primaryApproachList.join(', ')}
             </p>
-            {rectalCancer.surgicalApproach.primaryApproach === 'Laparoscopic Converted To Open' && rectalCancer.surgicalApproach.conversionReason?.length > 0 && (
+            {primaryApproachList.includes('Laparoscopic Converted To Open') && rectalCancer.surgicalApproach.conversionReason?.length > 0 && (
               <div className="text-xs text-gray-700 ml-4">
                 <span className="font-medium">Reason for Conversion:</span> {rectalCancer.surgicalApproach.conversionReason.join(', ')}
                 {rectalCancer.surgicalApproach.conversionReasonOther && ` - ${rectalCancer.surgicalApproach.conversionReasonOther}`}
@@ -753,7 +860,15 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             <h5 className="text-xs font-medium text-gray-600">Mobilization and Resection</h5>
             {rectalCancer.mobilizationAndResection.extentOfMobilization?.length > 0 && (
               <p className="text-xs text-gray-700">
-                <span className="font-medium">Extent of Mobilization:</span> {rectalCancer.mobilizationAndResection.extentOfMobilization.join(', ')}
+                <span className="font-medium">Extent of Mobilization:</span>{' '}
+                {rectalCancer.mobilizationAndResection.extentOfMobilization
+                  .map(item => {
+                    if (item === 'Other' && rectalCancer.mobilizationAndResection.extentOfMobilizationOther) {
+                      return `Other: ${rectalCancer.mobilizationAndResection.extentOfMobilizationOther}`;
+                    }
+                    return item;
+                  })
+                  .join(', ')}
               </p>
             )}
             {rectalCancer.mobilizationAndResection.vesselLigation?.length > 0 && (
@@ -875,19 +990,24 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
         
         {/* Additional Information */}
         {(rectalCancer?.additionalInfo?.additionalInformation || rectalCancer?.additionalInfo?.postOperativeManagement) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Additional Information</h5>
+          <div className="space-y-4 mt-4">
             {rectalCancer.additionalInfo.additionalInformation && (
-              <p className="text-xs text-gray-700"><span className="font-medium">Additional Information:</span> {rectalCancer.additionalInfo.additionalInformation}</p>
+              <div>
+                <h5 className="text-xs font-medium text-gray-600">Additional Notes</h5>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap">{rectalCancer.additionalInfo.additionalInformation}</p>
+              </div>
             )}
             {rectalCancer.additionalInfo.postOperativeManagement && (
-              <p className="text-xs text-gray-700"><span className="font-medium">Post-operative Management:</span> {rectalCancer.additionalInfo.postOperativeManagement}</p>
+              <div>
+                <h5 className="text-xs font-medium text-gray-600">Post-operative Management</h5>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap">{rectalCancer.additionalInfo.postOperativeManagement}</p>
+              </div>
             )}
           </div>
         )}
         
         {/* Old Structure - Surgical Approach Section */}
-        {(rectalCancer?.surgicalApproach?.approach || rectalCancer?.surgicalApproach?.resectionType) && !rectalCancer?.surgicalApproach?.primaryApproach && (
+        {(rectalCancer?.surgicalApproach?.approach || rectalCancer?.surgicalApproach?.resectionType) && primaryApproachList.length === 0 && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Surgical Approach</h5>
             {rectalCancer?.surgicalApproach?.approach && (
@@ -1277,19 +1397,11 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             )}
             {rectalCancer.procedureFindings.additionalNotes && (
               <p className="text-xs text-gray-700">
-                <span className="font-medium">Additional Notes:</span> {rectalCancer.procedureFindings.additionalNotes}
+                <span className="font-medium">Notes:</span> {rectalCancer.procedureFindings.additionalNotes}
               </p>
             )}
           </div>
         )}
-        
-        {/* Auto-Generated Summary */}
-        <div className="space-y-2 mt-6 pt-4 border-t">
-          <h5 className="text-xs font-medium text-gray-600">Synoptic Operative Summary</h5>
-          <div className="text-xs text-gray-700 leading-relaxed">
-            {generateSynopticSummary()}
-          </div>
-        </div>
         
         {/* Surgeon Signature */}
         {(rectalCancer?.additionalInfo?.surgeonSignatureText || rectalCancer?.additionalInfo?.surgeonSignature || rectalCancer?.additionalInfo?.dateTime) && (
@@ -1321,6 +1433,14 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             )}
           </div>
         )}
+        
+        {/* Auto-Generated Summary */}
+        <div className="space-y-2 mt-6 pt-4 border-t">
+          <h5 className="text-xs font-medium text-gray-600">Synoptic Operative Summary</h5>
+          <div className="text-xs text-gray-700 leading-relaxed">
+            {generateSynopticSummary()}
+          </div>
+        </div>
         
         {/* Footer */}
         <div className="border-t pt-4 mt-6 text-center text-xs space-y-1">

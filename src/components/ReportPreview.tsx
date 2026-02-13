@@ -898,6 +898,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                     onChange={(e) => setPatientFieldValue(e.target.value)}
                     className="h-6 text-xs w-32"
                     type="date"
+                    lang="en-GB"
                   />
                   <Button variant="outline" size="sm" onClick={cancelPatientEdit} className="h-6 w-6 p-0">
                     <X className="h-3 w-3" />

@@ -138,7 +138,8 @@ export const generateVentralHerniaPDF = async (
     console.log('operative:', ventralHerniaData?.operative);
     console.log('herniaType:', ventralHerniaData?.operative?.herniaType);
     console.log('herniaSite:', ventralHerniaData?.operative?.herniaSite);
-    console.log('herniaDefects:', ventralHerniaData?.operative?.herniaDefects);
+    console.log('herniaDefectLength:', ventralHerniaData?.operative?.herniaDefectLength);
+    console.log('herniaDefectWidth:', ventralHerniaData?.operative?.herniaDefectWidth);
     console.log('numberOfDefects:', ventralHerniaData?.operative?.numberOfDefects);
     console.log('contents:', ventralHerniaData?.operative?.contents);
     console.log('strangulation:', ventralHerniaData?.operative?.strangulation);
@@ -282,7 +283,7 @@ export const generateVentralHerniaPDF = async (
     y += 4.5; // +1 spacing
     
     // Row 2: Date of Birth, Age, empty - aligned in three columns  
-    const dob = patientInfo.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : '';
+    const dob = patientInfo.dateOfBirth ? formatDateDDMMYYYY(patientInfo.dateOfBirth) : '';
     const age = patientInfo.age || '';
     
     pdf.text(`Date Of Birth: ${dob}`, patientCol1X, y);
@@ -388,33 +389,118 @@ export const generateVentralHerniaPDF = async (
     y += 2; // +1 spacing before next section
     
     
-    // Separator line
+    // Separator line (thinner)
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
+    pdf.setLineWidth(0.1);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 6;
     
-    // PROCEDURE DETAILS
+    // Data preparation for all sections
+    const operative = ventralHerniaData?.operative || {};
+    const procedure = ventralHerniaData?.procedure || {};
+    
+    // OPERATIVE FINDINGS Section
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('PROCEDURE DETAILS', margin, y);
+    pdf.text('OPERATIVE FINDINGS', margin, y);
     y += 5;
     
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    const operative = ventralHerniaData?.operative || {};
-    const procedure = ventralHerniaData?.procedure || {};
+    // Operative findings data preparation
+    const herniaTypes = operative.herniaType?.map(type => 
+      type === 'Other' && operative.herniaTypeOther ? operative.herniaTypeOther : type
+    ).join(', ') || '';
     
-    // Two-column layout for procedure details - proper alignment
+    const herniaSites = operative.herniaSite?.map(site => 
+      site === 'Other' && operative.herniaSiteOther ? operative.herniaSiteOther : site
+    ).join(', ') || '';
+    
+    const herniaDefectLength = operative.herniaDefectLength || '';
+    const herniaDefectWidth = operative.herniaDefectWidth || '';
+    const herniaDefectsDisplay = herniaDefectLength || herniaDefectWidth 
+      ? `${herniaDefectLength || '___'} cm (Length) x ${herniaDefectWidth || '___'} cm (Width)`
+      : '';
+    const numberOfDefects = operative.numberOfDefects || '';
+    
+    const contents = operative.contents?.map(content => 
+      content === 'Other' && operative.contentsOther ? operative.contentsOther : content
+    ).join(', ') || '';
+    
+    const strangulation = operative.strangulation || '';
+    
+    // Two-column layout for operative findings - aligned with PORTS AND INCISIONS column
+    const col1X = margin;
+    const col2X = pageCenter + 2; // Same alignment as PORTS AND INCISIONS
+    
+    pdf.text(`Hernia Type: ${herniaTypes}`, col1X, y);
+    pdf.text(`Number of Defects: ${numberOfDefects}`, col2X, y);
+    y += 4.5;
+    
+    pdf.text(`Site of Hernia: ${herniaSites}`, col1X, y);
+    pdf.text(`Contents: ${contents}`, col2X, y);
+    y += 4.5;
+    
+    pdf.text(`Total Hernia Defect Size: ${herniaDefectsDisplay}`, col1X, y);
+    pdf.text(`Strangulation/Ischaemia: ${strangulation}`, col2X, y);
+    y += 6;
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // TWO-COLUMN SECTION: PROCEDURE DETAILS and PORTS AND INCISIONS
     const leftColX = margin;
-    const rightColX = pageCenter + 2; // Align with imaginary center line
+    const rightColX = pageCenter + 2;
+    const leftColWidth = (pageWidth / 2) - margin - 5;
+    const rightColWidth = (pageWidth / 2) - margin - 5;
+    
+    // Section headers
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('PROCEDURE DETAILS', leftColX, y);
+    pdf.text('PORTS AND INCISIONS', rightColX, y);
+    y += 5;
+    
     let leftY = y;
     let rightY = y;
     
-    // LEFT COLUMN
-    // Define all variables first - UPDATED to match new form data structure
-    const operationDescription = operative.operationDescription || ''; // Now exists in form structure
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Helper function for left column items with boundary control
+    const addLeftItem = (label: string, value: string) => {
+      if (value) {
+        const maxWidth = leftColWidth - 5; // Ensure boundary
+        const text = `${label}: ${value}`;
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        lines.forEach((line: string) => {
+          pdf.text(line, leftColX, leftY);
+          leftY += 4;
+        });
+        leftY += 1; // Small spacing between items
+      }
+    };
+    
+    // Helper function for right column items with boundary control
+    const addRightItem = (label: string, value: string) => {
+      if (value) {
+        const maxWidth = rightColWidth - 5; // Ensure boundary
+        const text = `${label}: ${value}`;
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        lines.forEach((line: string) => {
+          pdf.text(line, rightColX, rightY);
+          rightY += 4;
+        });
+        rightY += 1; // Small spacing between items
+      }
+    };
+    
+    // LEFT COLUMN - PROCEDURE DETAILS
+    const operationDescription = operative.operationDescription || '';
     
     let approachText = '';
     if (operative.approach?.length > 0) {
@@ -426,120 +512,9 @@ export const generateVentralHerniaPDF = async (
       }).join(', ');
     }
     
-    const closureTechnique = procedure.closureTechnique?.map((tech) => {
-      if (tech === 'Other' && procedure.closureTechniqueOther) {
-        return `Other: ${procedure.closureTechniqueOther}`;
-      }
-      return tech;
-    }).join(', ') || '';
-    const materialUsed = procedure.closureMaterial?.map((material) => {
-      if (material === 'Other' && procedure.closureMaterialOther) {
-        return `Other: ${procedure.closureMaterialOther}`;
-      }
-      return material;
-    }).join(', ') || ''; // Fixed field name
-    const incisionType = ''; // This field doesn't exist in the form structure
-    const repairType = procedure.repairType || operative.repairType || '';
-    
-    const primaryRepair = procedure.primaryRepair?.map((repair) => {
-      if (repair === 'Other' && procedure.primaryRepairOther) {
-        return `Other: ${procedure.primaryRepairOther}`;
-      }
-      return repair;
-    }).join(', ') || '';
-    
-    const herniaTypes = (operative.herniaType || procedure.herniaType)?.map(type => 
-      type === 'Other' && (operative.herniaTypeOther || procedure.herniaTypeOther) ? (operative.herniaTypeOther || procedure.herniaTypeOther) : type
-    ).join(', ') || '';
-    
-    const meshPlacement = procedure.meshType?.map((type) => {
-      if (type === 'Other' && procedure.meshPlacementOther) {
-        return procedure.meshPlacementOther;
-      }
-      return type;
-    }).join(', ') || '';
-    
-    const herniaSites = (operative.herniaSite || procedure.herniaSite)?.map(site => 
-      site === 'Other' && (operative.herniaSiteOther || procedure.herniaSiteOther) ? (operative.herniaSiteOther || procedure.herniaSiteOther) : site
-    ).join(', ') || '';
-    
-    const meshMaterials = procedure.meshMaterial?.map((material) => {
-      if (material === 'Other' && procedure.meshMaterialOther) {
-        return procedure.meshMaterialOther;
-      }
-      return material;
-    }).join(', ') || '';
-    
-    const herniaDefects = operative.herniaDefects || procedure.herniaDefects || '';
-    const meshSize = (procedure.meshLength || procedure.meshWidth || operative.meshLength || operative.meshWidth) ? 
-      `${procedure.meshLength || operative.meshLength || '___'} x ${procedure.meshWidth || operative.meshWidth || '___'} cm` : '';
-    
-    const numberOfDefects = operative.numberOfDefects || ''; // May have been added
-    
-    const fixation = procedure.fixation?.map(fix => 
-      fix === 'Other' && procedure.fixationOther ? procedure.fixationOther : fix
-    ).join(', ') || '';
-    
-    const contents = (operative.contents || procedure.contents)?.map(content => 
-      content === 'Other' && (operative.contentsOther || procedure.contentsOther) ? (operative.contentsOther || procedure.contentsOther) : content
-    ).join(', ') || ''; // May have been added
-    
-    const strangulation = operative.strangulation || procedure.strangulation || '';
-    
-    const difficulty = procedure.intraOperativeDifficulty?.map((diff) => {
-      if (diff === 'Other' && procedure.intraOperativeDifficultyOther) {
-        return procedure.intraOperativeDifficultyOther;
-      }
-      return diff;
-    }).join(', ') || '';
-    
-    const complications = procedure.complications?.map((comp) => {
-      if (comp === 'Other' && procedure.complicationOther) {
-        return procedure.complicationOther;
-      }
-      return comp;
-    }).join(', ') || '';
-    
-    // Conditional logic
-    const isConverted = operative.approach?.includes('Laparoscopic Converted To Open');
-    const isOpenApproach = operative.approach?.includes('Open');
-    const isLaparoscopic = operative.approach?.some(approach => 
-      ['Laparoscopic Repair', 'Robotic Repair'].includes(approach));
-    
-    // Dynamic layout - only show rows with content, eliminate blank spaces
-    const rowHeight = 4.5; // +1 spacing for consistency
-    let currentRowY = y;
-    
-    // Helper function to add a row only if at least one field has content
-    const addRowIfHasContent = (leftLabel: string, leftValue: string, rightLabel: string, rightValue: string) => {
-      if (leftValue || rightValue) {
-        // Only add text if there's actually content
-        if (leftLabel && leftValue) {
-          pdf.text(`${leftLabel}: ${leftValue}`, leftColX, currentRowY);
-        } else if (leftValue) {
-          pdf.text(leftValue, leftColX, currentRowY);
-        }
-        
-        if (rightLabel && rightValue) {
-          pdf.text(`${rightLabel}: ${rightValue}`, rightColX, currentRowY);
-        } else if (rightValue) {
-          pdf.text(rightValue, rightColX, currentRowY);
-        }
-        
-        currentRowY += rowHeight;
-      }
-    };
-    
-    // Helper function to add single-column row only if has content
-    const addSingleRowIfHasContent = (label: string, value: string) => {
-      if (value) {
-        pdf.text(`${label}: ${value}`, leftColX, currentRowY);
-        currentRowY += rowHeight;
-      }
-    };
-    
-    // Get conversion reason text
-    const conversionReasonText = operative.conversionReason?.length > 0 ? 
+    // Conditional: Only show conversion reason if "Laparoscopic Converted To Open" is selected
+    const showConversionReason = operative.approach?.includes('Laparoscopic Converted To Open');
+    const conversionReasonText = showConversionReason && operative.conversionReason?.length > 0 ? 
       operative.conversionReason.map(reason => {
         if (reason === 'Other' && operative.conversionReasonOther) {
           return `Other: ${operative.conversionReasonOther}`;
@@ -548,202 +523,146 @@ export const generateVentralHerniaPDF = async (
       }).join(', ') : '';
     
     const trocarNumber = operative.trocarNumber || '';
-    
-    // Get the new procedure fields
     const sacExcised = procedure.sacExcised || '';
     const fatDissected = procedure.fatDissected || '';
     const defectClosed = procedure.defectClosed || '';
     
-    // Dynamic rows - only show when filled
-    addRowIfHasContent('Operation Description', operationDescription, 'Sac Excised', sacExcised);
-    addRowIfHasContent('Pre-peritoneal Fat Dissected Off Sheath', fatDissected, 'Hernia Defect Closed', defectClosed);
-    addRowIfHasContent('Surgical Approach', approachText, 'Closure Technique', closureTechnique);
-    addRowIfHasContent('Reason for Conversion', conversionReasonText, 'Material Used', materialUsed);
-    addRowIfHasContent('Trocar Number', trocarNumber, 'Repair Type', repairType);
-    // Smart grouping to avoid gaps - group all the fields that might have conditional right-side content
-    const fieldPairs = [
-      { leftLabel: 'Hernia Type', leftValue: herniaTypes, rightLabel: 'Primary Tissue Repair', rightValue: primaryRepair, showRight: repairType === 'Primary Suture Closure (Non-Mesh)' },
-      { leftLabel: 'Site of Hernia', leftValue: herniaSites, rightLabel: 'Mesh Placement', rightValue: meshPlacement, showRight: repairType === 'Mesh Repair' },
-      { leftLabel: 'Total Hernia Defect Size', leftValue: herniaDefects, rightLabel: 'Mesh Material', rightValue: meshMaterials, showRight: repairType === 'Mesh Repair' },
-      { leftLabel: 'Number of Defects', leftValue: numberOfDefects, rightLabel: 'Mesh Size', rightValue: meshSize, showRight: repairType === 'Mesh Repair' },
-      { leftLabel: 'Contents', leftValue: contents, rightLabel: 'Fixation', rightValue: fixation, showRight: repairType === 'Mesh Repair' }
-    ];
-    
-    // Process each field pair intelligently
-    fieldPairs.forEach(pair => {
-      const leftContent = pair.leftValue;
-      const rightContent = pair.showRight ? pair.rightValue : '';
-      const rightLabel = pair.showRight ? pair.rightLabel : '';
-      
-      // Only create row if there's actually content to show
-      if (leftContent || rightContent) {
-        addRowIfHasContent(pair.leftLabel, leftContent, rightLabel, rightContent);
-      }
-    });
-    
-    // Single column fields (spanning full width) - only show when filled
-    addSingleRowIfHasContent('Strangulation/Ischaemia', strangulation);
-    addSingleRowIfHasContent('If Recurrent Hernia. Does Patient have a Mesh in Situ?', operative.meshInSitu || '');
-    addSingleRowIfHasContent('Intra-Operative Difficulty', difficulty);
-    addSingleRowIfHasContent('Intraoperative Complications', complications);
-    
-    y = currentRowY + 3;
-    
-    
-    // Separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    
-    // Two-column layout for PORTS AND INCISIONS & CLOSURE - OPTIMIZED FOR PAGE ONE
-    // Removed page break check to ensure it fits on page one
-    
-    const col1Width = 85;  // Reduced width for better fit
-    const col2Width = 85;  // Reduced width for better fit
-    const colGap = 2;
-    
-    const col1X = margin;
-    const col2X = pageCenter + 2; // Align with imaginary center line for consistency
-    
-    // Column headers - more compact
-    pdf.setFontSize(10); // Reduced font size
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('PORTS AND INCISIONS', col1X, y);
-    pdf.text('CLOSURE', col2X, y);
-    y += 4; // Reduced spacing
-    
-    let col1Y = y;
-    let col2Y = y;
-    
-    // COLUMN 1: Legend and Diagram
-    // Legend section - ULTRA-COMPACT for page one fitting
-    pdf.setFontSize(7); // Smaller font
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Legend:', col1X, col1Y);
-    col1Y += 2; // Reduced spacing
-    
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(6); // Even smaller font
-    
-    // ROW 1 of legend
-    const legendLeftX = col1X;
-    const legendRightX = col1X + 45; // Half width for two columns
-    
-    // Ports icon (left side) - smaller and neater
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(1);
-    pdf.line(legendLeftX + 2, col1Y, legendLeftX + 6, col1Y);
-    pdf.setFontSize(4);
-    pdf.text('5mm', legendLeftX + 2.5, col1Y - 1);
-    pdf.setFontSize(7);
-    pdf.text('Ports (with size label)', legendLeftX + 9, col1Y + 1);
-    
-    // Ileostomy icon (right side) - smaller and neater
-    pdf.setDrawColor(245, 158, 11); // Gold/Yellow
-    pdf.setLineWidth(1);
-    pdf.setLineDash([1.5, 1]);
-    pdf.circle(legendRightX + 3, col1Y, 1.5, 'S');
-    pdf.setLineDash([]);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.text('Ileostomy (dashed yellow circle)', legendRightX + 7, col1Y + 1);
-    
-    col1Y += 2; // Reduced spacing
-    
-    // ROW 2 of legend
-    // Incisions icon (left side) - smaller and neater
-    pdf.setDrawColor(139, 0, 0); // Dark red
-    pdf.setLineWidth(1);
-    pdf.setLineDash([2, 1.5]);
-    pdf.line(legendLeftX + 2, col1Y, legendLeftX + 6, col1Y);
-    pdf.setLineDash([]);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.text('Incisions (dashed dark red line)', legendLeftX + 9, col1Y + 1);
-    
-    // Colostomy icon (right side) - smaller and neater
-    pdf.setDrawColor(22, 163, 74); // Green
-    pdf.setLineWidth(1);
-    pdf.circle(legendRightX + 3, col1Y, 1.5, 'S');
-    pdf.setDrawColor(0, 0, 0);
-    pdf.text('Colostomy (solid green circle)', legendRightX + 7, col1Y + 1);
-    
-    col1Y += 2.5; // Reduced spacing
-    
-    // Diagram box - OPTIMIZED for page one fitting
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    const diagramBoxHeight = 45; // Further optimized for page one
-    pdf.rect(col1X, col1Y, col1Width - 5, diagramBoxHeight);
-    
-    // Diagram content - larger and properly sized
-    if (diagrams && diagrams.length > 0) {
-      // Render the actual diagram
-      const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
-      if (diagramImageData) {
-        try {
-          // Get image properties to preserve aspect ratio
-          const imgProperties = pdf.getImageProperties(diagramImageData);
-          const imgWidth = imgProperties.width;
-          const imgHeight = imgProperties.height;
-          const aspectRatio = imgWidth / imgHeight;
-          
-          // Available space for diagram
-          const maxWidth = col1Width - 8;
-          const maxHeight = diagramBoxHeight - 8;
-          
-          // Calculate optimal size while preserving aspect ratio
-          let finalWidth = maxWidth;
-          let finalHeight = maxWidth / aspectRatio;
-          
-          // If calculated height exceeds available space, scale based on height instead
-          if (finalHeight > maxHeight) {
-            finalHeight = maxHeight;
-            finalWidth = maxHeight * aspectRatio;
-          }
-          
-          // Center the diagram in the available space
-          const centerX = col1X + (maxWidth - finalWidth) / 2 + 4;
-          const centerY = col1Y + (maxHeight - finalHeight) / 2 + 4;
-          
-          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, finalWidth, finalHeight);
-        } catch (error) {
-          console.error('Error adding surgical diagram to PDF:', error);
-          pdf.setFontSize(8);
-          pdf.text('VENTRAL HERNIA DIAGRAM', col1X + 25, col1Y + 35);
-          pdf.text('(LEAVE CURRENT Diagram Size', col1X + 20, col1Y + 42);
-          pdf.text('AS IT IS)', col1X + 30, col1Y + 48);
+    // Conditional: Only show closure technique if defect closed is "Yes"
+    const showClosureTechnique = procedure.defectClosed === 'Yes';
+    const closureTechnique = showClosureTechnique && procedure.closureTechnique?.length > 0 ? 
+      procedure.closureTechnique.map((tech) => {
+        if (tech === 'Other' && procedure.closureTechniqueOther) {
+          return `Other: ${procedure.closureTechniqueOther}`;
         }
+        return tech;
+      }).join(', ') : '';
+    
+    const materialUsed = procedure.closureMaterial?.map((material) => {
+      if (material === 'Other' && procedure.closureMaterialOther) {
+        return `Other: ${procedure.closureMaterialOther}`;
       }
+      return material;
+    }).join(', ') || '';
+    
+    const repairType = procedure.repairType || '';
+    
+    // Conditional logic based on repair type
+    let primaryRepair = '';
+    let meshPlacement = '';
+    let meshMaterials = '';
+    let meshSize = '';
+    let fixation = '';
+    
+    if (repairType === 'Primary Suture Closure (Non-Mesh)') {
+      primaryRepair = procedure.primaryRepair?.map((repair) => {
+        if (repair === 'Other' && procedure.primaryRepairOther) {
+          return `Other: ${procedure.primaryRepairOther}`;
+        }
+        return repair;
+      }).join(', ') || '';
+      
+      meshPlacement = 'N/A';
+      meshMaterials = 'N/A';
+      meshSize = 'N/A';
+      fixation = 'N/A';
+    } else if (repairType === 'Mesh Repair') {
+      primaryRepair = 'N/A';
+      
+      meshPlacement = procedure.meshType?.map((type) => {
+        if (type === 'Other' && procedure.meshPlacementOther) {
+          return procedure.meshPlacementOther;
+        }
+        return type;
+      }).join(', ') || '';
+      
+      meshMaterials = procedure.meshMaterial?.map((material) => {
+        if (material === 'Other' && procedure.meshMaterialOther) {
+          return procedure.meshMaterialOther;
+        }
+        return material;
+      }).join(', ') || '';
+      
+      meshSize = (procedure.meshLength || procedure.meshWidth) ? 
+        `${procedure.meshLength || '___'} x ${procedure.meshWidth || '___'} cm` : '';
+      
+      fixation = procedure.fixation?.map(fix => 
+        fix === 'Other' && procedure.fixationOther ? procedure.fixationOther : fix
+      ).join(', ') || '';
     } else {
-      pdf.setFontSize(8);
-      pdf.text('VENTRAL HERNIA DIAGRAM', col1X + 25, col1Y + 35);
-      pdf.text('(LEAVE CURRENT Diagram Size', col1X + 20, col1Y + 42);
-      pdf.text('AS IT IS)', col1X + 30, col1Y + 48);
+      primaryRepair = procedure.primaryRepair?.map((repair) => {
+        if (repair === 'Other' && procedure.primaryRepairOther) {
+          return `Other: ${procedure.primaryRepairOther}`;
+        }
+        return repair;
+      }).join(', ') || '';
+      
+      meshPlacement = procedure.meshType?.map((type) => {
+        if (type === 'Other' && procedure.meshPlacementOther) {
+          return procedure.meshPlacementOther;
+        }
+        return type;
+      }).join(', ') || '';
+      
+      meshMaterials = procedure.meshMaterial?.map((material) => {
+        if (material === 'Other' && procedure.meshMaterialOther) {
+          return procedure.meshMaterialOther;
+        }
+        return material;
+      }).join(', ') || '';
+      
+      meshSize = (procedure.meshLength || procedure.meshWidth) ? 
+        `${procedure.meshLength || '___'} x ${procedure.meshWidth || '___'} cm` : '';
+      
+      fixation = procedure.fixation?.map(fix => 
+        fix === 'Other' && procedure.fixationOther ? procedure.fixationOther : fix
+      ).join(', ') || '';
     }
     
-    col1Y += diagramBoxHeight + 3;
+    // Add procedure details items to left column
+    addLeftItem('Operation Description', operationDescription);
+    addLeftItem('Surgical Approach', approachText);
     
-    // COLUMN 2: Closure - OPTIMIZED for page one fitting
-    pdf.setFontSize(8); // Reduced font size
+    // Conditional: Only show if conversion is applicable
+    if (showConversionReason) {
+      addLeftItem('Reason for Conversion', conversionReasonText);
+    }
+    
+    addLeftItem('Trocar Number', trocarNumber);
+    addLeftItem('Sac Excised', sacExcised);
+    addLeftItem('Pre-peritoneal Fat Dissected Off Sheath', fatDissected);
+    addLeftItem('Hernia Defect Closed', defectClosed);
+    
+    // Conditional: Only show if defect was closed
+    if (showClosureTechnique) {
+      addLeftItem('Closure Technique', closureTechnique);
+    }
+    
+    addLeftItem('Material Used', materialUsed);
+    addLeftItem('Repair Type', repairType);
+    addLeftItem('Primary Tissue Repair', primaryRepair);
+    addLeftItem('Mesh Placement', meshPlacement);
+    addLeftItem('Mesh Material', meshMaterials);
+    addLeftItem('Mesh Size', meshSize);
+    addLeftItem('Fixation', fixation);
+    
+    // CLOSURE Section (in left column immediately after Fixation)
+    leftY += 6; // Add some space before closure
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('CLOSURE', leftColX, leftY);
+    leftY += 5;
+    
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Helper function for closure section to save space
-    const addClosureItemIfHasContent = (label: string, value: string) => {
-      if (value) {
-        pdf.text(`${label}: ${value}`, col2X, col2Y);
-        col2Y += 4.5; // +1 spacing for consistency
-      }
-    };
-    
+    // Closure data
     const haemostasis = procedure.haemostasis || '';
-    addClosureItemIfHasContent('Haemostasis', haemostasis);
-    
     let drainText = procedure.drain || '';
     if (procedure.drain === 'Yes' && procedure.drainDetails) {
       drainText += ` - ${procedure.drainDetails}`;
     }
-    addClosureItemIfHasContent('Drain', drainText);
     
+    // Conditional closure fields - only show if user has selected something
     const fascialClosure = procedure.fascialClosure?.length > 0 ? 
       procedure.fascialClosure.map((closure) => {
         if (closure === 'Other' && procedure.fascialClosureOther) {
@@ -751,7 +670,6 @@ export const generateVentralHerniaPDF = async (
         }
         return closure;
       }).join(', ') : '';
-    addClosureItemIfHasContent('Fascial Closure', fascialClosure);
     
     const fascialMaterial = procedure.fascialClosureMaterial?.length > 0 ? 
       procedure.fascialClosureMaterial.map((material) => {
@@ -760,7 +678,6 @@ export const generateVentralHerniaPDF = async (
         }
         return material;
       }).join(', ') : '';
-    addClosureItemIfHasContent('Fascial Material Used', fascialMaterial);
     
     const skinClosure = procedure.skinClosure?.length > 0 ? 
       procedure.skinClosure.map((closure) => {
@@ -769,7 +686,6 @@ export const generateVentralHerniaPDF = async (
         }
         return closure;
       }).join(', ') : '';
-    addClosureItemIfHasContent('Skin Closure', skinClosure);
     
     const skinMaterial = procedure.skinClosureMaterial?.length > 0 ? 
       procedure.skinClosureMaterial.map((material) => {
@@ -778,7 +694,196 @@ export const generateVentralHerniaPDF = async (
         }
         return material;
       }).join(', ') : '';
-    addClosureItemIfHasContent('Skin Material Used', skinMaterial);
+    
+    // Add closure items to left column - only if they have values
+    addLeftItem('Haemostasis', haemostasis);
+    addLeftItem('Drain', drainText);
+    
+    // Conditional: Only show if user has selected something
+    if (fascialClosure) {
+      addLeftItem('Fascial Closure', fascialClosure);
+    }
+    if (fascialMaterial) {
+      addLeftItem('Fascial Material Used', fascialMaterial);
+    }
+    if (skinClosure) {
+      addLeftItem('Skin Closure', skinClosure);
+    }
+    if (skinMaterial) {
+      addLeftItem('Skin Material Used', skinMaterial);
+    }
+    
+    // RIGHT COLUMN - PORTS AND INCISIONS with diagram
+    if (diagrams && diagrams.length > 0) {
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'bold');
+      
+      // Legend with visual indicators - exactly like appendectomy
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('Legend:', rightColX, rightY);
+      rightY += 5;
+      
+      // Row 1: Ports and Ileostomy
+      const legendCol1X = rightColX;
+      const legendCol2X = rightColX + 45;
+      
+      // Ports legend with smaller visual indicator
+      pdf.text('Ports (with size label)', legendCol1X + 6, rightY);
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.8);
+      pdf.line(legendCol1X, rightY - 1, legendCol1X + 4, rightY - 1);
+      pdf.setFontSize(4);
+      pdf.text('5mm', legendCol1X + 0.5, rightY - 2);
+      pdf.setFontSize(8);
+      
+      // Ileostomy legend with smaller visual indicator
+      pdf.text('Ileostomy', legendCol2X + 6, rightY);
+      pdf.setDrawColor(245, 158, 11); // Yellow/Gold color
+      pdf.setLineWidth(0.8);
+      pdf.setLineDash([1.5, 1]);
+      pdf.circle(legendCol2X + 2, rightY - 1, 1.5);
+      pdf.setLineDash([]);
+      
+      rightY += 5;
+      
+      // Row 2: Incisions and Colostomy
+      // Incisions legend with smaller visual indicator
+      pdf.text('Incisions', legendCol1X + 6, rightY);
+      pdf.setDrawColor(139, 0, 0); // Dark red color
+      pdf.setLineWidth(0.8);
+      pdf.setLineDash([2, 1.5]);
+      pdf.line(legendCol1X, rightY - 1, legendCol1X + 4, rightY - 1);
+      pdf.setLineDash([]);
+      
+      // Colostomy legend with smaller visual indicator
+      pdf.text('Colostomy', legendCol2X + 6, rightY);
+      pdf.setDrawColor(22, 163, 74); // Green color
+      pdf.setLineWidth(1.2);
+      pdf.circle(legendCol2X + 2, rightY - 1, 1.5);
+      
+      rightY += 6;
+      
+      // Reset draw color
+      pdf.setDrawColor(0, 0, 0);
+      
+      // Space before diagram
+      rightY += 2;
+      
+      // Diagram box with fixed size as specified
+      pdf.setLineWidth(0.2);
+      const diagramBoxHeight = 60;
+      const diagramBoxWidth = rightColWidth - 10;
+      pdf.rect(rightColX, rightY, diagramBoxWidth, diagramBoxHeight);
+      
+      // Diagram content - KEEP CURRENT DIAGRAM SIZE AS SPECIFIED
+      const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
+      if (diagramImageData) {
+        try {
+          const imgProperties = pdf.getImageProperties(diagramImageData);
+          const imgWidth = imgProperties.width;
+          const imgHeight = imgProperties.height;
+          const aspectRatio = imgWidth / imgHeight;
+          
+          const maxWidth = diagramBoxWidth - 8;
+          const maxHeight = diagramBoxHeight - 8;
+          
+          let finalWidth = maxWidth;
+          let finalHeight = maxWidth / aspectRatio;
+          
+          if (finalHeight > maxHeight) {
+            finalHeight = maxHeight;
+            finalWidth = maxHeight * aspectRatio;
+          }
+          
+          const centerX = rightColX + (maxWidth - finalWidth) / 2 + 4;
+          const centerY = rightY + (maxHeight - finalHeight) / 2 + 4;
+          
+          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, finalWidth, finalHeight);
+        } catch (error) {
+          console.error('Error adding surgical diagram to PDF:', error);
+          pdf.setFontSize(8);
+          pdf.text('DIAGRAM', rightColX + 35, rightY + 30);
+          pdf.text('(LEAVE CURRENT Diagram Size', rightColX + 20, rightY + 35);
+          pdf.text('AS IT IS)', rightColX + 35, rightY + 40);
+        }
+      } else {
+        pdf.setFontSize(8);
+        pdf.text('DIAGRAM', rightColX + 35, rightY + 30);
+        pdf.text('(LEAVE CURRENT Diagram Size', rightColX + 20, rightY + 35);
+        pdf.text('AS IT IS)', rightColX + 35, rightY + 40);
+      }
+      
+      rightY += diagramBoxHeight + 6;
+    } else {
+      addRightItem('Surgical Markings', 'No markings documented');
+    }
+    
+    // Add COMPLICATIONS section in the right column under the diagram
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('COMPLICATIONS', rightColX, rightY);
+    rightY += 5;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Complications data with N/A autofill logic
+    const difficulty = procedure.intraOperativeDifficulty?.length > 0 ? 
+      procedure.intraOperativeDifficulty.map((diff) => {
+        if (diff === 'Other' && procedure.intraOperativeDifficultyOther) {
+          return procedure.intraOperativeDifficultyOther;
+        }
+        return diff;
+      }).join(', ') : 'N/A';
+    
+    const complications = procedure.complications?.length > 0 ? 
+      procedure.complications.map((comp) => {
+        if (comp === 'Other' && procedure.complicationOther) {
+          return procedure.complicationOther;
+        }
+        return comp;
+      }).join(', ') : 'N/A';
+    
+    // Add complications items to right column
+    const addRightComplicationsItem = (label: string, value: string) => {
+      if (label || value) {
+        const maxWidth = rightColWidth - 5;
+        const text = `${label}: ${value}`;
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        lines.forEach((line: string) => {
+          pdf.text(line, rightColX, rightY);
+          rightY += 4;
+        });
+        rightY += 1;
+      }
+    };
+    
+    addRightComplicationsItem('Intra-Operative Difficulty', difficulty);
+    addRightComplicationsItem('Intra-Operative Complications', complications);
+    
+    // Update y to the maximum of both columns
+    y = Math.max(leftY, rightY) + 6;
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // Force page break here - move to next page
+    pdf.addPage();
+    addFooter(++currentPage);
+    y = margin + 10;
+    
+    // SPECIMEN Section (now on page 2)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SPECIMEN', margin, y);
+    y += 5;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
     
     const specimen = procedure.specimenSent?.length > 0 ? 
       procedure.specimenSent.map((spec) => {
@@ -787,97 +892,89 @@ export const generateVentralHerniaPDF = async (
         }
         return spec;
       }).join(', ') : '';
-    addClosureItemIfHasContent('Specimen Sent for Pathology', specimen);
     
     const laboratory = procedure.laboratoryName || '';
-    addClosureItemIfHasContent('Specify Laboratory Sent to', laboratory);
+    const otherSpecimens = procedure.otherSpecimens || '';
     
-    // Move y to bottom of all columns and add post-operative management
-    y = Math.max(col1Y, col2Y) + 4; // Reduced spacing
+    pdf.text(`Specimen Sent for Pathology: ${specimen}`, margin, y);
+    y += 4.5;
+    
+    pdf.text(`Specify Laboratory Sent to: ${laboratory}`, margin, y);
+    y += 4.5;
+    
+    pdf.text(`Other Specimens Taken: ${otherSpecimens}`, margin, y);
+    y += 6;
     
     // Separator line
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
+    pdf.setLineWidth(0.1);
     pdf.line(margin, y, pageWidth - margin, y);
-    y += 5; // Reduced spacing
+    y += 6;
     
-    // Two-column layout: NOTES | POST OPERATIVE MANAGEMENT
-    const notesPostOpSectionY = y;
-    const notesColX = margin;
-    const postOpColX = margin + 95; // Position for right column
-    
-    // NOTES Section (Left Column)
-    pdf.setFontSize(10);
+    // NOTES Section (full width)
+    pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('NOTES', notesColX, notesPostOpSectionY);
+    pdf.text('NOTES', margin, y);
+    y += 5;
     
-    // POST OPERATIVE MANAGEMENT Section (Right Column)
-    pdf.text('POST OPERATIVE MANAGEMENT', postOpColX, notesPostOpSectionY);
-    
-    let notesY = notesPostOpSectionY + 8;
-    let postOpY = notesPostOpSectionY + 8;
-    
-    pdf.setFontSize(8);
+    pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Check for additional notes from multiple possible sources
     const additionalNotes = procedure.additionalNotes || 
                            ventralHerniaData?.procedureFindings?.additionalNotes || 
                            ventralHerniaData?.additionalNotes || '';
     
-    // Check for post operative management from multiple possible sources 
+    if (additionalNotes) {
+      const lines = pdf.splitTextToSize(`Additional Notes: ${additionalNotes}`, pageWidth - (margin * 2));
+      lines.forEach((line: string) => {
+        pdf.text(line, margin, y);
+        y += 4;
+      });
+    }
+    
+    y += 6;
+    
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+    
+    // POST OPERATIVE MANAGEMENT Section (full width)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('POST OPERATIVE MANAGEMENT', margin, y);
+    y += 5;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
     const postOpMgmt = procedure.postOperativeManagement || 
                        ventralHerniaData?.postOperativeManagement || '';
     
-    // Helper function to add content to NOTES column
-    const addNotesContent = (label: string, value: string) => {
-      if (value) {
-        const columnWidth = 90; // Width for left column
-        const lines = pdf.splitTextToSize(`${label}: ${value}`, columnWidth);
-        lines.forEach((line: string) => {
-          pdf.text(line, notesColX, notesY);
-          notesY += 4;
-        });
-        notesY += 3;
-      }
-    };
-    
-    // Helper function to add content to POST OPERATIVE MANAGEMENT column
-    const addPostOpContent = (label: string, value: string) => {
-      if (value) {
-        const columnWidth = 90; // Width for right column
-        const lines = pdf.splitTextToSize(`${label}: ${value}`, columnWidth);
-        lines.forEach((line: string) => {
-          pdf.text(line, postOpColX, postOpY);
-          postOpY += 4;
-        });
-        postOpY += 3;
-      }
-    };
-
-    // Add content to respective columns
-    addNotesContent('Additional Notes', additionalNotes);
-    addPostOpContent('Post Operative Management', postOpMgmt);
-    
-    // Update y position to after both columns
-    y = Math.max(notesY, postOpY);
-    
-    // Add more spacing after POST OPERATIVE MANAGEMENT section to make signature more visible
-    if (additionalNotes || postOpMgmt) {
-      y += 8; // Increased spacing when content exists
-    } else {
-      y += 6; // Spacing when no content
+    if (postOpMgmt) {
+      const lines = pdf.splitTextToSize(`Post Operative Management: ${postOpMgmt}`, pageWidth - (margin * 2));
+      lines.forEach((line: string) => {
+        pdf.text(line, margin, y);
+        y += 4;
+      });
     }
     
-    // Force page break before signature for better visibility
-    pdf.addPage();
-    y = margin + 20; // Reset y position for new page with extra spacing to move signature lower
+    y += 6;
     
-    // Signature Section - now on page 2 for better visibility
+    // Separator line
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 15;
+    
+    // Signature Section with proper spacing - inline layout as specified
     pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
     const signatureY = y;
     
-    // Surgeon's Signature - inline layout  
+    // Surgeon's Signature and Date & Time on same line
     pdf.text("Surgeon's Signature:", margin, signatureY);
     
     // Handle signature - check for text first, then image
@@ -895,8 +992,8 @@ export const generateVentralHerniaPDF = async (
           const aspectRatio = imgWidth / imgHeight;
           
           // Set maximum constraints for signature display
-          const maxWidth = 70;  // Increased max width for better visibility
-          const maxHeight = 25; // Increased max height for better visibility
+          const maxWidth = 50;
+          const maxHeight = 15;
           
           let finalWidth = maxWidth;
           let finalHeight = maxWidth / aspectRatio;
@@ -932,14 +1029,16 @@ export const generateVentralHerniaPDF = async (
       }
     }
     
-    // Date & Time - inline layout on same line as signature
-    const dateTimeX = margin + 130;
-    pdf.text('Date & Time:', dateTimeX, signatureY);
+    // Date & Time - aligned with right column like other fields
+    const rightColXForDateTime = pageCenter + 2; // Same alignment as PORTS AND INCISIONS
+    pdf.text('Date & Time:', rightColXForDateTime, signatureY);
     if (ventralHerniaData?.closure?.dateTime) {
-      pdf.text(formatDateTimeWithColon(ventralHerniaData.closure.dateTime), dateTimeX + 30, signatureY);
+      pdf.text(formatDateTimeWithColon(ventralHerniaData.closure.dateTime), rightColXForDateTime + 30, signatureY);
     } else {
-      pdf.text(formatDateTimeWithColon(new Date()), dateTimeX + 30, signatureY);
+      pdf.text(formatDateTimeWithColon(new Date()), rightColXForDateTime + 30, signatureY);
     }
+    
+    y = signatureY + 10;
     
     // Update total pages in all footers
     const totalPages = pdf.internal.getNumberOfPages();

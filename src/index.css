@@ -282,4 +282,6 @@ All colors MUST be HSL.
     background-color: #000000;
     border-color: #000000;
   }
+
+  /* Note: rely on lang="en-GB" for dd/mm/yyyy ordering to preserve native separators */
 }

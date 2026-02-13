@@ -218,45 +218,6 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
                 </div>
               </div>
             )}
-            {ventralHernia.operative.operationDescription && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Operation Description:</p>
-                <p className="text-xs text-gray-700">{ventralHernia.operative.operationDescription}</p>
-              </div>
-            )}
-            {ventralHernia.operative.approach?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Operative Approach:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.operative.approach.map((approach, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {approach === 'Other' && ventralHernia.operative.approachOther 
-                        ? `Other: ${ventralHernia.operative.approachOther}` 
-                        : approach}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ventralHernia.operative.conversionReason?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Reason for Conversion:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.operative.conversionReason.map((reason, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {reason === 'Other' && ventralHernia.operative.conversionReasonOther 
-                        ? `Other: ${ventralHernia.operative.conversionReasonOther}` 
-                        : reason}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ventralHernia.operative.trocarNumber && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Trocar Number:</span> {ventralHernia.operative.trocarNumber}
-              </p>
-            )}
             {/* Mesh in Situ - Show only when Recurrent Hernia is selected */}
             {ventralHernia.preoperative.indication?.includes('Recurrent Hernia') && ventralHernia.operative.meshInSitu && (
               <div className="ml-4">
@@ -273,379 +234,425 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
           </div>
         )}
         
-        {/* Operative Findings */}
-        {(ventralHernia.operative.herniaType?.length > 0 || ventralHernia.operative.herniaSite?.length > 0 || 
-          ventralHernia.operative.herniaDefects || ventralHernia.operative.strangulation || 
-          ventralHernia.operative.meshInSitu || ventralHernia.operative.approach?.length > 0) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Operative Findings</h5>
-            {ventralHernia.operative.herniaType?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="text-xs font-medium text-gray-600">Hernia Type:</span>
-                {ventralHernia.operative.herniaType.map((type, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {type === 'Other' && ventralHernia.operative.herniaTypeOther 
-                      ? `Other: ${ventralHernia.operative.herniaTypeOther}` 
-                      : type}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {ventralHernia.operative.herniaSite?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="text-xs font-medium text-gray-600">Site of Hernia:</span>
-                {ventralHernia.operative.herniaSite.map((site, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {site === 'Other' && ventralHernia.operative.herniaSiteOther 
-                      ? `Other: ${ventralHernia.operative.herniaSiteOther}` 
-                      : site}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {ventralHernia.operative.herniaDefects && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Total Hernia Defect Size:</span> {ventralHernia.operative.herniaDefects}
-              </p>
-            )}
-            {ventralHernia.operative.numberOfDefects && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Number of Defects:</span> {ventralHernia.operative.numberOfDefects}
-              </p>
-            )}
-            {ventralHernia.operative.contents?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="text-xs font-medium text-gray-600">Contents:</span>
-                {ventralHernia.operative.contents.map((content, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {content === 'Other' && ventralHernia.operative.contentsOther 
-                      ? `Other: ${ventralHernia.operative.contentsOther}` 
-                      : content}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {ventralHernia.operative.strangulation && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Strangulation/Ischaemia:</span> {ventralHernia.operative.strangulation}
-              </p>
-            )}
-            {ventralHernia.operative.approach?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="text-xs font-medium text-gray-600">Operative Approach:</span>
-                {ventralHernia.operative.approach.map((approach, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {approach === 'Other' && ventralHernia.operative.approachOther 
-                      ? `Other: ${ventralHernia.operative.approachOther}` 
-                      : approach}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {ventralHernia.operative.conversionReason?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Reason for Conversion:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.operative.conversionReason.map((reason, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {reason === 'Other' && ventralHernia.operative.conversionReasonOther 
-                        ? `Other: ${ventralHernia.operative.conversionReasonOther}` 
-                        : reason}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ventralHernia.operative.trocarNumber && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Trocar Number:</span> {ventralHernia.operative.trocarNumber}
-              </p>
-            )}
-            {ventralHernia.operative.operationDescription && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Operation Description:</span> {ventralHernia.operative.operationDescription}
-              </p>
-            )}
-          </div>
-        )}
-        
-        {/* Procedure Details */}
-        {(ventralHernia.procedure.sacExcised || ventralHernia.procedure.fatDissected || 
-          ventralHernia.procedure.defectClosed || ventralHernia.procedure.repairType ||
-          ventralHernia.procedure.meshType?.length > 0 || ventralHernia.procedure.primaryRepair?.length > 0) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Procedure Details</h5>
-            {ventralHernia.procedure.sacExcised && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Sac Excised:</span> {ventralHernia.procedure.sacExcised}
-              </p>
-            )}
-            {ventralHernia.procedure.fatDissected && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Pre-Peritoneal Fat Dissected Off Sheath:</span> {ventralHernia.procedure.fatDissected}
-              </p>
-            )}
-            {ventralHernia.procedure.defectClosed && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Hernia Defect Closed:</span> {ventralHernia.procedure.defectClosed}
-              </p>
-            )}
-            {ventralHernia.procedure.defectClosed === 'Yes' && ventralHernia.procedure.closureTechnique?.length > 0 && (
-              <div className="ml-4 space-y-1">
-                <p className="text-xs font-medium text-gray-600">Closure Technique:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.procedure.closureTechnique.map((technique, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {technique === 'Other' && ventralHernia.procedure.closureTechniqueOther 
-                        ? `Other: ${ventralHernia.procedure.closureTechniqueOther}` 
-                        : technique}
-                    </Badge>
-                  ))}
-                </div>
-                {ventralHernia.procedure.closureMaterial?.length > 0 && (
-                  <div className="space-y-1 mt-1">
-                    <p className="text-xs font-medium text-gray-600">Material Used:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {ventralHernia.procedure.closureMaterial.map((material, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {material === 'Other' && ventralHernia.procedure.closureMaterialOther 
-                            ? `Other: ${ventralHernia.procedure.closureMaterialOther}` 
-                            : material}
-                        </Badge>
-                      ))}
+        {/* Main Section with separator line */}
+        <div className="border-t-2 border-gray-400 pt-4">
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left Column - Top: OPERATIVE FINDINGS, Bottom: PROCEDURE DETAILS + COMPLICATIONS */}
+            <div className="space-y-6">
+              {/* OPERATIVE FINDINGS */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">OPERATIVE FINDINGS</h5>
+                <div className="space-y-2">
+                  {ventralHernia.operative.herniaType?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Hernia Type: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.herniaType.map(type => 
+                          type === 'Other' && ventralHernia.operative.herniaTypeOther 
+                            ? ventralHernia.operative.herniaTypeOther
+                            : type
+                        ).join(', ')}
+                      </span>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-            {ventralHernia.procedure.repairType && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Repair Type:</span> {ventralHernia.procedure.repairType}
-              </p>
-            )}
-            {ventralHernia.procedure.meshType?.length > 0 && (
-              <div className="ml-4 space-y-1">
-                <p className="text-xs font-medium text-gray-600">Mesh Details:</p>
-                <div className="flex flex-wrap gap-1">
-                  <span className="text-xs text-gray-600">Mesh Placement:</span>
-                  {ventralHernia.procedure.meshType.map((type, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {type === 'Other' && ventralHernia.procedure.meshPlacementOther 
-                        ? `Other: ${ventralHernia.procedure.meshPlacementOther}` 
-                        : type}
-                    </Badge>
-                  ))}
-                </div>
-                {ventralHernia.procedure.meshMaterial?.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    <span className="text-xs text-gray-600">Material:</span>
-                    {ventralHernia.procedure.meshMaterial.map((material, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {material === 'Other' && ventralHernia.procedure.meshMaterialOther 
-                          ? `Other: ${ventralHernia.procedure.meshMaterialOther}` 
-                          : material}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {(ventralHernia.procedure.meshLength || ventralHernia.procedure.meshWidth) && (
-                  <p className="text-xs text-gray-700">
-                    <span className="font-medium">Size:</span> {ventralHernia.procedure.meshLength || '___'} x {ventralHernia.procedure.meshWidth || '___'} cm
-                  </p>
-                )}
-                {ventralHernia.procedure.fixation?.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    <span className="text-xs text-gray-600">Fixation:</span>
-                    {ventralHernia.procedure.fixation.map((fix, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {fix === 'Other' && ventralHernia.procedure.fixationOther 
-                          ? `Other: ${ventralHernia.procedure.fixationOther}` 
-                          : fix}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {ventralHernia.procedure.primaryRepair?.length > 0 && (
-              <div className="ml-4 space-y-1">
-                <p className="text-xs font-medium text-gray-600">Primary Tissue Repair:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.procedure.primaryRepair.map((repair, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {repair === 'Other' && ventralHernia.procedure.primaryRepairOther 
-                        ? `Other: ${ventralHernia.procedure.primaryRepairOther}` 
-                        : repair}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ventralHernia.procedure.intraOperativeDifficulty?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Intra-Operative Difficulty:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.procedure.intraOperativeDifficulty.map((difficulty, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {difficulty === 'Other' && ventralHernia.procedure.intraOperativeDifficultyOther 
-                        ? `Other: ${ventralHernia.procedure.intraOperativeDifficultyOther}` 
-                        : difficulty}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {ventralHernia.procedure.complications?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Intraoperative Complications:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.procedure.complications.map((comp, index) => (
-                    <Badge key={index} variant="destructive" className="text-xs">
-                      {comp === 'Other' && ventralHernia.procedure.complicationOther 
-                        ? `Other: ${ventralHernia.procedure.complicationOther}` 
-                        : comp}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Closure Details */}
-        {(ventralHernia.procedure.haemostasis || ventralHernia.procedure.drain || 
-          ventralHernia.procedure.fascialClosure?.length > 0 || ventralHernia.procedure.skinClosure?.length > 0) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Haemostasis & Closure</h5>
-            {ventralHernia.procedure.haemostasis && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Haemostasis:</span> {ventralHernia.procedure.haemostasis}
-              </p>
-            )}
-            {ventralHernia.procedure.drain && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Drain:</span> {ventralHernia.procedure.drain}
-                {ventralHernia.procedure.drain === 'Yes' && ventralHernia.procedure.drainDetails && (
-                  <span> - {ventralHernia.procedure.drainDetails}</span>
-                )}
-              </p>
-            )}
-            {ventralHernia.procedure.fascialClosure?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs text-gray-700">
-                  <span className="font-medium">Fascial Closure:</span>
-                </p>
-                <div className="ml-2 flex flex-wrap gap-1">
-                  {ventralHernia.procedure.fascialClosure.map((closure, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {closure === 'Other' && ventralHernia.procedure.fascialClosureOther 
-                        ? `Other: ${ventralHernia.procedure.fascialClosureOther}` 
-                        : closure}
-                    </Badge>
-                  ))}
-                </div>
-                {ventralHernia.procedure.fascialClosureMaterial?.length > 0 && (
-                  <div className="ml-2 space-y-1">
-                    <p className="text-xs text-gray-600">Material Used:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {ventralHernia.procedure.fascialClosureMaterial.map((material, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {material === 'Other' && ventralHernia.procedure.fascialClosureMaterialOther 
-                            ? `Other: ${ventralHernia.procedure.fascialClosureMaterialOther}` 
-                            : material}
-                        </Badge>
-                      ))}
+                  )}
+                  {ventralHernia.operative.herniaSite?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Site of Hernia: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.herniaSite.map(site => 
+                          site === 'Other' && ventralHernia.operative.herniaSiteOther 
+                            ? ventralHernia.operative.herniaSiteOther
+                            : site
+                        ).join(', ')}
+                      </span>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-            {ventralHernia.procedure.skinClosure?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs text-gray-700">
-                  <span className="font-medium">Skin Closure:</span>
-                </p>
-                <div className="ml-2 flex flex-wrap gap-1">
-                  {ventralHernia.procedure.skinClosure.map((closure, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {closure === 'Other' && ventralHernia.procedure.skinClosureOther 
-                        ? `Other: ${ventralHernia.procedure.skinClosureOther}` 
-                        : closure}
-                    </Badge>
-                  ))}
-                </div>
-                {ventralHernia.procedure.skinClosureMaterial?.length > 0 && (
-                  <div className="ml-2 space-y-1">
-                    <p className="text-xs text-gray-600">Material Used:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {ventralHernia.procedure.skinClosureMaterial.map((material, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {material === 'Other' && ventralHernia.procedure.skinClosureMaterialOther 
-                            ? `Other: ${ventralHernia.procedure.skinClosureMaterialOther}` 
-                            : material}
-                        </Badge>
-                      ))}
+                  )}
+                  {(ventralHernia.operative.herniaDefectLength || ventralHernia.operative.herniaDefectWidth) && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Total Hernia Defect Size: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.herniaDefectLength || '___'} cm (Length) x {ventralHernia.operative.herniaDefectWidth || '___'} cm (Width)
+                      </span>
                     </div>
+                  )}
+                  {ventralHernia.operative.numberOfDefects && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Number of Defects: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.operative.numberOfDefects}</span>
+                    </div>
+                  )}
+                  {ventralHernia.operative.contents?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Contents: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.contents.map(content => 
+                          content === 'Other' && ventralHernia.operative.contentsOther 
+                            ? ventralHernia.operative.contentsOther
+                            : content
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.operative.strangulation && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Strangulation/Ischaemia: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.operative.strangulation}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* PROCEDURE DETAILS */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">PROCEDURE DETAILS</h5>
+                <div className="space-y-2">
+                  {ventralHernia.operative.operationDescription && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Operation Description: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.operative.operationDescription}</span>
+                    </div>
+                  )}
+                  {ventralHernia.operative.approach?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Surgical Approach: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.approach.map(approach => 
+                          approach === 'Other' && ventralHernia.operative.approachOther 
+                            ? ventralHernia.operative.approachOther
+                            : approach
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.operative.conversionReason?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Reason for Conversion: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.operative.conversionReason.map(reason => 
+                          reason === 'Other' && ventralHernia.operative.conversionReasonOther 
+                            ? ventralHernia.operative.conversionReasonOther
+                            : reason
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.operative.trocarNumber && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Trocar Number: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.operative.trocarNumber}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.sacExcised && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Sac Excised: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.sacExcised}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.fatDissected && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Pre-peritoneal Fat Dissected Off Sheath: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.fatDissected}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.defectClosed && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Hernia Defect Closed: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.defectClosed}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.closureTechnique?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Closure Technique: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.closureTechnique.map(technique => 
+                          technique === 'Other' && ventralHernia.procedure.closureTechniqueOther 
+                            ? ventralHernia.procedure.closureTechniqueOther
+                            : technique
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.closureMaterial?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Material Used: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.closureMaterial.map(material => 
+                          material === 'Other' && ventralHernia.procedure.closureMaterialOther 
+                            ? ventralHernia.procedure.closureMaterialOther
+                            : material
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.repairType && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Repair Type: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.repairType}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.primaryRepair?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Primary Tissue Repair: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.primaryRepair.map(repair => 
+                          repair === 'Other' && ventralHernia.procedure.primaryRepairOther 
+                            ? ventralHernia.procedure.primaryRepairOther
+                            : repair
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.meshType?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Mesh Placement: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.meshType.map(type => 
+                          type === 'Other' && ventralHernia.procedure.meshPlacementOther 
+                            ? ventralHernia.procedure.meshPlacementOther
+                            : type
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.meshMaterial?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Mesh Material: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.meshMaterial.map(material => 
+                          material === 'Other' && ventralHernia.procedure.meshMaterialOther 
+                            ? ventralHernia.procedure.meshMaterialOther
+                            : material
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {(ventralHernia.procedure.meshLength || ventralHernia.procedure.meshWidth) && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Mesh Size: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.meshLength || '___'} x {ventralHernia.procedure.meshWidth || '___'} cm</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.fixation?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Fixation: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.fixation.map(fix => 
+                          fix === 'Other' && ventralHernia.procedure.fixationOther 
+                            ? ventralHernia.procedure.fixationOther
+                            : fix
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* COMPLICATIONS */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">COMPLICATIONS</h5>
+                <div className="space-y-2">
+                  {ventralHernia.procedure.intraOperativeDifficulty?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Intra-Operative Difficulty: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.intraOperativeDifficulty.map(difficulty => 
+                          difficulty === 'Other' && ventralHernia.procedure.intraOperativeDifficultyOther 
+                            ? ventralHernia.procedure.intraOperativeDifficultyOther
+                            : difficulty
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.complications?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Intraoperative Complications: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.complications.map(comp => 
+                          comp === 'Other' && ventralHernia.procedure.complicationOther 
+                            ? ventralHernia.procedure.complicationOther
+                            : comp
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Right Column - Top: CLOSURE, Middle: SPECIMEN, Bottom: PORTS AND INCISIONS */}
+            <div className="space-y-6">
+              {/* CLOSURE */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">CLOSURE</h5>
+                <div className="space-y-2">
+                  {ventralHernia.procedure.haemostasis && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Haemostasis: </span>
+                      <span className="text-xs text-gray-700">{ventralHernia.procedure.haemostasis}</span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.drain && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Drain: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.drain}
+                        {ventralHernia.procedure.drain === 'Yes' && ventralHernia.procedure.drainDetails && (
+                          <span> - {ventralHernia.procedure.drainDetails}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.fascialClosure?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Fascial Closure: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.fascialClosure.map(closure => 
+                          closure === 'Other' && ventralHernia.procedure.fascialClosureOther 
+                            ? ventralHernia.procedure.fascialClosureOther
+                            : closure
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.fascialClosureMaterial?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Fascial Material Used: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.fascialClosureMaterial.map(material => 
+                          material === 'Other' && ventralHernia.procedure.fascialClosureMaterialOther 
+                            ? ventralHernia.procedure.fascialClosureMaterialOther
+                            : material
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.skinClosure?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Skin Closure: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.skinClosure.map(closure => 
+                          closure === 'Other' && ventralHernia.procedure.skinClosureOther 
+                            ? ventralHernia.procedure.skinClosureOther
+                            : closure
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {ventralHernia.procedure.skinClosureMaterial?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Skin Material Used: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.skinClosureMaterial.map(material => 
+                          material === 'Other' && ventralHernia.procedure.skinClosureMaterialOther 
+                            ? ventralHernia.procedure.skinClosureMaterialOther
+                            : material
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* SPECIMEN */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">SPECIMEN</h5>
+                <div className="space-y-2">
+                  {ventralHernia.procedure.specimenSent?.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-gray-600">Specimen Sent for Pathology: </span>
+                      <span className="text-xs text-gray-700">
+                        {ventralHernia.procedure.specimenSent.map(specimen => 
+                          specimen === 'Other' && ventralHernia.procedure.specimenOther 
+                            ? ventralHernia.procedure.specimenOther
+                            : specimen
+                        ).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  {(ventralHernia.procedure.specimenSent?.includes('Hernia Sac') || 
+                    ventralHernia.procedure.specimenSent?.includes('Other')) && 
+                    ventralHernia.procedure.laboratoryName && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-600">Specify Laboratory Sent to: </span>
+                        <span className="text-xs text-gray-700">{ventralHernia.procedure.laboratoryName}</span>
+                      </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* PORTS AND INCISIONS */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-600 mb-3">PORTS AND INCISIONS</h5>
+                {ventralHernia.procedureFindings && (ventralHernia.procedureFindings.findings || ventralHernia.procedureFindings.additionalNotes) && (
+                  <div className="space-y-2">
+                    {ventralHernia.procedureFindings.findings && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-600">Surgical Markings: </span>
+                        <span className="text-xs text-gray-700">Documented on anatomical diagram</span>
+                      </div>
+                    )}
+                    {ventralHernia.procedureFindings.additionalNotes && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-600">Diagram Notes: </span>
+                        <span className="text-xs text-gray-700">{ventralHernia.procedureFindings.additionalNotes}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-            {ventralHernia.procedure.specimenSent?.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-600">Specimen Sent:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ventralHernia.procedure.specimenSent.map((specimen, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {specimen === 'Other' && ventralHernia.procedure.specimenOther 
-                        ? `Other: ${ventralHernia.procedure.specimenOther}` 
-                        : specimen}
-                    </Badge>
-                  ))}
-                </div>
-                {(ventralHernia.procedure.specimenSent.includes('Hernia Sac') || 
-                  ventralHernia.procedure.specimenSent.includes('Other')) && 
-                  ventralHernia.procedure.laboratoryName && (
-                    <p className="text-xs text-gray-700 ml-2">
-                      <span className="font-medium">Laboratory Sent to:</span> {ventralHernia.procedure.laboratoryName}
-                    </p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Bottom separator line */}
+        <div className="border-t-2 border-gray-400 mt-6"></div>
+        
+        
+        
+        {/* NOTES and POST OPERATIVE MANAGEMENT Section */}
+        <div className="mt-6">
+          <div className="grid grid-cols-2 gap-6">
+            {/* Left Column - NOTES */}
+            <div>
+              <h5 className="text-xs font-bold text-gray-600 mb-3">NOTES</h5>
+              <div className="space-y-2">
+                {ventralHernia.procedure?.additionalNotes && (
+                  <div>
+                    <span className="text-xs font-medium text-gray-600">Additional Notes: </span>
+                    <span className="text-xs text-gray-700">{ventralHernia.procedure.additionalNotes}</span>
+                  </div>
                 )}
               </div>
-            )}
+            </div>
+            
+            {/* Right Column - POST OPERATIVE MANAGEMENT */}
+            <div>
+              <h5 className="text-xs font-bold text-gray-600 mb-3">POST OPERATIVE MANAGEMENT</h5>
+              <div className="space-y-2">
+                {ventralHernia.procedure?.postOperativeManagement && (
+                  <div>
+                    <span className="text-xs font-medium text-gray-600">Post Operative Management: </span>
+                    <span className="text-xs text-gray-700">{ventralHernia.procedure.postOperativeManagement}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        )}
-        
-        {/* Procedure Findings - Surgical Markings */}
-        {ventralHernia.procedureFindings && (ventralHernia.procedureFindings.findings || ventralHernia.procedureFindings.additionalNotes) && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Surgical Diagram & Notes</h5>
-            {ventralHernia.procedureFindings.findings && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Surgical Markings:</span> Documented on anatomical diagram
-              </p>
-            )}
-            {ventralHernia.procedureFindings.additionalNotes && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Additional Notes:</span> {ventralHernia.procedureFindings.additionalNotes}
-              </p>
-            )}
+          
+          {/* Signature Section */}
+          <div className="mt-6 pt-4 border-t border-gray-300">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="text-xs">
+                <span className="font-medium text-gray-600">Surgeon's Signature:</span>
+                <div className="mt-2 h-8 border-b border-gray-300"></div>
+              </div>
+              <div className="text-xs">
+                <span className="font-medium text-gray-600">Date & Time:</span>
+                <div className="mt-2 h-8 border-b border-gray-300"></div>
+              </div>
+            </div>
           </div>
-        )}
-        
-        {/* Additional Notes */}
-        {ventralHernia.procedure?.additionalNotes && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Additional Notes</h5>
-            <p className="text-xs text-gray-700">{ventralHernia.procedure.additionalNotes}</p>
-          </div>
-        )}
-        
-        {/* Post-operative Management */}
-        {ventralHernia.procedure?.postOperativeManagement && (
-          <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Post Operative Management</h5>
-            <p className="text-xs text-gray-700">{ventralHernia.procedure.postOperativeManagement}</p>
-          </div>
-        )}
+        </div>
         
         {/* Footer */}
         <div className="border-t pt-4 mt-6 text-center text-xs space-y-1">

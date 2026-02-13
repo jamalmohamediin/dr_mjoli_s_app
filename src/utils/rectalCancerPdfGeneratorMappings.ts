@@ -1,6 +1,15 @@
 // Mappings for the new rectal cancer data structure to PDF sections
 
 export const mapNewStructureToOld = (rectalCancerData: any) => {
+  const primaryApproachRaw = rectalCancerData.surgicalApproach?.primaryApproach;
+  const primaryApproachList = Array.isArray(primaryApproachRaw) 
+    ? primaryApproachRaw 
+    : primaryApproachRaw 
+      ? [primaryApproachRaw] 
+      : [];
+  const primaryApproachText = primaryApproachList.join(', ');
+  const isConvertedApproach = primaryApproachList.includes('Laparoscopic Converted To Open');
+
   return {
     ...rectalCancerData,
     // Map surgical team data
@@ -35,8 +44,8 @@ export const mapNewStructureToOld = (rectalCancerData: any) => {
     // Map surgical approach
     surgicalApproach: {
       ...rectalCancerData.surgicalApproach,
-      approach: rectalCancerData.surgicalApproach?.primaryApproach || rectalCancerData.surgicalApproach?.approach,
-      conversionToOpen: rectalCancerData.surgicalApproach?.primaryApproach === 'Laparoscopic Converted To Open' ? 'Yes' : 'No',
+      approach: primaryApproachText || rectalCancerData.surgicalApproach?.approach,
+      conversionToOpen: isConvertedApproach ? 'Yes' : 'No',
       conversionReason: rectalCancerData.surgicalApproach?.conversionReason || [],
       conversionReasonOther: rectalCancerData.surgicalApproach?.conversionReasonOther,
       resectionType: rectalCancerData.operationType?.rectumOperationType?.join(', ') || rectalCancerData.surgicalApproach?.resectionType

@@ -5,7 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo, Redo } from "lucide-react";
+import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/utils/dateFormatter";
 
@@ -15,8 +15,8 @@ interface RectalCancerFormProps {
   onSave?: (section: string) => void;
   onClear?: (section: string) => void;
   onClearAll?: () => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
+  onUndo?: (section: string) => void;
+  onRedo?: (section: string) => void;
   onExportPDF?: () => void;
   diagramElement?: React.ReactNode;
 }
@@ -31,9 +31,17 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
     operativeEvents: true
   });
 
+  
+
   // Helper function to check if Rectum is selected
   const isRectumSelected = () => {
     return currentReport.rectalCancer?.operationType?.type?.includes('Rectum');
+  };
+
+  const getPrimaryApproachList = () => {
+    const current = currentReport.rectalCancer?.surgicalApproach?.primaryApproach;
+    if (Array.isArray(current)) return current;
+    return current ? [current] : [];
   };
 
   // Helper function to check if Colon is selected
@@ -48,13 +56,15 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
 
   // Helper function to check if laparoscopic converted to open is selected
   const isLaparoscopicConverted = () => {
-    return currentReport.rectalCancer?.surgicalApproach?.primaryApproach === 'Laparoscopic Converted To Open';
+    return getPrimaryApproachList().includes('Laparoscopic Converted To Open');
   };
 
   // Helper function to check if trocar number should be shown
   const shouldShowTrocarNumber = () => {
-    const approach = currentReport.rectalCancer?.surgicalApproach?.primaryApproach;
-    return approach === 'Laparoscopic' || approach === 'Laparoscopic Converted To Open' || approach === 'Robotic';
+    const approaches = getPrimaryApproachList();
+    return approaches.some(approach => 
+      approach === 'Laparoscopic' || approach === 'Laparoscopic Converted To Open' || approach === 'Robotic'
+    );
   };
 
   // Helper function to check if anastomosis is selected
@@ -92,7 +102,10 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
 
   // Helper function to check if anal canal is selected for distal transection
   const isAnalCanalSelected = () => {
-    return currentReport.rectalCancer?.mobilizationAndResection?.distalTransection === 'Anal Canal';
+    const distalTransection = currentReport.rectalCancer?.mobilizationAndResection?.distalTransection;
+    return Array.isArray(distalTransection) 
+      ? distalTransection.includes('Anal Canal')
+      : distalTransection === 'Anal Canal';
   };
 
   // Helper function to check if specimen extraction is not none
@@ -175,40 +188,34 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.basicData ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('rectalCancerSection1')}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </Button>
-                )}
-                {onUndo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onUndo}
-                    className="flex items-center gap-1"
-                  >
-                    <Undo className="h-4 w-4" />
-                    Undo
-                  </Button>
-                )}
-                {onRedo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRedo}
-                    className="flex items-center gap-1"
-                  >
-                    <Redo className="h-4 w-4" />
-                    Redo
-                  </Button>
-                )}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onUndo && onUndo('patientInfo')}
+                  title="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onRedo && onRedo('patientInfo')}
+                  title="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  onClick={() => onClear && onClear('patientInfo')}
+                  title="Clear Section"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -237,10 +244,11 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Date Of Birth:</label>
+                    <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
                     <div className="w-full">
                       <Input 
                         type="date" 
+                        lang="en-GB"
                         value={currentReport.rectalCancer.patientInfo?.dateOfBirth || ''}
                         onChange={(e) => updateRectalCancer('patientInfo', 'dateOfBirth', e.target.value)}
                       />
@@ -598,31 +606,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                     </div>
                   </div>
 
-                  {/* Conditional Neoadjuvant Details */}
-                  {isNeoadjuvantYes() && !isRectumSelected() && (
-                    <div className="mt-3 ml-4 space-y-3">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Radiation Details:</label>
-                        <Input 
-                          type="text" 
-                          placeholder="e.g., Long course chemoradiation 50.4 Gy in 28 fractions" 
-                          className="mt-1"
-                          value={currentReport.rectalCancer?.operationType?.radiationDetails || ''}
-                          onChange={(e) => updateRectalCancer('operationType', 'radiationDetails', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700">Chemotherapy Regimen:</label>
-                        <Input 
-                          type="text" 
-                          placeholder="e.g., Capecitabine, 5-FU" 
-                          className="mt-1"
-                          value={currentReport.rectalCancer?.operationType?.chemotherapyRegimen || ''}
-                          onChange={(e) => updateRectalCancer('operationType', 'chemotherapyRegimen', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  )}
+                  {/* Conditional Neoadjuvant Details - Removed as requested */}
                 </div>
               </div>
 
@@ -863,18 +847,34 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.operativeFindings ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('operativeFindings')}
-                    className="px-3 py-1 text-xs"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Clear
-                  </Button>
-                )}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onUndo && onUndo('surgicalApproach')}
+                  title="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onRedo && onRedo('surgicalApproach')}
+                  title="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  onClick={() => onClear && onClear('surgicalApproach')}
+                  title="Clear Section"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -898,9 +898,13 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                     <div className="flex items-center" key={`approach-${approach}`}>
                       <Checkbox 
                         id={`approach-${approach}`}
-                        checked={currentReport.rectalCancer?.surgicalApproach?.primaryApproach === approach}
+                        checked={getPrimaryApproachList().includes(approach)}
                         onCheckedChange={(checked) => {
-                          updateRectalCancer('surgicalApproach', 'primaryApproach', checked ? approach : '');
+                          const current = getPrimaryApproachList();
+                          const updated = checked 
+                            ? Array.from(new Set([...current, approach]))
+                            : current.filter(item => item !== approach);
+                          updateRectalCancer('surgicalApproach', 'primaryApproach', updated);
                         }}
                       />
                       <label htmlFor={`approach-${approach}`} className="ml-2 text-sm">{approach}</label>
@@ -908,7 +912,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   ))}
                 </div>
                 
-                {currentReport.rectalCancer?.surgicalApproach?.primaryApproach === 'Other' && (
+                {getPrimaryApproachList().includes('Other') && (
                   <div className="mt-3 ml-4">
                     <Input 
                       type="text" 
@@ -1002,41 +1006,6 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.surgicalApproach ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('rectalCancerSection2')}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </Button>
-                )}
-                {onUndo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onUndo}
-                    className="flex items-center gap-1"
-                  >
-                    <Undo className="h-4 w-4" />
-                    Undo
-                  </Button>
-                )}
-                {onRedo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRedo}
-                    className="flex items-center gap-1"
-                  >
-                    <Redo className="h-4 w-4" />
-                    Redo
-                  </Button>
-                )}
-              </div>
             </div>
           </CardHeader>
           <CollapsibleContent>
@@ -1071,40 +1040,34 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.mobilizationResection ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('rectalCancerSection3')}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </Button>
-                )}
-                {onUndo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onUndo}
-                    className="flex items-center gap-1"
-                  >
-                    <Undo className="h-4 w-4" />
-                    Undo
-                  </Button>
-                )}
-                {onRedo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRedo}
-                    className="flex items-center gap-1"
-                  >
-                    <Redo className="h-4 w-4" />
-                    Redo
-                  </Button>
-                )}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onUndo && onUndo('mobilizationAndResection')}
+                  title="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onRedo && onRedo('mobilizationAndResection')}
+                  title="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  onClick={() => onClear && onClear('mobilizationAndResection')}
+                  title="Clear Section"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -1115,10 +1078,12 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                 <p className="text-sm font-medium text-gray-700 mb-2">Extent of Mobilization [Check all that apply]:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                   {[
+                    'Caecum',
                     'Ascending Colon',
                     'Hepatic Flexure',
                     'Splenic Flexure',
                     'Descending Colon',
+                    'Sigmoid Colon',
                     'Rectum',
                     'Other'
                   ].map(extent => (
@@ -1349,7 +1314,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                 {/* Anal Canal Transection Level (Conditional) */}
                 {isAnalCanalSelected() && (
                   <div className="mt-3 ml-6 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300">
-                    <p className="text-sm font-medium text-gray-700 mb-3">Anal Canal Transection level:</p>
+                    <p className="text-sm font-medium text-gray-700 mb-3">Anal Canal Transection Level:</p>
                     <div className="space-y-2">
                       {[
                         'Anorectal Junction',
@@ -1378,7 +1343,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                       <div className="mt-3">
                         <Input 
                           type="text" 
-                          placeholder="Specify other transection level" 
+                          placeholder="Please Specify" 
                           value={currentReport.rectalCancer?.mobilizationAndResection?.analCanalTransectionOther || ''}
                           onChange={(e) => updateRectalCancer('mobilizationAndResection', 'analCanalTransectionOther', e.target.value)}
                         />
@@ -1390,7 +1355,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
 
               {/* Excised En-Bloc resection */}
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Excised En-Bloc resection: [Check if removed with Primary Specimen]</p>
+                <p className="text-sm font-medium text-gray-700 mb-2">Excised En-Bloc Resection: [Check if removed with Primary Specimen]</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                   {[
                     'None',
@@ -1450,40 +1415,34 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.reconstruction ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('rectalCancerSection4')}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </Button>
-                )}
-                {onUndo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onUndo}
-                    className="flex items-center gap-1"
-                  >
-                    <Undo className="h-4 w-4" />
-                    Undo
-                  </Button>
-                )}
-                {onRedo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRedo}
-                    className="flex items-center gap-1"
-                  >
-                    <Redo className="h-4 w-4" />
-                    Redo
-                  </Button>
-                )}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onUndo && onUndo('reconstruction')}
+                  title="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onRedo && onRedo('reconstruction')}
+                  title="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  onClick={() => onClear && onClear('reconstruction')}
+                  title="Clear Section"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -1947,40 +1906,34 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
                   {expanded.operativeEvents ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                 </CardTitle>
               </CollapsibleTrigger>
-              <div className="flex gap-2 ml-4">
-                {onClear && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onClear('rectalCancerSection5')}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </Button>
-                )}
-                {onUndo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onUndo}
-                    className="flex items-center gap-1"
-                  >
-                    <Undo className="h-4 w-4" />
-                    Undo
-                  </Button>
-                )}
-                {onRedo && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRedo}
-                    className="flex items-center gap-1"
-                  >
-                    <Redo className="h-4 w-4" />
-                    Redo
-                  </Button>
-                )}
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onUndo && onUndo('operativeEvents')}
+                  title="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={() => onRedo && onRedo('operativeEvents')}
+                  title="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                  onClick={() => onClear && onClear('operativeEvents')}
+                  title="Clear Section"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -2567,7 +2520,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
               onClick={onUndo}
               className="flex items-center gap-2"
             >
-              <Undo className="h-5 w-5" />
+              <Undo2 className="h-5 w-5" />
               Undo
             </Button>
           )}
@@ -2578,7 +2531,7 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
               onClick={onRedo}
               className="flex items-center gap-2"
             >
-              <Redo className="h-5 w-5" />
+              <Redo2 className="h-5 w-5" />
               Redo
             </Button>
           )}

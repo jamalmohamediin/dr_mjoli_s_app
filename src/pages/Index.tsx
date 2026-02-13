@@ -29,6 +29,8 @@ import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 
 const Index = () => {
+  
+  
   const [currentReport, setCurrentReport] = useState({
     patientInfo: {} as any,
     gastroscopyFindings: { findings: [] } as any,
@@ -254,7 +256,7 @@ const Index = () => {
         completenessOfTumourResection: ''
       },
       surgicalApproach: {
-        primaryApproach: '',
+        primaryApproach: [] as string[],
         conversionReason: [],
         conversionReasonOther: ''
       },
@@ -464,6 +466,32 @@ const Index = () => {
     procedureFindings: 0
   });
 
+  // Ventral Hernia history management for undo/redo
+  const [ventralHerniaHistory, setVentralHerniaHistory] = useState({
+    patientInfo: [currentReport.ventralHernia?.patientInfo || {
+      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
+    }],
+    preoperative: [currentReport.ventralHernia?.preoperative || {
+      surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
+    }],
+    operative: [currentReport.ventralHernia?.operative || {
+      herniaType: [], herniaTypeOther: '', herniaSite: [], herniaSiteOther: '', herniaDefects: '', numberOfDefects: '', contents: [], contentsOther: '', strangulation: '', meshInSitu: '', approach: [], approachOther: '', conversionReason: [], conversionReasonOther: '', trocarNumber: '', operationDescription: ''
+    }],
+    procedure: [currentReport.ventralHernia?.procedure || {
+      dissection: '', sacExcised: '', fatDissected: '', defectClosed: '', closureTechnique: [], closureTechniqueOther: '', closureMaterial: [], closureMaterialOther: '', repairType: '', meshType: [], meshPlacementOther: '', meshMaterial: [], meshMaterialOther: '', meshLength: '', meshWidth: '', fixation: [], fixationOther: '', intraOperativeDifficulty: [], intraOperativeDifficultyOther: '', primaryRepair: [], primaryRepairOther: '', complications: [], complicationOther: '', haemostasis: '', drain: '', drainDetails: '', fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: '', specimenSent: [], specimenOther: '', laboratoryName: '', additionalNotes: '', postOperativeManagement: ''
+    }],
+    procedureFindings: [currentReport.ventralHernia?.procedureFindings || {
+      findings: '', additionalNotes: ''
+    }]
+  });
+  const [ventralHerniaHistoryIndex, setVentralHerniaHistoryIndex] = useState({
+    patientInfo: 0,
+    preoperative: 0,
+    operative: 0,
+    procedure: 0,
+    procedureFindings: 0
+  });
+
   // Ventral Hernia specific state
   const [herniaActiveSection, setHerniaActiveSection] = useState("section1");
   const [herniaExpanded, setHerniaExpanded] = useState({
@@ -477,6 +505,94 @@ const Index = () => {
   // Ventral Hernia repair type states
   const [herniaPrimaryClosure, setHerniaPrimaryClosure] = useState(false);
   const [herniaMeshRepair, setHerniaMeshRepair] = useState(false);
+
+  // Endoscopy history management for undo/redo
+  const [endoscopyHistory, setEndoscopyHistory] = useState({
+    patientInfo: [currentReport.patientInfo || {}],
+    procedureInfo: [{ 
+      selectedProcedures: currentReport.selectedProcedures || [],
+      procedure: currentReport.procedure || {},
+      gastroscopyCanvasData: currentReport.gastroscopyCanvasData || '',
+      colonoscopyCanvasData: currentReport.colonoscopyCanvasData || ''
+    }],
+    procedureTypes: [{ 
+      gastroscopyFindings: currentReport.gastroscopyFindings || { findings: [] },
+      colonoscopyFindings: currentReport.colonoscopyFindings || { findings: [] },
+      procedureFindings: currentReport.procedureFindings || { findings: '', additionalNotes: '' }
+    }],
+    specimen: [currentReport.specimen || {
+      sentForPathology: '', laboratoryName: '', otherSpecimensTaken: '', otherSpecimensDetails: ''
+    }]
+  });
+  const [endoscopyHistoryIndex, setEndoscopyHistoryIndex] = useState({
+    patientInfo: 0,
+    procedureInfo: 0,
+    procedureTypes: 0,
+    specimen: 0
+  });
+
+  // Rectal Cancer history management for undo/redo
+  const [rectalCancerHistory, setRectalCancerHistory] = useState({
+    patientInfo: [currentReport.rectalCancer?.patientInfo || {
+      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
+    }],
+    operationType: [currentReport.rectalCancer?.operationType || {
+      type: [], typeOther: '', neoadjuvantTreatment: '', neoadjuvantDetails: ''
+    }],
+    surgicalApproach: [currentReport.rectalCancer?.surgicalApproach || {
+      primaryApproach: [], conversionReason: [], conversionReasonOther: '', trocarNumber: ''
+    }],
+    mobilizationAndResection: [currentReport.rectalCancer?.mobilizationAndResection || {
+      extentOfMobilization: [],
+      extentOfMobilizationOther: '',
+      vesselLigation: [],
+      vesselLigationOther: '',
+      imvLigation: '',
+      hemostasisTechnique: [],
+      hemostasisTechniqueOther: '',
+      lymphNodeDissection: '',
+      lymphNodeDissectionOther: '',
+      proximalTransection: [],
+      proximalTransectionOther: '',
+      distalTransection: [],
+      distalTransectionOther: '',
+      analCanalTransection: [],
+      analCanalTransectionOther: '',
+      enBlocResection: [],
+      enBlocResectionOther: '',
+      mobilization: [],
+      mobilizationOther: '',
+      mesorectalExcision: [],
+      mesorectalExcisionOther: '',
+      distanceFromAnalVerge: ''
+    }],
+    reconstruction: [currentReport.rectalCancer?.reconstruction || {
+      reconstructionType: [], anastomosisDetails: {}, stomaDetails: {}, reconstructionOther: ''
+    }],
+    operativeEvents: [currentReport.rectalCancer?.operativeEvents || {
+      intraoperativeComplications: [], intraoperativeComplicationsOther: '', drainInsertion: '', drainDetails: '', specimenExtraction: '', extractionSite: '', additionalProcedures: []
+    }],
+    closure: [currentReport.rectalCancer?.closure || {
+      fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: ''
+    }],
+    procedureDetails: [currentReport.rectalCancer?.procedureDetails || {
+      surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', additionalNotes: '', postOperativeManagement: ''
+    }],
+    procedureFindings: [currentReport.rectalCancer?.procedureFindings || {
+      findings: '', additionalNotes: ''
+    }]
+  });
+  const [rectalCancerHistoryIndex, setRectalCancerHistoryIndex] = useState({
+    patientInfo: 0,
+    operationType: 0,
+    surgicalApproach: 0,
+    mobilizationAndResection: 0,
+    reconstruction: 0,
+    operativeEvents: 0,
+    closure: 0,
+    procedureDetails: 0,
+    procedureFindings: 0
+  });
 
   // Rectal Cancer specific state
   const [rectalActiveSection, setRectalActiveSection] = useState("section1");
@@ -522,6 +638,10 @@ const Index = () => {
       setTempFollowUpNotes(currentReport.followUp?.notes || '');
     }
   }, [currentReport.followUp, isEditingFollowUp, tempFollowUpOther, tempFollowUpNotes]);
+
+  
+
+  
   
   const gastroscopyDiagramRef = useRef<HTMLCanvasElement>(null);
   const colonoscopyDiagramRef = useRef<HTMLCanvasElement>(null);
@@ -560,41 +680,34 @@ const Index = () => {
       toast.success('Redone');
     }
   };
-  
-  // Section-specific history for endoscopy (copying Appendectomy pattern)
-  const [endoscopyHistory, setEndoscopyHistory] = useState({
-    patientInfo: [{}],
-    procedureInfo: [{}],
-    gastroscopyFindings: [{ findings: [] }],
-    colonoscopyFindings: [{ findings: [] }],
-    specimen: [{}],
-    conclusion: [''],
-    followUp: [{}],
-    signature: [{}]
-  });
-
-  const [endoscopyHistoryIndex, setEndoscopyHistoryIndex] = useState({
-    patientInfo: 0,
-    procedureInfo: 0,
-    gastroscopyFindings: 0,
-    colonoscopyFindings: 0,
-    specimen: 0,
-    conclusion: 0,
-    followUp: 0,
-    signature: 0
-  });
-
-  // Section-specific undo/redo functions for endoscopy (copying Appendectomy pattern)
+  // Section-specific undo/redo functions for endoscopy
   const undoEndoscopy = (section: string) => {
     const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
     if (currentIndex > 0) {
       const newIndex = currentIndex - 1;
       const previousState = endoscopyHistory[section as keyof typeof endoscopyHistory][newIndex];
       
-      setCurrentReport(prev => ({
-        ...prev,
-        [section]: JSON.parse(JSON.stringify(previousState))
-      }));
+      // Update current report based on section
+      setCurrentReport(prev => {
+        const updated = { ...prev };
+        
+        if (section === 'patientInfo') {
+          updated.patientInfo = JSON.parse(JSON.stringify(previousState));
+        } else if (section === 'procedureInfo') {
+          updated.selectedProcedures = previousState.selectedProcedures || [];
+          updated.procedure = previousState.procedure || {};
+          updated.gastroscopyCanvasData = previousState.gastroscopyCanvasData || '';
+          updated.colonoscopyCanvasData = previousState.colonoscopyCanvasData || '';
+        } else if (section === 'procedureTypes') {
+          updated.gastroscopyFindings = previousState.gastroscopyFindings || { findings: [] };
+          updated.colonoscopyFindings = previousState.colonoscopyFindings || { findings: [] };
+          updated.procedureFindings = previousState.procedureFindings || { findings: '', additionalNotes: '' };
+        } else if (section === 'specimen') {
+          updated.specimen = JSON.parse(JSON.stringify(previousState));
+        }
+        
+        return updated;
+      });
       
       setEndoscopyHistoryIndex(prev => ({
         ...prev,
@@ -607,16 +720,33 @@ const Index = () => {
 
   const redoEndoscopy = (section: string) => {
     const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
-    const historyArray = endoscopyHistory[section as keyof typeof endoscopyHistory];
+    const maxIndex = (endoscopyHistory[section as keyof typeof endoscopyHistory] || []).length - 1;
     
-    if (currentIndex < historyArray.length - 1) {
+    if (currentIndex < maxIndex) {
       const newIndex = currentIndex + 1;
-      const nextState = historyArray[newIndex];
+      const nextState = endoscopyHistory[section as keyof typeof endoscopyHistory][newIndex];
       
-      setCurrentReport(prev => ({
-        ...prev,
-        [section]: JSON.parse(JSON.stringify(nextState))
-      }));
+      // Update current report based on section
+      setCurrentReport(prev => {
+        const updated = { ...prev };
+        
+        if (section === 'patientInfo') {
+          updated.patientInfo = JSON.parse(JSON.stringify(nextState));
+        } else if (section === 'procedureInfo') {
+          updated.selectedProcedures = nextState.selectedProcedures || [];
+          updated.procedure = nextState.procedure || {};
+          updated.gastroscopyCanvasData = nextState.gastroscopyCanvasData || '';
+          updated.colonoscopyCanvasData = nextState.colonoscopyCanvasData || '';
+        } else if (section === 'procedureTypes') {
+          updated.gastroscopyFindings = nextState.gastroscopyFindings || { findings: [] };
+          updated.colonoscopyFindings = nextState.colonoscopyFindings || { findings: [] };
+          updated.procedureFindings = nextState.procedureFindings || { findings: '', additionalNotes: '' };
+        } else if (section === 'specimen') {
+          updated.specimen = JSON.parse(JSON.stringify(nextState));
+        }
+        
+        return updated;
+      });
       
       setEndoscopyHistoryIndex(prev => ({
         ...prev,
@@ -627,23 +757,67 @@ const Index = () => {
     }
   };
 
-  const addToEndoscopyHistory = (section: string, data: any) => {
-    const currentIndex = endoscopyHistoryIndex[section as keyof typeof endoscopyHistoryIndex];
-    const currentHistory = endoscopyHistory[section as keyof typeof endoscopyHistory];
+  const clearEndoscopy = (section: string) => {
+    let initialState: any = {};
     
-    // Remove any history after current index and add new state
-    const newHistory = currentHistory.slice(0, currentIndex + 1);
-    newHistory.push(JSON.parse(JSON.stringify(data)));
-    
-    setEndoscopyHistory(prev => ({
-      ...prev,
-      [section]: newHistory
+    if (section === 'patientInfo') {
+      initialState = {};
+    } else if (section === 'procedureInfo') {
+      initialState = {
+        selectedProcedures: [],
+        procedure: {},
+        gastroscopyCanvasData: '',
+        colonoscopyCanvasData: ''
+      };
+    } else if (section === 'procedureTypes') {
+      initialState = {
+        gastroscopyFindings: { findings: [] },
+        colonoscopyFindings: { findings: [] },
+        procedureFindings: { findings: '', additionalNotes: '' }
+      };
+    } else if (section === 'specimen') {
+      initialState = {
+        sentForPathology: '',
+        laboratoryName: '',
+        otherSpecimensTaken: '',
+        otherSpecimensDetails: ''
+      };
+    }
+
+    // Update current report
+    setCurrentReport(prev => {
+      const updated = { ...prev };
+      
+      if (section === 'patientInfo') {
+        updated.patientInfo = initialState;
+      } else if (section === 'procedureInfo') {
+        updated.selectedProcedures = initialState.selectedProcedures;
+        updated.procedure = initialState.procedure;
+        updated.gastroscopyCanvasData = initialState.gastroscopyCanvasData;
+        updated.colonoscopyCanvasData = initialState.colonoscopyCanvasData;
+      } else if (section === 'procedureTypes') {
+        updated.gastroscopyFindings = initialState.gastroscopyFindings;
+        updated.colonoscopyFindings = initialState.colonoscopyFindings;
+        updated.procedureFindings = initialState.procedureFindings;
+      } else if (section === 'specimen') {
+        updated.specimen = initialState;
+      }
+      
+      return updated;
+    });
+
+    // Add cleared state to history
+    setEndoscopyHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), initialState]
     }));
-    
+
     setEndoscopyHistoryIndex(prev => ({
       ...prev,
-      [section]: newHistory.length - 1
+      [section]: (endoscopyHistory[section as keyof typeof endoscopyHistory] || []).length
     }));
+
+    toast.success(`${section} section cleared`);
   };
 
   // Clear specific endoscopy section (enhanced to manage section history)
@@ -713,6 +887,73 @@ const Index = () => {
     }));
     
     toast.success(`${section} cleared`);
+  };
+
+  const clearAllEndoscopyData = () => {
+    const initialEndoscopyData = {
+      patientInfo: {},
+      procedureInfo: {},
+      gastroscopyFindings: { findings: [] },
+      colonoscopyFindings: { findings: [] },
+      specimen: {
+        sentForPathology: '',
+        laboratoryName: '',
+        otherSpecimensTaken: '',
+        otherSpecimensDetails: ''
+      },
+      conclusion: '',
+      followUp: {
+        enabled: false,
+        options: [],
+        other: '',
+        notes: '',
+        postOperativeManagement: ''
+      },
+      signature: {
+        surgeonSignature: '',
+        surgeonSignatureText: '',
+        dateTime: ''
+      },
+      media: [],
+      notes: '',
+      selectedProcedures: [],
+      gastroscopyCanvasData: '',
+      colonoscopyCanvasData: '',
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      ...initialEndoscopyData
+    }));
+
+    // Reset all history to initial states
+    setEndoscopyHistory({
+      patientInfo: [{}],
+      procedureInfo: [{}],
+      gastroscopyFindings: [{ findings: [] }],
+      colonoscopyFindings: [{ findings: [] }],
+      specimen: [{}],
+      conclusion: [''],
+      followUp: [{}],
+      signature: [{}]
+    });
+
+    setEndoscopyHistoryIndex({
+      patientInfo: 0,
+      procedureInfo: 0,
+      gastroscopyFindings: 0,
+      colonoscopyFindings: 0,
+      specimen: 0,
+      conclusion: 0,
+      followUp: 0,
+      signature: 0
+    });
+
+    toast.success("All endoscopy data cleared successfully!");
   };
   
   // Auto-save functionality with shorter debouncing for better user experience
@@ -955,6 +1196,68 @@ const Index = () => {
         } as typeof prev;
         setTimeout(() => {
           addToHistory(next);
+          
+          // Also track endoscopy section history for section-specific undo/redo
+          if (section === 'patientInfo') {
+            setEndoscopyHistory(prevHistory => {
+              const newHistory = [...(prevHistory.patientInfo || []), next.patientInfo];
+              setEndoscopyHistoryIndex(prev => ({
+                ...prev,
+                patientInfo: newHistory.length - 1
+              }));
+              return {
+                ...prevHistory,
+                patientInfo: newHistory
+              };
+            });
+          } else if (section === 'selectedProcedures' || section === 'gastroscopyCanvasData' || section === 'colonoscopyCanvasData') {
+            const procedureData = {
+              selectedProcedures: next.selectedProcedures || [],
+              procedure: next.procedure || {},
+              gastroscopyCanvasData: next.gastroscopyCanvasData || '',
+              colonoscopyCanvasData: next.colonoscopyCanvasData || ''
+            };
+            setEndoscopyHistory(prevHistory => {
+              const newHistory = [...(prevHistory.procedureInfo || []), procedureData];
+              setEndoscopyHistoryIndex(prev => ({
+                ...prev,
+                procedureInfo: newHistory.length - 1
+              }));
+              return {
+                ...prevHistory,
+                procedureInfo: newHistory
+              };
+            });
+          } else if (section === 'gastroscopyFindings' || section === 'colonoscopyFindings' || section === 'procedureFindings') {
+            const findingsData = {
+              gastroscopyFindings: next.gastroscopyFindings || { findings: [] },
+              colonoscopyFindings: next.colonoscopyFindings || { findings: [] },
+              procedureFindings: next.procedureFindings || { findings: '', additionalNotes: '' }
+            };
+            setEndoscopyHistory(prevHistory => {
+              const newHistory = [...(prevHistory.procedureTypes || []), findingsData];
+              setEndoscopyHistoryIndex(prev => ({
+                ...prev,
+                procedureTypes: newHistory.length - 1
+              }));
+              return {
+                ...prevHistory,
+                procedureTypes: newHistory
+              };
+            });
+          } else if (section === 'specimen') {
+            setEndoscopyHistory(prevHistory => {
+              const newHistory = [...(prevHistory.specimen || []), next.specimen];
+              setEndoscopyHistoryIndex(prev => ({
+                ...prev,
+                specimen: newHistory.length - 1
+              }));
+              return {
+                ...prevHistory,
+                specimen: newHistory
+              };
+            });
+          }
         }, 0);
         return next;
       });
@@ -1064,7 +1367,7 @@ const Index = () => {
 
   const redoAppendectomy = (section: keyof typeof appendectomyHistory) => {
     const currentIndex = appendectomyHistoryIndex[section];
-    const maxIndex = appendectomyHistory[section].length - 1;
+    const maxIndex = (appendectomyHistory[section] || []).length - 1;
     
     if (currentIndex < maxIndex) {
       const newIndex = currentIndex + 1;
@@ -1162,15 +1465,466 @@ const Index = () => {
     // Add cleared state to history
     setAppendectomyHistory(prevHistory => ({
       ...prevHistory,
-      [section]: [...prevHistory[section], initialState[section]]
+      [section]: [...(prevHistory[section] || []), initialState[section]]
     }));
 
     setAppendectomyHistoryIndex(prev => ({
       ...prev,
-      [section]: appendectomyHistory[section].length
+      [section]: (appendectomyHistory[section] || []).length
     }));
 
     toast.success(`${section} section cleared`);
+  };
+
+  // Ventral Hernia undo/redo/clear functions
+  const undoVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
+    const currentIndex = ventralHerniaHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = ventralHerniaHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        ventralHernia: {
+          ...prev.ventralHernia,
+          [section]: previousState
+        }
+      }));
+      
+      setVentralHerniaHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} undo successful`);
+    }
+  };
+
+  const redoVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
+    const currentIndex = ventralHerniaHistoryIndex[section];
+    const maxIndex = (ventralHerniaHistory[section] || []).length - 1;
+    
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = ventralHerniaHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        ventralHernia: {
+          ...prev.ventralHernia,
+          [section]: nextState
+        }
+      }));
+      
+      setVentralHerniaHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} redo successful`);
+    }
+  };
+
+  const clearVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
+    const initialState = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      preoperative: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        indication: [],
+        indicationOther: '',
+        imaging: [],
+        imagingOther: ''
+      },
+      operative: {
+        herniaType: [],
+        herniaTypeOther: '',
+        herniaSite: [],
+        herniaSiteOther: '',
+        herniaDefects: '',
+        numberOfDefects: '',
+        contents: [],
+        contentsOther: '',
+        strangulation: '',
+        meshInSitu: '',
+        approach: [],
+        approachOther: '',
+        conversionReason: [],
+        conversionReasonOther: '',
+        trocarNumber: '',
+        operationDescription: ''
+      },
+      procedure: {
+        dissection: '',
+        sacExcised: '',
+        fatDissected: '',
+        defectClosed: '',
+        closureTechnique: [],
+        closureTechniqueOther: '',
+        closureMaterial: [],
+        closureMaterialOther: '',
+        repairType: '',
+        meshType: [],
+        meshPlacementOther: '',
+        meshMaterial: [],
+        meshMaterialOther: '',
+        meshLength: '',
+        meshWidth: '',
+        fixation: [],
+        fixationOther: '',
+        intraOperativeDifficulty: [],
+        intraOperativeDifficultyOther: '',
+        primaryRepair: [],
+        primaryRepairOther: '',
+        complications: [],
+        complicationOther: '',
+        haemostasis: '',
+        drain: '',
+        drainDetails: '',
+        fascialClosure: [],
+        fascialClosureOther: '',
+        fascialClosureMaterial: [],
+        fascialClosureMaterialOther: '',
+        skinClosure: [],
+        skinClosureOther: '',
+        skinClosureMaterial: [],
+        skinClosureMaterialOther: '',
+        specimenSent: [],
+        specimenOther: '',
+        laboratoryName: '',
+        additionalNotes: '',
+        postOperativeManagement: ''
+      },
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      ventralHernia: {
+        ...prev.ventralHernia,
+        [section]: initialState[section]
+      }
+    }));
+
+    // Add cleared state to history
+    setVentralHerniaHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section] || []), initialState[section]]
+    }));
+
+    setVentralHerniaHistoryIndex(prev => ({
+      ...prev,
+      [section]: (ventralHerniaHistory[section] || []).length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  // Rectal Cancer undo/redo/clear functions
+  const undoRectalCancer = (section: keyof typeof rectalCancerHistory) => {
+    const currentIndex = rectalCancerHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = rectalCancerHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        rectalCancer: {
+          ...prev.rectalCancer,
+          [section]: previousState
+        }
+      }));
+      
+      setRectalCancerHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} undo successful`);
+    }
+  };
+
+  const redoRectalCancer = (section: keyof typeof rectalCancerHistory) => {
+    const currentIndex = rectalCancerHistoryIndex[section];
+    const maxIndex = (rectalCancerHistory[section] || []).length - 1;
+    
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = rectalCancerHistory[section][newIndex];
+      
+      setCurrentReport(prev => ({
+        ...prev,
+        rectalCancer: {
+          ...prev.rectalCancer,
+          [section]: nextState
+        }
+      }));
+      
+      setRectalCancerHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+      
+      toast.success(`${section} redo successful`);
+    }
+  };
+
+  const clearRectalCancer = (section: keyof typeof rectalCancerHistory) => {
+    const initialState = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      operationType: {
+        type: [],
+        typeOther: '',
+        neoadjuvantTreatment: '',
+        neoadjuvantDetails: ''
+      },
+      surgicalApproach: {
+        primaryApproach: [],
+        conversionReason: [],
+        conversionReasonOther: '',
+        trocarNumber: ''
+      },
+      mobilizationAndResection: {
+        extentOfMobilization: [],
+        extentOfMobilizationOther: '',
+        vesselLigation: [],
+        vesselLigationOther: '',
+        imvLigation: '',
+        hemostasisTechnique: [],
+        hemostasisTechniqueOther: '',
+        lymphNodeDissection: '',
+        lymphNodeDissectionOther: '',
+        proximalTransection: [],
+        proximalTransectionOther: '',
+        distalTransection: [],
+        distalTransectionOther: '',
+        analCanalTransection: [],
+        analCanalTransectionOther: '',
+        enBlocResection: [],
+        enBlocResectionOther: '',
+        mobilization: [],
+        mobilizationOther: '',
+        mesorectalExcision: [],
+        mesorectalExcisionOther: '',
+        distanceFromAnalVerge: ''
+      },
+      reconstruction: {
+        reconstructionType: [],
+        anastomosisDetails: {},
+        stomaDetails: {},
+        reconstructionOther: ''
+      },
+      operativeEvents: {
+        intraoperativeComplications: [],
+        intraoperativeComplicationsOther: '',
+        drainInsertion: '',
+        drainDetails: '',
+        specimenExtraction: '',
+        extractionSite: '',
+        additionalProcedures: []
+      },
+      closure: {
+        fascialClosure: [],
+        fascialClosureOther: '',
+        fascialClosureMaterial: [],
+        fascialClosureMaterialOther: '',
+        skinClosure: [],
+        skinClosureOther: '',
+        skinClosureMaterial: [],
+        skinClosureMaterialOther: ''
+      },
+      procedureDetails: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        additionalNotes: '',
+        postOperativeManagement: ''
+      },
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      rectalCancer: {
+        ...prev.rectalCancer,
+        [section]: initialState[section]
+      }
+    }));
+
+    // Add cleared state to history
+    setRectalCancerHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section] || []), initialState[section]]
+    }));
+
+    setRectalCancerHistoryIndex(prev => ({
+      ...prev,
+      [section]: (rectalCancerHistory[section] || []).length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  const clearAllRectalCancerData = () => {
+    const initialRectalCancer = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      operationType: {
+        type: [],
+        typeOther: '',
+        neoadjuvantTreatment: '',
+        neoadjuvantDetails: ''
+      },
+      surgicalApproach: {
+        primaryApproach: [],
+        conversionReason: [],
+        conversionReasonOther: '',
+        trocarNumber: ''
+      },
+      mobilizationAndResection: {
+        extentOfMobilization: [],
+        extentOfMobilizationOther: '',
+        vesselLigation: [],
+        vesselLigationOther: '',
+        imvLigation: '',
+        hemostasisTechnique: [],
+        hemostasisTechniqueOther: '',
+        lymphNodeDissection: '',
+        lymphNodeDissectionOther: '',
+        proximalTransection: [],
+        proximalTransectionOther: '',
+        distalTransection: [],
+        distalTransectionOther: '',
+        analCanalTransection: [],
+        analCanalTransectionOther: '',
+        enBlocResection: [],
+        enBlocResectionOther: '',
+        mobilization: [],
+        mobilizationOther: '',
+        mesorectalExcision: [],
+        mesorectalExcisionOther: '',
+        distanceFromAnalVerge: ''
+      },
+      reconstruction: {
+        reconstructionType: [],
+        anastomosisDetails: {},
+        stomaDetails: {},
+        reconstructionOther: ''
+      },
+      operativeEvents: {
+        intraoperativeComplications: [],
+        intraoperativeComplicationsOther: '',
+        drainInsertion: '',
+        drainDetails: '',
+        specimenExtraction: '',
+        extractionSite: '',
+        additionalProcedures: []
+      },
+      closure: {
+        fascialClosure: [],
+        fascialClosureOther: '',
+        fascialClosureMaterial: [],
+        fascialClosureMaterialOther: '',
+        skinClosure: [],
+        skinClosureOther: '',
+        skinClosureMaterial: [],
+        skinClosureMaterialOther: ''
+      },
+      procedureDetails: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        additionalNotes: '',
+        postOperativeManagement: ''
+      },
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      rectalCancer: initialRectalCancer
+    }));
+
+    // Reset all history to initial states
+    setRectalCancerHistory({
+      patientInfo: [initialRectalCancer.patientInfo],
+      operationType: [initialRectalCancer.operationType],
+      surgicalApproach: [initialRectalCancer.surgicalApproach],
+      mobilizationAndResection: [initialRectalCancer.mobilizationAndResection],
+      reconstruction: [initialRectalCancer.reconstruction],
+      operativeEvents: [initialRectalCancer.operativeEvents],
+      closure: [initialRectalCancer.closure],
+      procedureDetails: [initialRectalCancer.procedureDetails],
+      procedureFindings: [initialRectalCancer.procedureFindings]
+    });
+
+    setRectalCancerHistoryIndex({
+      patientInfo: 0,
+      operationType: 0,
+      surgicalApproach: 0,
+      mobilizationAndResection: 0,
+      reconstruction: 0,
+      operativeEvents: 0,
+      closure: 0,
+      procedureDetails: 0,
+      procedureFindings: 0
+    });
+
+    toast.success("All rectal cancer data cleared successfully!");
   };
 
   const clearAllAppendectomyData = () => {
@@ -1265,6 +2019,93 @@ const Index = () => {
     });
 
     toast.success('All appendectomy data cleared');
+  };
+
+  const clearAllVentralHerniaData = () => {
+    const initialVentralHernia = {
+      patientInfo: {
+        name: '',
+        patientId: '',
+        dateOfBirth: '',
+        age: '',
+        sex: '',
+        sexOther: '',
+        weight: '',
+        height: '',
+        bmi: '',
+        asaScore: '',
+        asaNotes: ''
+      },
+      preoperative: {
+        surgeons: [''],
+        assistants: [''],
+        anaesthetists: [''],
+        duration: '',
+        startTime: '',
+        endTime: '',
+        indication: [],
+        indicationOther: '',
+        imaging: [],
+        imagingOther: ''
+      },
+      operative: {
+        approach: [],
+        reasonForConversion: '',
+        trocarNumber: '',
+        herniaType: [],
+        herniaTypeOther: '',
+        defectLocation: [],
+        defectLocationOther: '',
+        defectSize: {
+          length: '',
+          width: '',
+          area: ''
+        },
+        contentsOfHernia: [],
+        contentsOfHerniaOther: '',
+        complications: [],
+        complicationsOther: ''
+      },
+      procedure: {
+        meshUsed: '',
+        meshType: '',
+        meshSize: '',
+        meshPosition: [],
+        meshPositionOther: '',
+        fixationMethod: [],
+        fixationMethodOther: '',
+        adhesiolysis: '',
+        adhesiolysisNotes: ''
+      },
+      procedureFindings: {
+        findings: '',
+        additionalNotes: ''
+      }
+    };
+
+    setCurrentReport(prev => ({
+      ...prev,
+      ventralHernia: initialVentralHernia
+    }));
+
+    // Reset all history to initial states
+    setVentralHerniaHistory({
+      patientInfo: [initialVentralHernia.patientInfo],
+      preoperative: [initialVentralHernia.preoperative],
+      operative: [initialVentralHernia.operative],
+      procedure: [initialVentralHernia.procedure],
+      procedureFindings: [initialVentralHernia.procedureFindings]
+    });
+
+    setVentralHerniaHistoryIndex({
+      patientInfo: 0,
+      preoperative: 0,
+      operative: 0,
+      procedure: 0,
+      procedureFindings: 0
+    });
+
+    toast.success("All ventral hernia data cleared successfully!");
   };
 
   // Handle clearing endoscopy data (section-specific or all)
@@ -1437,6 +2278,17 @@ const Index = () => {
         }
       }
 
+      // Add to history for undo/redo functionality
+      setVentralHerniaHistory(prevHistory => ({
+        ...prevHistory,
+        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newVentralHernia[section]]
+      }));
+
+      setVentralHerniaHistoryIndex(prev => ({
+        ...prev,
+        [section]: (ventralHerniaHistory[section as keyof typeof ventralHerniaHistory] || []).length
+      }));
+
       return {
         ...prev,
         ventralHernia: newVentralHernia
@@ -1472,6 +2324,17 @@ const Index = () => {
           newRectalCancer.patientInfo.age = age;
         }
       }
+
+      // Add to history for undo/redo functionality
+      setRectalCancerHistory(prevHistory => ({
+        ...prevHistory,
+        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newRectalCancer[section]]
+      }));
+
+      setRectalCancerHistoryIndex(prev => ({
+        ...prev,
+        [section]: (rectalCancerHistory[section as keyof typeof rectalCancerHistory] || []).length
+      }));
 
       return {
         ...prev,
@@ -2002,7 +2865,7 @@ const Index = () => {
                             variant="ghost" 
                             size="sm" 
                             className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                            onClick={() => clearEndoscopySection('patientInfo')}
+                            onClick={() => clearEndoscopy('patientInfo')}
                             title="Clear Section"
                           >
                             <RotateCcw className="h-4 w-4" />
@@ -2147,7 +3010,7 @@ const Index = () => {
                                 variant="ghost" 
                                 size="sm" 
                                 className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                                onClick={() => clearEndoscopySection('procedureInfo')}
+                                onClick={() => clearEndoscopy('procedureInfo')}
                                 title="Clear Section"
                               >
                                 <RotateCcw className="h-4 w-4" />
@@ -2188,7 +3051,7 @@ const Index = () => {
                           variant="ghost" 
                           size="sm" 
                           className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          onClick={() => clearEndoscopySection('procedureTypes')}
+                          onClick={() => clearEndoscopy('procedureTypes')}
                           title="Clear Section"
                         >
                           <RotateCcw className="h-4 w-4" />
@@ -2275,7 +3138,7 @@ const Index = () => {
                               variant="ghost" 
                               size="sm" 
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                              onClick={() => clearEndoscopySection('specimen')}
+                              onClick={() => clearEndoscopy('specimen')}
                               title="Clear Section"
                             >
                               <RotateCcw className="h-4 w-4" />
@@ -2624,80 +3487,71 @@ const Index = () => {
                               />
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
 
-                    {/* Surgeon Signature Section */}
-                    <Card className="glass-card-light">
-                      <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                          <span className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-gray-600" />
-                            <span className="text-sm font-semibold text-black">Surgeon's Signature</span>
-                            <span className="text-xs text-gray-500 font-normal ml-2">Document with signature and date/time</span>
-                          </span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
-                          <div className="space-y-2">
-                            <Input 
-                              type="text" 
-                              placeholder="Type signature name or leave blank to upload"
-                              className="w-full"
-                              value={currentReport.signature?.surgeonSignatureText || ''}
-                              onChange={(e) => updateReport('signature', {
-                                ...currentReport.signature,
-                                surgeonSignatureText: e.target.value
-                              })}
-                            />
-                            <input 
-                              type="file" 
-                              accept="image/*,.pdf" 
-                              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    updateReport('signature', {
+                          {/* Surgeon Signature Section - moved under Post Operative Management */}
+                          <div className="pt-4 border-t">
+                            <div className="space-y-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
+                                <div className="space-y-2">
+                                  <Input 
+                                    type="text" 
+                                    placeholder="Type signature name or leave blank to upload"
+                                    className="w-full"
+                                    value={currentReport.signature?.surgeonSignatureText || ''}
+                                    onChange={(e) => updateReport('signature', {
                                       ...currentReport.signature,
-                                      surgeonSignature: reader.result as string
-                                    });
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                            />
-                            <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
-                            {currentReport.signature?.surgeonSignature && (
-                              <div className="space-y-1">
-                                <p className="text-xs text-green-600">✓ Signature uploaded</p>
-                                <div className="border rounded p-2 bg-gray-50">
-                                  <p className="text-xs text-gray-600 mb-1">Preview:</p>
-                                  <img 
-                                    src={currentReport.signature.surgeonSignature} 
-                                    alt="Signature preview" 
-                                    className="max-h-12 max-w-full object-contain"
+                                      surgeonSignatureText: e.target.value
+                                    })}
                                   />
+                                  <input 
+                                    type="file" 
+                                    accept="image/*,.pdf" 
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                          updateReport('signature', {
+                                            ...currentReport.signature,
+                                            surgeonSignature: reader.result as string
+                                          });
+                                        };
+                                        reader.readAsDataURL(file);
+                                      }
+                                    }}
+                                  />
+                                  <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
+                                  {currentReport.signature?.surgeonSignature && (
+                                    <div className="space-y-1">
+                                      <p className="text-xs text-green-600">✓ Signature uploaded</p>
+                                      <div className="border rounded p-2 bg-gray-50">
+                                        <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                                        <img 
+                                          src={currentReport.signature.surgeonSignature} 
+                                          alt="Signature preview" 
+                                          className="max-h-12 max-w-full object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            )}
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Date & Time:</p>
+                                <Input 
+                                  type="datetime-local" 
+                                  className="w-full"
+                                  value={currentReport.signature?.dateTime || ''}
+                                  onChange={(e) => updateReport('signature', {
+                                    ...currentReport.signature,
+                                    dateTime: e.target.value
+                                  })}
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-700 mb-2">Date & Time:</p>
-                          <Input 
-                            type="datetime-local" 
-                            className="w-full"
-                            value={currentReport.signature?.dateTime || ''}
-                            onChange={(e) => updateReport('signature', {
-                              ...currentReport.signature,
-                              dateTime: e.target.value
-                            })}
-                          />
                         </div>
                       </CardContent>
                     </Card>
@@ -2726,6 +3580,16 @@ const Index = () => {
                             >
                               <Download className="h-3 w-3 mr-1" />
                               {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
+                            </Button>
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="text-xs"
+                              onClick={clearAllEndoscopyData}
+                              title="Clear all endoscopy data"
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Clear All Data
                             </Button>
                             <Button 
                               variant="outline" 
@@ -2866,11 +3730,12 @@ const Index = () => {
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Date Of Birth:</label>
+                              <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
                               <div className="w-full">
                                 <Input 
                                   className="w-full" 
                                   type="date" 
+                                  lang="en-GB"
                                   value={currentReport.appendectomy.patientInfo.dateOfBirth}
                                   onChange={(e) => updateAppendectomy('patientInfo', 'dateOfBirth', e.target.value)}
                                 />
@@ -4053,72 +4918,6 @@ const Index = () => {
                               </div>
                             </div>
 
-                            <div className="border-t pt-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
-                                  <div className="space-y-2">
-                                    <Input 
-                                      type="text" 
-                                      placeholder="Type signature name or leave blank to upload"
-                                      className="w-full"
-                                      value={currentReport.appendectomy?.closure?.surgeonSignatureText || ''}
-                                      onChange={(e) => updateAppendectomy('closure', 'surgeonSignatureText', e.target.value)}
-                                    />
-                                    <input 
-                                      type="file" 
-                                      accept="image/*,.pdf" 
-                                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          const reader = new FileReader();
-                                          reader.onloadend = () => {
-                                            updateAppendectomy('closure', 'surgeonSignature', reader.result as string);
-                                          };
-                                          reader.readAsDataURL(file);
-                                        }
-                                      }}
-                                    />
-                                    <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
-                                    {currentReport.appendectomy?.closure?.surgeonSignature && (
-                                      <div className="space-y-1">
-                                        <p className="text-xs text-green-600">✓ Signature uploaded</p>
-                                        <div className="border rounded p-2 bg-gray-50">
-                                          <p className="text-xs text-gray-600 mb-1">Preview:</p>
-                                          <img 
-                                            src={currentReport.appendectomy.closure.surgeonSignature} 
-                                            alt="Signature preview" 
-                                            className="max-h-12 max-w-full object-contain"
-                                          />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
-                                  <div className="space-y-2">
-                                    <Input 
-                                      type="datetime-local" 
-                                      className="w-full"
-                                      value={currentReport.appendectomy?.closure?.dateTime || getLocalDateTimeValue()}
-                                      onChange={(e) => updateAppendectomy('closure', 'dateTime', e.target.value)}
-                                    />
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="text-xs px-2 py-1"
-                                      onClick={() => {
-                                        updateAppendectomy('closure', 'dateTime', getLocalDateTimeValue());
-                                      }}
-                                    >
-                                      Set Current Date/Time
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
                           </div>
                         </CardContent>
                       )}
@@ -4165,6 +4964,74 @@ const Index = () => {
                               value={currentReport.appendectomy?.closure?.postOperativeManagement || ''}
                               onChange={(e) => updateAppendectomy('closure', 'postOperativeManagement', e.target.value)}
                             />
+                          </div>
+                          
+                          {/* Surgeon's Signature Section - moved under Post Operative Management */}
+                          <div className="border-t pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
+                                <div className="space-y-2">
+                                  <Input 
+                                    type="text" 
+                                    placeholder="Type signature name or leave blank to upload"
+                                    className="w-full"
+                                    value={currentReport.appendectomy?.closure?.surgeonSignatureText || ''}
+                                    onChange={(e) => updateAppendectomy('closure', 'surgeonSignatureText', e.target.value)}
+                                  />
+                                  <input 
+                                    type="file" 
+                                    accept="image/*,.pdf" 
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => {
+                                          updateAppendectomy('closure', 'surgeonSignature', reader.result as string);
+                                        };
+                                        reader.readAsDataURL(file);
+                                      }
+                                    }}
+                                  />
+                                  <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
+                                  {currentReport.appendectomy?.closure?.surgeonSignature && (
+                                    <div className="space-y-1">
+                                      <p className="text-xs text-green-600">✓ Signature uploaded</p>
+                                      <div className="border rounded p-2 bg-gray-50">
+                                        <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                                        <img 
+                                          src={currentReport.appendectomy.closure.surgeonSignature} 
+                                          alt="Signature preview" 
+                                          className="max-h-12 max-w-full object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
+                                <div className="space-y-2">
+                                  <Input 
+                                    type="datetime-local" 
+                                    className="w-full"
+                                    value={currentReport.appendectomy?.closure?.dateTime || getLocalDateTimeValue()}
+                                    onChange={(e) => updateAppendectomy('closure', 'dateTime', e.target.value)}
+                                  />
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs px-2 py-1"
+                                    onClick={() => {
+                                      updateAppendectomy('closure', 'dateTime', getLocalDateTimeValue());
+                                    }}
+                                  >
+                                    Set Current Date/Time
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -4239,6 +5106,15 @@ const Index = () => {
                               <Download className="w-4 h-4 mr-2" />
                               {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                             </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="glass-button text-xs"
+                              onClick={clearAllVentralHerniaData}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Clear All Data
+                            </Button>
                           </div>
                         </div>
                       </CardHeader>
@@ -4248,15 +5124,48 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <div 
                         className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section1" ? "bg-green-50" : ""}`}
-                        onClick={() => {
-                          setHerniaExpanded(prev => ({ ...prev, section1: !prev.section1 }));
-                          if (!herniaExpanded.section1) {
-                            setHerniaActiveSection("section1");
-                          }
-                        }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Patient Information</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section1 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center flex-1"
+                          onClick={() => {
+                            setHerniaExpanded(prev => ({ ...prev, section1: !prev.section1 }));
+                            if (!herniaExpanded.section1) {
+                              setHerniaActiveSection("section1");
+                            }
+                          }}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Patient Information</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ml-2 ${herniaExpanded.section1 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoVentralHernia('patientInfo')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoVentralHernia('patientInfo')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearVentralHernia('patientInfo')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {herniaExpanded.section1 && (
@@ -4289,11 +5198,12 @@ const Index = () => {
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Date Of Birth:</label>
+                              <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
                               <div className="w-full">
                                 <Input 
                                   className="w-full" 
                                   type="date" 
+                                  lang="en-GB"
                                   value={currentReport.ventralHernia?.patientInfo?.dateOfBirth || ''}
                                   onChange={(e) => updateVentralHernia('patientInfo', 'dateOfBirth', e.target.value)}
                                 />
@@ -4396,15 +5306,48 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <div 
                         className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section2" ? "bg-green-50" : ""}`}
-                        onClick={() => {
-                          setHerniaExpanded(prev => ({ ...prev, section2: !prev.section2 }));
-                          if (!herniaExpanded.section2) {
-                            setHerniaActiveSection("section2");
-                          }
-                        }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Preoperative Information</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section2 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center flex-1"
+                          onClick={() => {
+                            setHerniaExpanded(prev => ({ ...prev, section2: !prev.section2 }));
+                            if (!herniaExpanded.section2) {
+                              setHerniaActiveSection("section2");
+                            }
+                          }}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Preoperative Information</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ml-2 ${herniaExpanded.section2 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoVentralHernia('preoperative')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoVentralHernia('preoperative')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearVentralHernia('preoperative')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {herniaExpanded.section2 && (
@@ -5152,16 +6095,30 @@ const Index = () => {
                                       type="text" 
                                       className="w-20" 
                                       placeholder="___"
-                                      value={currentReport.ventralHernia?.operative?.herniaDefects || ''}
+                                      value={currentReport.ventralHernia?.operative?.herniaDefectLength || ''}
                                       onChange={(e) => updateReport('ventralHernia', {
                                         ...currentReport.ventralHernia,
                                         operative: {
                                           ...currentReport.ventralHernia?.operative,
-                                          herniaDefects: e.target.value
+                                          herniaDefectLength: e.target.value
                                         }
                                       })}
                                     />
-                                    <span className="text-sm text-gray-700">(cm)</span>
+                                    <span className="text-sm text-gray-700">cm (Length) x</span>
+                                    <Input 
+                                      type="text" 
+                                      className="w-20" 
+                                      placeholder="___"
+                                      value={currentReport.ventralHernia?.operative?.herniaDefectWidth || ''}
+                                      onChange={(e) => updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        operative: {
+                                          ...currentReport.ventralHernia?.operative,
+                                          herniaDefectWidth: e.target.value
+                                        }
+                                      })}
+                                    />
+                                    <span className="text-sm text-gray-700">cm (Width)</span>
                                   </div>
                                 </div>
 
@@ -5311,15 +6268,48 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <div 
                         className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section3" ? "bg-green-50" : ""}`}
-                        onClick={() => {
-                          setHerniaExpanded(prev => ({ ...prev, section3: !prev.section3 }));
-                          if (!herniaExpanded.section3) {
-                            setHerniaActiveSection("section3");
-                          }
-                        }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Access and Ports</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section3 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center flex-1"
+                          onClick={() => {
+                            setHerniaExpanded(prev => ({ ...prev, section3: !prev.section3 }));
+                            if (!herniaExpanded.section3) {
+                              setHerniaActiveSection("section3");
+                            }
+                          }}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Access and Ports</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ml-2 ${herniaExpanded.section3 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoVentralHernia('operative')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoVentralHernia('operative')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearVentralHernia('operative')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {herniaExpanded.section3 && (
@@ -5385,15 +6375,48 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <div 
                         className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section4" ? "bg-green-50" : ""}`}
-                        onClick={() => {
-                          setHerniaExpanded(prev => ({ ...prev, section4: !prev.section4 }));
-                          if (!herniaExpanded.section4) {
-                            setHerniaActiveSection("section4");
-                          }
-                        }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Procedure Details</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section4 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center flex-1"
+                          onClick={() => {
+                            setHerniaExpanded(prev => ({ ...prev, section4: !prev.section4 }));
+                            if (!herniaExpanded.section4) {
+                              setHerniaActiveSection("section4");
+                            }
+                          }}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Procedure Details</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ml-2 ${herniaExpanded.section4 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoVentralHernia('procedure')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoVentralHernia('procedure')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearVentralHernia('procedure')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {herniaExpanded.section4 && (
@@ -5938,15 +6961,48 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <div 
                         className={`px-6 py-4 border-b border-gray-200 flex justify-between items-center cursor-pointer ${herniaActiveSection === "section5" ? "bg-green-50" : ""}`}
-                        onClick={() => {
-                          setHerniaExpanded(prev => ({ ...prev, section5: !prev.section5 }));
-                          if (!herniaExpanded.section5) {
-                            setHerniaActiveSection("section5");
-                          }
-                        }}
                       >
-                        <h2 className="text-lg font-semibold text-gray-800">Closure</h2>
-                        <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${herniaExpanded.section5 ? "transform rotate-180" : ""}`} />
+                        <div 
+                          className="flex items-center flex-1"
+                          onClick={() => {
+                            setHerniaExpanded(prev => ({ ...prev, section5: !prev.section5 }));
+                            if (!herniaExpanded.section5) {
+                              setHerniaActiveSection("section5");
+                            }
+                          }}
+                        >
+                          <h2 className="text-lg font-semibold text-gray-800">Closure</h2>
+                          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ml-2 ${herniaExpanded.section5 ? "transform rotate-180" : ""}`} />
+                        </div>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => undoVentralHernia('procedure')}
+                            title="Undo"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => redoVentralHernia('procedure')}
+                            title="Redo"
+                          >
+                            <Redo2 className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            onClick={() => clearVentralHernia('procedure')}
+                            title="Clear Section"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {herniaExpanded.section5 && (
@@ -6503,6 +7559,16 @@ const Index = () => {
                                   <Download className="w-4 h-4 mr-2" />
                                   {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                                 </Button>
+                                <Button 
+                                  variant="destructive" 
+                                  size="sm" 
+                                  className="text-xs"
+                                  onClick={clearAllRectalCancerData}
+                                  title="Clear all rectal cancer data"
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Clear All Data
+                                </Button>
                               </div>
                             </div>
                           </CardHeader>
@@ -6513,6 +7579,16 @@ const Index = () => {
                           currentReport={currentReport}
                           updateRectalCancer={updateRectalCancer}
                           onExportPDF={() => handleExportPDF('rectalCancer')}
+                          onUndo={(section) => {
+                            undoRectalCancer(section as keyof typeof rectalCancerHistory);
+                          }}
+                          onRedo={(section) => {
+                            redoRectalCancer(section as keyof typeof rectalCancerHistory);
+                          }}
+                          onClear={(section) => {
+                            clearRectalCancer(section as keyof typeof rectalCancerHistory);
+                          }}
+                          onClearAll={clearAllRectalCancerData}
                           diagramElement={
                             <ConditionalDiagramDisplay
                               selectedProcedures={["Rectal Cancer Surgery"]}

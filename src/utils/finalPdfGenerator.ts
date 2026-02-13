@@ -331,49 +331,35 @@ export const generateFinalPDF = async (
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
     pdf.text('PROCEDURE INFORMATION', margin, y);
-    y += 6;
+    y += 8;
     
     if (reportData?.patientInfo) {
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'normal');
       
-      // Get all the data (removed intra-operative fields as requested)
+      // Get all the data
       const proceduresText = reportData?.selectedProcedures && reportData.selectedProcedures.length > 0 
         ? reportData.selectedProcedures.join(', ') : '';
       const bowelPrepRaw = reportData.patientInfo.preparation || '';
       const bowelPrep = bowelPrepRaw ? bowelPrepRaw.charAt(0).toUpperCase() + bowelPrepRaw.slice(1).toLowerCase() : '';
       const anesthesiaType = capitalizeAnesthesia(reportData.patientInfo.sedation || '');
       
-      // 3-column layout with headers and answers below
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'bold');
-      
-      // Row 1: Column headers
-      pdf.text('Procedures Performed:', col1XThree, y);
-      pdf.text('Type of Anesthesia:', col2XThree, y);
-      pdf.text('Bowel Preparation:', col3XThree, y);
-      y += 4;
-      
-      // Row 2: Answers below headers
+      // Single column layout as specified
       pdf.setFont('helvetica', 'normal');
+      pdf.text('Procedures Performed:', margin, y);
+      y += 4;
+      pdf.text(proceduresText, margin, y);
+      y += 6;
       
-      // Split long procedures text if needed
-      const proceduresLines = pdf.splitTextToSize(proceduresText, threeColumnWidth - 4);
-      pdf.text(proceduresLines, col1XThree, y);
+      pdf.text('Type of Anesthesia:', margin, y);
+      y += 4;
+      pdf.text(anesthesiaType, margin, y);
+      y += 6;
       
-      // Split long anesthesia text if needed
-      const anesthesiaLines = pdf.splitTextToSize(anesthesiaType, threeColumnWidth - 4);
-      pdf.text(anesthesiaLines, col2XThree, y);
-      
-      // Split long bowel prep text if needed
-      const bowelPrepLines = pdf.splitTextToSize(bowelPrep, threeColumnWidth - 4);
-      pdf.text(bowelPrepLines, col3XThree, y);
-      
-      // Calculate the maximum height used by any column
-      const maxLines = Math.max(proceduresLines.length, anesthesiaLines.length, bowelPrepLines.length);
-      y += (maxLines * 3) + 2;
-      
-      y += 4; // Add spacing before separator
+      pdf.text('Bowel Preparation:', margin, y);
+      y += 4;
+      pdf.text(bowelPrep, margin, y);
+      y += 8;
       
       // Separator line
       pdf.setDrawColor(0, 0, 0);
@@ -514,7 +500,7 @@ export const generateFinalPDF = async (
     // Check page break before SPECIMEN section
     checkPageBreak(60);
     
-    // SPECIMEN, CONCLUSION, FOLLOW UP sections - New layout as specified (using existing three-column variables)
+    // SPECIMEN section - New layout as specified 
     if (reportData) {
       // Get all the data using correct field paths
       const specimenSent = reportData?.specimen?.sentForPathology || '';
@@ -545,76 +531,115 @@ export const generateFinalPDF = async (
         }
       }
       
-      // Row 1: 3-column headers - SPECIMEN | CONCLUSION | FOLLOW UP OPTIONS
+      // SPECIMEN section header
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('SPECIMEN', col1XThree, y);
-      pdf.text('CONCLUSION', col2XThree, y);
-      pdf.text('FOLLOW UP OPTIONS', col3XThree, y);
-      y += 6;
+      pdf.text('SPECIMEN', margin, y);
+      y += 8;
       
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'normal');
       
-      let specimenY = y;
-      let conclusionY = y;
-      let followUpY = y;
+      // SPECIMEN fields
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('Specimen Sent for Pathology:', margin, y);
+      y += 4;
+      pdf.text(specimenSent, margin, y);
+      y += 6;
       
-      // Left column - SPECIMEN fields
-      pdf.text(`Specimen Sent for Pathology: ${specimenSent}`, col1XThree, specimenY);
-      specimenY += 4;
+      pdf.text('Specify Laboratory Sent to:', margin, y);
+      y += 4;
+      pdf.text(laboratory, margin, y);
+      y += 6;
       
-      pdf.text(`Specify Laboratory Sent to: ${laboratory}`, col1XThree, specimenY);
-      specimenY += 4;
+      pdf.text('Other Specimens Taken:', margin, y);
+      y += 4;
+      pdf.text(otherSpecimensDisplay, margin, y);
+      y += 8;
       
-      pdf.text(`Other Specimens Taken: ${otherSpecimensDisplay}`, col1XThree, specimenY);
-      specimenY += 4;
+      // Separator line
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 8;
       
-      // Middle column - CONCLUSION content
+      // CONCLUSION section
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('CONCLUSION', margin, y);
+      y += 8;
+      
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
       if (conclusion) {
-        const conclusionLines = pdf.splitTextToSize(conclusion, threeColumnWidth - 4);
-        pdf.text(conclusionLines, col2XThree, conclusionY);
-        conclusionY += conclusionLines.length * 3;
+        const conclusionLines = pdf.splitTextToSize(conclusion, pageWidth - 2 * margin);
+        pdf.text(conclusionLines, margin, y);
+        y += conclusionLines.length * 3 + 4;
       }
+      y += 4;
       
-      // Right column - FOLLOW UP OPTIONS content
-      if (combinedFollowUp) {
-        const followUpLines = pdf.splitTextToSize(combinedFollowUp, threeColumnWidth - 4);
-        pdf.text(followUpLines, col3XThree, followUpY);
-        followUpY += followUpLines.length * 3;
-      }
+      // Separator line
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 8;
       
-      // Move to next section based on the tallest column
-      y = Math.max(specimenY, conclusionY, followUpY) + 6;
-      
-      // Row 2: NOTES and POST OPERATIVE MANAGEMENT - aligned with columns
+      // NOTES section
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('NOTES', col1XThree, y);
-      pdf.text('POST OPERATIVE MANAGEMENT', col2XThree, y);
-      y += 6;
+      pdf.text('NOTES', margin, y);
+      y += 8;
       
       pdf.setFontSize(8);
       pdf.setFont('helvetica', 'normal');
-      
-      let notesY = y;
-      let postOpY = y;
-      
-      // Additional Notes (left column - aligned with SPECIMEN) and Post Operative Management (middle column - aligned with CONCLUSION)
       if (additionalNotes) {
-        const notesLines = pdf.splitTextToSize(`Additional Notes: ${additionalNotes}`, threeColumnWidth - 4);
-        pdf.text(notesLines, col1XThree, notesY);
-        notesY += notesLines.length * 3;
+        const notesLines = pdf.splitTextToSize(additionalNotes, pageWidth - 2 * margin);
+        pdf.text(notesLines, margin, y);
+        y += notesLines.length * 3 + 4;
       }
+      y += 4;
       
+      // Separator line
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 8;
+      
+      // POST OPERATIVE MANAGEMENT section
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('POST OPERATIVE MANAGEMENT', margin, y);
+      y += 8;
+      
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
       if (postOpMgmt) {
-        // Display just the content inline with the header (no label repetition)
-        const postOpLines = pdf.splitTextToSize(postOpMgmt, threeColumnWidth - 4);
-        pdf.text(postOpLines, col2XThree, postOpY);
-        postOpY += postOpLines.length * 3;
+        const postOpLines = pdf.splitTextToSize(postOpMgmt, pageWidth - 2 * margin);
+        pdf.text(postOpLines, margin, y);
+        y += postOpLines.length * 3 + 4;
       }
+      y += 4;
       
-      y = Math.max(notesY, postOpY) + 4; // Reduced spacing to bring signature closer
+      // Separator line
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 8;
+      
+      // FOLLOW UP OPTIONS section
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('FOLLOW UP OPTIONS', margin, y);
+      y += 8;
+      
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      if (combinedFollowUp) {
+        const followUpLines = pdf.splitTextToSize(combinedFollowUp, pageWidth - 2 * margin);
+        pdf.text(followUpLines, margin, y);
+        y += followUpLines.length * 3 + 4;
+      }
+      y += 4;
       
       // Separator line
       pdf.setDrawColor(0, 0, 0);

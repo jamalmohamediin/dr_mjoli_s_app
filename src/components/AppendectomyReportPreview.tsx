@@ -692,31 +692,33 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         {/* Surgeon Signature */}
         {(appendectomy.closure.surgeonSignatureText || appendectomy.closure.surgeonSignature || appendectomy.closure.dateTime) && (
           <div className="space-y-2">
-            <h5 className="text-xs font-medium text-gray-600">Documentation</h5>
-            {appendectomy.closure.surgeonSignatureText && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Surgeon's Signature:</span> {appendectomy.closure.surgeonSignatureText}
-              </p>
-            )}
-            {!appendectomy.closure.surgeonSignatureText && appendectomy.closure.surgeonSignature && (
-              <div className="space-y-1">
-                <p className="text-xs text-gray-700 font-medium">Surgeon's Signature:</p>
-                {appendectomy.closure.surgeonSignature.startsWith('data:image') ? (
-                  <img 
-                    src={appendectomy.closure.surgeonSignature} 
-                    alt="Surgeon signature" 
-                    className="max-h-8 max-w-32 object-contain border rounded bg-gray-50"
-                  />
-                ) : (
-                  <p className="text-xs text-gray-700">{appendectomy.closure.surgeonSignature}</p>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="font-medium">Surgeon's Signature:</span>
+                {appendectomy.closure.surgeonSignatureText && (
+                  <p className="text-gray-700 mt-1">{appendectomy.closure.surgeonSignatureText}</p>
+                )}
+                {!appendectomy.closure.surgeonSignatureText && appendectomy.closure.surgeonSignature && (
+                  <div className="mt-1">
+                    {appendectomy.closure.surgeonSignature.startsWith('data:image') ? (
+                      <img 
+                        src={appendectomy.closure.surgeonSignature} 
+                        alt="Surgeon signature" 
+                        className="max-h-8 max-w-32 object-contain border rounded bg-gray-50"
+                      />
+                    ) : (
+                      <p className="text-gray-700">{appendectomy.closure.surgeonSignature}</p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-            {appendectomy.closure.dateTime && (
-              <p className="text-xs text-gray-700">
-                <span className="font-medium">Date:</span> {formatDateOnly(appendectomy.closure.dateTime)}
-              </p>
-            )}
+              <div>
+                <span className="font-medium">Date/Time:</span>
+                {appendectomy.closure.dateTime && (
+                  <p className="text-gray-700 mt-1">{formatDateOnly(appendectomy.closure.dateTime)}</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
         

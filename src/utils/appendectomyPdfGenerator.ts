@@ -140,7 +140,7 @@ export const generateAppendectomyPDF = async (
     
     // Helper function to check page break
     const checkPageBreak = (neededSpace: number) => {
-      if (y + neededSpace > pageHeight - 40) { // Leave space for footer
+      if (y + neededSpace > pageHeight - 60) { // Leave more space for footer
         currentPage++;
         pdf.addPage();
         y = margin;
@@ -228,7 +228,7 @@ export const generateAppendectomyPDF = async (
     
     // Add separator line
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.3);
+    pdf.setLineWidth(0.1);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 10;
     
@@ -264,7 +264,7 @@ export const generateAppendectomyPDF = async (
     
     // Row 2: Date Of Birth, Age, Sex
     const row2Y = y;
-    const dob = patientInfo.dateOfBirth ? formatDateOnly(patientInfo.dateOfBirth) : '';
+    const dob = patientInfo.dateOfBirth ? formatDateDDMMYYYY(patientInfo.dateOfBirth) : '';
     const age = patientInfo.age || '';
     const sex = patientInfo.sex ? (patientInfo.sex === 'other' && patientInfo.sexOther ? patientInfo.sexOther : patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase()) : '';
     
@@ -300,7 +300,7 @@ export const generateAppendectomyPDF = async (
     
     // Add separator line
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.3);
+    pdf.setLineWidth(0.1);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 8;
     
@@ -336,23 +336,73 @@ export const generateAppendectomyPDF = async (
     pdf.text(`Total Duration: ${totalDuration}`, col3X, preRow2Y);
     y += 6;
     
-    // Row 3: Indication for Surgery (col1), Preoperative Imaging (col2) - same row
+    // Row 3: Indication for Surgery
     const preRow3Y = y;
     const indication = preop.indication?.join(', ') || '';
-    const imaging = preop.imaging?.join(', ') || '';
     
     pdf.text(`Indication for Surgery: ${indication}`, col1X, preRow3Y);
-    pdf.text(`Preoperative Imaging: ${imaging}`, col2X, preRow3Y);
+    y += 6;
+    
+    // Row 4: Preoperative Imaging (moved under Indications)
+    const preRow4Y = y;
+    const imaging = preop.imaging?.join(', ') || '';
+    
+    pdf.text(`Preoperative Imaging: ${imaging}`, col1X, preRow4Y);
     y += 8;
     
     // Add separator line
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.3);
+    pdf.setLineWidth(0.1);
     pdf.line(margin, y, pageWidth - margin, y);
     y += 10;
     
     const procedure = appendectomyData?.procedure || {};
     const intraop = appendectomyData?.intraoperative || {};
+    
+    // OPERATIVE FINDINGS Section (full width)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('OPERATIVE FINDINGS', margin, y);
+    y += 8;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    
+    // Set up two-column layout for operative findings
+    const opFindingsCol1X = margin;
+    const opFindingsCol2X = margin + 100;
+    
+    // Row 1: Appendix Appearance and Presence of Abscess
+    const appendixAppearance = intraop.appendixAppearance?.join(', ') || '';
+    const abscess = intraop.abscess || '';
+    
+    let opRow1Y = y;
+    if (appendixAppearance && appendixAppearance.trim() && appendixAppearance !== 'Not specified' && appendixAppearance !== 'None') {
+      pdf.text(`Appendix Appearance: ${appendixAppearance}`, opFindingsCol1X, opRow1Y);
+    }
+    if (abscess && abscess.trim() && abscess !== 'Not specified' && abscess !== 'None') {
+      pdf.text(`Presence of Abscess: ${abscess}`, opFindingsCol2X, opRow1Y);
+    }
+    y += 6;
+    
+    // Row 2: Other Intra-abdominal Findings and Presence of Peritonitis
+    const otherFindings = intraop.otherFindings || '';
+    const peritonitis = intraop.peritonitis?.join(', ') || '';
+    
+    let opRow2Y = y;
+    if (otherFindings && otherFindings.trim() && otherFindings !== 'Not specified' && otherFindings !== 'None') {
+      pdf.text(`Other Intra-abdominal Findings: ${otherFindings}`, opFindingsCol1X, opRow2Y);
+    }
+    if (peritonitis && peritonitis.trim() && peritonitis !== 'Not specified' && peritonitis !== 'None') {
+      pdf.text(`Presence of Peritonitis: ${peritonitis}`, opFindingsCol2X, opRow2Y);
+    }
+    y += 10;
+    
+    // Add separator line after operative findings
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
     
     // Two-column layout: PROCEDURE DETAILS | PORTS AND INCISIONS
     const sectionStartY = y;
@@ -377,33 +427,39 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Helper function to add content only if it exists and advance Y position
+    // Helper function to add content only if it exists and advance Y position with text wrapping
     const addContentLine = (text: string, spacing: number = 6) => {
       if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
-        pdf.text(text, procedureX, procedureY);
-        procedureY += spacing;
+        const maxWidth = procedureColumnWidth - 5; // Leave margin for column boundary
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        lines.forEach((line: string, index: number) => {
+          pdf.text(line, procedureX, procedureY);
+          procedureY += 4;
+        });
+        procedureY += (spacing - 4); // Adjust for line spacing
         return true;
       }
       return false;
     };
     
-    const addContentBlock = (label: string, value: string, spacing: number = 8) => {
-      if (value && value.trim() && value !== 'Not specified' && value !== 'None') {
-        pdf.text(label, procedureX, procedureY);
-        pdf.text(value, procedureX, procedureY + 4);
-        procedureY += spacing;
-        return true;
-      }
-      return false;
-    };
+    // PROCEDURE DETAILS Content
     
     // Operation Description
     const operationDescription = procedure.operationDescription || '';
-    addContentLine(`Operation Description: ${operationDescription}`, 8);
+    addContentLine(`Operation Description: ${operationDescription}`, 6);
     
-    // Surgical Approach
+    // Surgical Approach - limit width to prevent overflow
     const surgicalApproach = procedure.approach?.join(', ') || '';
-    addContentLine(`Surgical Approach: ${surgicalApproach}`, 6);
+    const maxApproachWidth = procedureColumnWidth - 5; // Leave some margin
+    const approachLines = pdf.splitTextToSize(`Surgical Approach: ${surgicalApproach}`, maxApproachWidth);
+    
+    if (surgicalApproach && surgicalApproach.trim() && surgicalApproach !== 'Not specified' && surgicalApproach !== 'None') {
+      approachLines.forEach((line: string, index: number) => {
+        pdf.text(line, procedureX, procedureY);
+        procedureY += 4;
+      });
+      procedureY += 2; // Extra spacing after surgical approach
+    }
     
     // Conditional fields based on surgical approach - only render if they have content
     const isLaparoscopic = surgicalApproach.toLowerCase().includes('laparoscopic');
@@ -449,22 +505,6 @@ export const generateAppendectomyPDF = async (
       addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
     }
     
-    // Appendix Appearance
-    const appendixAppearance = intraop.appendixAppearance?.join(', ') || '';
-    addContentLine(`Appendix Appearance: ${appendixAppearance}`, 6);
-    
-    // Presence of Abscess
-    const abscess = intraop.abscess || '';
-    addContentLine(`Presence of Abscess: ${abscess}`, 6);
-    
-    // Presence of Peritonitis
-    const peritonitis = intraop.peritonitis?.join(', ') || '';
-    addContentLine(`Presence of Peritonitis: ${peritonitis}`, 6);
-    
-    // Other Intra-abdominal Findings
-    const otherFindings = intraop.otherFindings || '';
-    addContentLine(`Other Intra-abdominal Findings: ${otherFindings}`, 6);
-    
     // Method of Appendiceal Ligation
     const ligationMethod = procedure.divisionMethod?.join(', ') || '';
     addContentLine(`Method of Appendiceal Ligation: ${ligationMethod}`, 6);
@@ -480,17 +520,46 @@ export const generateAppendectomyPDF = async (
     // Drain Placement
     const drainPlacement = procedure.drainPlacement || '';
     const drainText = drainPlacement + (procedure.drainLocation ? ` (${procedure.drainLocation})` : '');
-    addContentLine(`Drain Placement: ${drainText}`, 6);
+    addContentLine(`Drain Placement: ${drainText}`, 8);
+    
+    // COMPLICATIONS section (within PROCEDURE DETAILS column)
+    procedureY += 2; // Small spacing
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('COMPLICATIONS', procedureX, procedureY);
+    procedureY += 6;
+    
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
     
     // Intra-Operative Difficulty
     const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
-    addContentLine(`Intra-Operative Difficulty: ${difficulty}`, 6);
+    if (difficulty && difficulty.trim() && difficulty !== 'Not specified' && difficulty !== 'None') {
+      const maxWidth = procedureColumnWidth - 5;
+      const difficultyLines = pdf.splitTextToSize(`Intra-Operative Difficulty: ${difficulty}`, maxWidth);
+      difficultyLines.forEach((line: string) => {
+        pdf.text(line, procedureX, procedureY);
+        procedureY += 4;
+      });
+      procedureY += 2;
+    }
     
     // Intra-Operative Complications
     const complications = Array.isArray(appendectomyData?.closure?.complications) 
       ? appendectomyData.closure.complications.join(', ') 
       : appendectomyData?.closure?.complications || '';
-    addContentLine(`Intra-Operative Complications: ${complications}`, 6);
+    if (complications && complications.trim() && complications !== 'Not specified' && complications !== 'None') {
+      const maxWidth = procedureColumnWidth - 5;
+      const complicationLines = pdf.splitTextToSize(`Intra-Operative Complications: ${complications}`, maxWidth);
+      complicationLines.forEach((line: string) => {
+        pdf.text(line, procedureX, procedureY);
+        procedureY += 4;
+      });
+      procedureY += 2;
+    }
+    
+    // Move y position to after both columns - Page 1 ends here
+    y = Math.max(procedureY, diagramY) + 8;
     
     // PORTS AND INCISIONS Content (Right Column)
     // Legend with visual indicators in two rows - smaller and neater icons
@@ -582,125 +651,155 @@ export const generateAppendectomyPDF = async (
     
     diagramY += diagramBoxHeight + 8;
     
-    // Move y position to after both columns - Page 1 ends here
-    y = Math.max(procedureY, diagramY) + 5;
+    // Page 1 ends here
+    y = Math.max(procedureY, diagramY) + 8;
     
-    // Start Page 2 for CLOSURE and POST OPERATIVE MANAGEMENT
+    // Start Page 2 for remaining sections
     pdf.addPage();
     currentPage++;
     y = margin;
     
-    // Two-column layout: CLOSURE | NOTES
+    // CLOSURE Section (full width with side-by-side layout)
     const closureSectionY = y;
-    const closureColX = col1X;
-    const notesColX = col2X + 15;
     
-    // CLOSURE Section (Left Column)
+    // CLOSURE Section Title
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('CLOSURE', closureColX, closureSectionY);
+    pdf.text('CLOSURE', margin, closureSectionY);
+    y += 8;
     
-    // NOTES Section (Right Column)
-    pdf.text('NOTES', notesColX, closureSectionY);
-    
-    let closureY = closureSectionY + 8;
-    let notesY = closureSectionY + 8;
-    
-    // CLOSURE Content (Left Column)
+    // CLOSURE Content with side-by-side layout
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const closure = appendectomyData?.closure || {};
     
-    // Helper function for closure content
-    const addClosureContentLine = (text: string, spacing: number = 6) => {
-      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
-        pdf.text(text, closureColX, closureY);
-        closureY += spacing;
-        return true;
-      }
-      return false;
-    };
+    // Set up two-column layout for closure fields
+    const closureCol1X = margin;
+    const closureCol2X = margin + 100;
     
-    const addNotesContentLine = (text: string, spacing: number = 6) => {
-      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
-        pdf.text(text, notesColX, notesY);
-        notesY += spacing;
-        return true;
-      }
-      return false;
-    };
-    
-    const addNotesContentBlock = (label: string, value: string, spacing: number = 8) => {
-      if (value && value.trim() && value !== 'Not specified' && value !== 'None') {
-        pdf.text(label, notesColX, notesY);
-        pdf.text(value, notesColX, notesY + 4);
-        notesY += spacing;
-        return true;
-      }
-      return false;
-    };
-    
-    // Fascial Closure
+    // Row 1: Fascial Closure and Skin Closure
     const fascialClosure = Array.isArray(closure.fascialClosure) ? closure.fascialClosure.join(', ') : closure.fascialClosure || '';
-    addClosureContentLine(`Fascial Closure: ${fascialClosure}`, 6);
-    
-    // Fascial Material Used
-    const fascialMaterial = Array.isArray(closure.fascialMaterial) ? closure.fascialMaterial.join(', ') : closure.fascialMaterial || '';
-    addClosureContentLine(`Fascial Material Used: ${fascialMaterial}`, 6);
-    
-    // Skin Closure
     const skinClosureField = Array.isArray(closure.skinClosure) ? closure.skinClosure.join(', ') : closure.skinClosure || '';
-    addClosureContentLine(`Skin Closure: ${skinClosureField}`, 6);
     
-    // Skin Material Used
+    if (fascialClosure && fascialClosure.trim() && fascialClosure !== 'Not specified' && fascialClosure !== 'None') {
+      pdf.text(`Fascial Closure: ${fascialClosure}`, closureCol1X, y);
+    }
+    if (skinClosureField && skinClosureField.trim() && skinClosureField !== 'Not specified' && skinClosureField !== 'None') {
+      pdf.text(`Skin Closure: ${skinClosureField}`, closureCol2X, y);
+    }
+    y += 6;
+    
+    // Row 2: Fascial Material Used and Skin Material Used
+    const fascialMaterial = Array.isArray(closure.fascialMaterial) ? closure.fascialMaterial.join(', ') : closure.fascialMaterial || '';
     const skinMaterial = Array.isArray(closure.skinMaterial) ? closure.skinMaterial.join(', ') : closure.skinMaterial || '';
-    addClosureContentLine(`Skin Material Used: ${skinMaterial}`, 6);
+    
+    if (fascialMaterial && fascialMaterial.trim() && fascialMaterial !== 'Not specified' && fascialMaterial !== 'None') {
+      pdf.text(`Fascial Material Used: ${fascialMaterial}`, closureCol1X, y);
+    }
+    if (skinMaterial && skinMaterial.trim() && skinMaterial !== 'Not specified' && skinMaterial !== 'None') {
+      pdf.text(`Skin Material Used: ${skinMaterial}`, closureCol2X, y);
+    }
+    y += 10;
+    
+    // Add separator line after CLOSURE
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+    
+    // SPECIMEN Section (full width)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SPECIMEN', margin, y);
+    y += 8;
+    
+    // SPECIMEN Content
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
     
     // Specimen Sent for Pathology
     const pathology = closure.pathology || '';
-    addClosureContentLine(`Specimen Sent for Pathology: ${pathology}`, 6);
+    if (pathology && pathology.trim() && pathology !== 'Not specified' && pathology !== 'None') {
+      pdf.text(`Specimen Sent for Pathology: ${pathology}`, margin, y);
+      y += 6;
+    }
     
     // Specify Laboratory Sent to
     const laboratory = closure.laboratoryName || '';
-    addClosureContentLine(`Specify Laboratory Sent to: ${laboratory}`, 6);
+    if (laboratory && laboratory.trim() && laboratory !== 'Not specified' && laboratory !== 'None') {
+      pdf.text(`Specify Laboratory Sent to: ${laboratory}`, margin, y);
+      y += 6;
+    }
     
     // Other Specimens Taken
     const otherSpecimens = closure.otherSpecimens || '';
-    addClosureContentLine(`Other Specimens Taken: ${otherSpecimens}`, 8);
+    if (otherSpecimens && otherSpecimens.trim() && otherSpecimens !== 'Not specified' && otherSpecimens !== 'None') {
+      pdf.text(`Other Specimens Taken: ${otherSpecimens}`, margin, y);
+      y += 8;
+    }
     
-    // NOTES Content (Right Column)
-    // Additional Notes under NOTES section
-    const additionalNotes = closure.additionalNotes || '';
-    addNotesContentLine(`Additional Notes: ${additionalNotes}`, 10);
+    // Add separator line after SPECIMEN
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
     
-    // Add POST OPERATIVE MANAGEMENT as a subsection
+    // NOTES section (full width)
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('POST OPERATIVE MANAGEMENT', notesColX, notesY);
-    notesY += 8;
+    pdf.text('NOTES', margin, y);
+    y += 8;
     
-    // Post Operative Management content
+    // NOTES Content
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+    const additionalNotes = closure.additionalNotes || '';
+    if (additionalNotes && additionalNotes.trim() && additionalNotes !== 'Not specified' && additionalNotes !== 'None') {
+      pdf.text(`Additional Notes: ${additionalNotes}`, margin, y);
+      y += 10;
+    }
+    
+    // Add separator line after NOTES
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+    
+    // POST OPERATIVE MANAGEMENT section (full width)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('POST OPERATIVE MANAGEMENT', margin, y);
+    y += 8;
+    
+    // POST OPERATIVE MANAGEMENT Content
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const postOpManagement = closure.postOperativeManagement || '';
-    addNotesContentBlock('Post Operative Management:', postOpManagement, 10);
+    if (postOpManagement && postOpManagement.trim() && postOpManagement !== 'Not specified' && postOpManagement !== 'None') {
+      pdf.text(`Post Operative Management: ${postOpManagement}`, margin, y);
+      y += 10;
+    }
     
-    // Move y position to after both columns
-    y = Math.max(closureY, notesY) + 15;
+    // Add separator line after POST OPERATIVE MANAGEMENT
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 15;
     
-    // Signature Section - matching template format
-    const signatureY = y + 5;
-    const signatureLineWidth = 100;
-    const dateTimeLineWidth = 100;
-    const dateTimeX = pageWidth - margin - dateTimeLineWidth;
+    // Signature Section
+    const signatureY = y;
+    
+    // Two-column signature layout
+    const signatureCol1X = margin;
+    const signatureCol2X = margin + 100;
     
     // Surgeon's Signature
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('Surgeon\'s Signature:', margin, signatureY);
+    pdf.text('Surgeon\'s Signature:', signatureCol1X, signatureY);
     
     // Date & Time
-    pdf.text('Date & Time:', dateTimeX - 5, signatureY);
+    pdf.text('Date & Time:', signatureCol2X, signatureY);
     
     // Add signature if available
     if (appendectomyData?.closure?.surgeonSignature) {
@@ -712,28 +811,29 @@ export const generateAppendectomyPDF = async (
           pdf.addImage(
             appendectomyData.closure.surgeonSignature, 
             'PNG', 
-            margin + 40, 
+            signatureCol1X + 40, 
             signatureY - dimensions.height + 3, 
             dimensions.width, 
             dimensions.height
           );
         } catch (error) {
           console.error('Error adding signature image:', error);
-          pdf.text('[Signature]', margin + 40, signatureY);
+          pdf.text('[Signature]', signatureCol1X + 40, signatureY);
         }
       } else {
-        pdf.text(appendectomyData.closure.surgeonSignature, margin + 40, signatureY);
+        pdf.text(appendectomyData.closure.surgeonSignature, signatureCol1X + 40, signatureY);
       }
     }
     
-    // Add date/time if available
+    // Add date/time if available - positioned after "Date & Time:" label
     if (appendectomyData?.closure?.dateTime) {
-      pdf.text(formatDateTimeWithColon(appendectomyData.closure.dateTime), dateTimeX + 25, signatureY);
+      pdf.text(formatDateTimeWithColon(appendectomyData.closure.dateTime), signatureCol2X + 25, signatureY);
     } else {
-      pdf.text(formatDateTimeWithColon(new Date()), dateTimeX + 25, signatureY);
+      pdf.text(formatDateTimeWithColon(new Date()), signatureCol2X + 25, signatureY);
     }
     
-    y = signatureY + 15;
+    // Update y position to after signature section
+    y = signatureY + 20;
     
     // Calculate total pages and add footer to each page properly
     const totalPages = pdf.internal.getNumberOfPages();
@@ -757,13 +857,12 @@ export const generateAppendectomyPDF = async (
       pdf.setFont('helvetica', 'normal');
       
       if (i === 1) {
-        // Page 1 footer with practice info
+        // Page 1 - no footer (moved to page 2)
+      } else {
+        // Page 2 and subsequent pages - full footer
         pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
         pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 4, { align: 'center' });
         pdf.text(`Report Date: ${dateWithSuffix} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 8, { align: 'center' });
-      } else {
-        // Subsequent pages - minimal footer
-        pdf.text(`Report Date: ${dateWithSuffix} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 4, { align: 'center' });
       }
     }
     
