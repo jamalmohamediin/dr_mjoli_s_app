@@ -40,11 +40,15 @@ interface RectalCancerReportPreviewProps {
       };
       operationType?: {
         type?: string[];
+        operationFindings?: string;
+        operationFindingsOptions?: string[];
+        operationFindingsOther?: string;
         rectumOperationType?: string[];
         rectumOperationOther?: string;
         neoadjuvantTreatment?: string;
         radiationDetails?: string;
         chemotherapyRegimen?: string;
+        resectionCompleteness?: string;
         staging?: {
           t?: string;
           n?: string;
@@ -230,6 +234,15 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     : rectalCancer?.surgicalApproach?.primaryApproach
       ? [rectalCancer.surgicalApproach.primaryApproach]
       : [];
+  const operationFindingsOptions = rectalCancer?.operationType?.operationFindingsOptions || [];
+  const operationFindingsSelectionText = operationFindingsOptions
+    .map((option) => {
+      if (option === 'Other' && rectalCancer?.operationType?.operationFindingsOther?.trim()) {
+        return `Other: ${rectalCancer.operationType.operationFindingsOther}`;
+      }
+      return option;
+    })
+    .join(', ');
   
   // Helper function to determine visibility based on branching logic
   const shouldShowSection = (section: string): boolean => {
@@ -499,7 +512,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
   if (!hasData) {
     return (
       <div className="p-6 text-center text-muted-foreground">
-        <p className="text-sm">Start filling out the rectal cancer surgery form to see findings appear here.</p>
+        <p className="text-sm">Start filling out the colorectal resection form to see findings appear here.</p>
       </div>
     );
   }
@@ -522,7 +535,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             
             {/* Center Column - Report Title */}
             <div className="text-center space-y-2">
-              <h4 className="text-sm font-bold">COLON AND RECTUM RESECTION REPORT</h4>
+              <h4 className="text-sm font-bold">COLORECTAL RESECTION REPORT</h4>
             </div>
             
             {/* Right Column - Practice Address */}
@@ -651,7 +664,11 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
         )}
         
         {/* Indication for Surgery - Enhanced with comprehensive details */}
-        {(rectalCancer?.operationType?.type?.length > 0 || rectalCancer?.operationType?.neoadjuvantTreatment || rectalCancer?.findings?.description) && (
+        {(rectalCancer?.operationType?.type?.length > 0 ||
+          rectalCancer?.operationType?.operationFindingsOptions?.length > 0 ||
+          rectalCancer?.operationType?.operationFindings ||
+          rectalCancer?.operationType?.neoadjuvantTreatment ||
+          rectalCancer?.findings?.description) && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Indication for Surgery</h5>
             <div className="space-y-1 text-xs text-gray-700">
@@ -659,6 +676,20 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
               {rectalCancer?.operationType?.type?.length > 0 && (
                 <div><span className="font-medium">Operation Type:</span> {rectalCancer.operationType.type.join(', ')}</div>
               )}
+
+              {(rectalCancer?.operationType?.type?.includes('Colon') || rectalCancer?.operationType?.type?.includes('Rectum')) &&
+                operationFindingsSelectionText && (
+                  <div className="ml-4">
+                    <span className="font-medium">Operation Findings:</span> {operationFindingsSelectionText}
+                  </div>
+                )}
+
+              {(rectalCancer?.operationType?.type?.includes('Colon') || rectalCancer?.operationType?.type?.includes('Rectum')) &&
+                rectalCancer?.operationType?.operationFindings?.trim() && (
+                  <div className="ml-4">
+                    <span className="font-medium">Description of Operation Findings:</span> {rectalCancer.operationType.operationFindings}
+                  </div>
+                )}
               
               {/* Rectum Operation Types - show with bullet points when Rectum is selected */}
               {rectalCancer?.operationType?.type?.includes('Rectum') && rectalCancer?.operationType?.rectumOperationType?.length > 0 && (

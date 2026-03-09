@@ -1,0 +1,1852 @@
+import React, { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { formatDateOnly, getLocalDateTimeValue } from "@/utils/dateFormatter";
+import { initialCholecystectomyState } from "@/utils/cholecystectomy";
+import {
+  Activity,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  Redo2,
+  RotateCcw,
+  Scissors,
+  Shield,
+  Undo2,
+  User,
+} from "lucide-react";
+
+interface CholecystectomyFormProps {
+  currentReport: any;
+  updateCholecystectomy: (section: string, field: string, value: any) => void;
+  onClear?: (section: string) => void;
+  onClearAll?: () => void;
+  onUndo?: (section: string) => void;
+  onRedo?: (section: string) => void;
+  onExportPDF?: () => void;
+  diagramElement?: React.ReactNode;
+}
+
+const indicationOptions = [
+  "Symptomatic gallstones",
+  "Acute cholecystitis",
+  "Gallstone pancreatitis",
+  "Biliary colic",
+  "Acalculus cholecystitis",
+  "Other",
+];
+
+const urgencyOptions = ["Elective", "Semi-elective", "Semi-urgent", "Emergency", "Day case"];
+
+const imagingOptions = [
+  "None",
+  "Ultrasound",
+  "CT Scan",
+  "MRI",
+  "X-Ray",
+  "Contrast Study",
+  "Other",
+];
+
+const gallbladderAppearanceOptions = [
+  "Normal",
+  "Distended",
+  "Inflamed",
+  "Thickened wall",
+  "Fibrotic",
+  "Empyema",
+  "Gangrenous",
+  "Perforated",
+  "Mucocele",
+  "Other",
+];
+
+const adhesionOptions = ["None", "Mild", "Moderate", "Severe", "Dense"];
+
+const approachOptions = ["Laparoscopic", "Laparoscopic converted to open", "Open"];
+
+const conversionReasonOptions = [
+  "Adhesions",
+  "Visceral injury",
+  "Vascular injury",
+  "Difficult exposure",
+  "Difficult visualization",
+  "Bleeding",
+  "Failure to progress",
+  "Other",
+];
+
+const subtotalReasonOptions = [
+  "Difficult exposure",
+  "Bleeding",
+  "Failure to progress",
+  "Adhesions",
+  "Difficult visualization",
+  "Visceral injury",
+  "Vascular injury",
+  "Other",
+];
+
+const cysticDuctControlOptions = [
+  "Ligaclip",
+  "Hemoloc",
+  "Endoloop",
+  "Tie",
+  "Linear stapler",
+  "Other",
+];
+
+const cysticArteryControlOptions = [
+  "Ligaclip",
+  "Hemoloc",
+  "Diathermy",
+  "Energy device",
+  "Other",
+];
+
+const liverBedDissectionOptions = [
+  "Diathermy",
+  "Ligasure",
+  "Harmonic",
+  "Blunt",
+  "Sharp",
+  "Other",
+];
+
+const additionalProcedureOptions = [
+  "Intraoperative cholangiogram",
+  "Common bile duct exploration",
+  "Drain insertion",
+  "Other",
+];
+
+const cholangiogramFindingOptions = [
+  "Normal",
+  "Filling defects",
+  "Ductal stricture",
+  "Dilatation",
+  "Stones",
+  "Leaks",
+  "Other",
+];
+
+const gallbladderRetrievalOptions = ["Endobag", "Direct port extraction", "Other"];
+
+const skinClosureOptions = [
+  "Simple suture",
+  "Staples",
+  "Subcuticular suture",
+  "Adhesive strip",
+  "Tissue glue",
+  "Other",
+];
+
+const intraoperativeDifficultyOptions = [
+  "None",
+  "Peritoneal access",
+  "Adhesions",
+  "Dense inflammation",
+  "Dense fibrosis",
+  "Bleeding",
+  "Equipment issues",
+  "Other",
+];
+
+const complicationOptions = [
+  "None",
+  "Bile duct injury",
+  "Bleeding",
+  "Liver tear",
+  "Bowel injury",
+  "Other",
+];
+
+const toArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean) as string[];
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value];
+  }
+  return [];
+};
+
+export const CholecystectomyForm = ({
+  currentReport,
+  updateCholecystectomy,
+  onClear,
+  onUndo,
+  onRedo,
+  diagramElement,
+}: CholecystectomyFormProps) => {
+  const cholecystectomy = currentReport.cholecystectomy || initialCholecystectomyState;
+  const [expanded, setExpanded] = useState({
+    patientInfo: true,
+    preoperative: true,
+    intraoperative: false,
+    procedure: false,
+    closure: false,
+  });
+
+  const toggleExpand = (section: keyof typeof expanded) => {
+    setExpanded((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  const toggleArrayValue = (
+    section: string,
+    field: string,
+    option: string,
+    currentValue: unknown
+  ) => {
+    const current = toArray(currentValue);
+    const updated = current.includes(option)
+      ? current.filter((item) => item !== option)
+      : [...current, option];
+    updateCholecystectomy(section, field, updated);
+  };
+
+  const calculateDuration = (startTime: string, endTime: string): string => {
+    if (!startTime || !endTime) return "";
+
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const [endHour, endMinute] = endTime.split(":").map(Number);
+    const startTotal = startHour * 60 + startMinute;
+    let endTotal = endHour * 60 + endMinute;
+
+    if (endTotal < startTotal) {
+      endTotal += 24 * 60;
+    }
+
+    return String(endTotal - startTotal);
+  };
+
+  const handleTimeChange = (field: "startTime" | "endTime", value: string) => {
+    updateCholecystectomy("preoperative", field, value);
+
+    const startTime =
+      field === "startTime" ? value : cholecystectomy.preoperative?.startTime || "";
+    const endTime = field === "endTime" ? value : cholecystectomy.preoperative?.endTime || "";
+
+    if (startTime && endTime) {
+      updateCholecystectomy("preoperative", "duration", calculateDuration(startTime, endTime));
+    }
+  };
+
+  const isConvertedToOpen = () =>
+    toArray(cholecystectomy.procedure?.approach).includes("Laparoscopic converted to open");
+
+  const isSubtotalSelected = () =>
+    cholecystectomy.procedure?.subtotalCholecystectomy === "Yes";
+
+  const hasAdditionalDrain = () =>
+    toArray(cholecystectomy.procedure?.additionalProcedures).includes("Drain insertion");
+
+  const hasCholangiogram = () =>
+    toArray(cholecystectomy.procedure?.additionalProcedures).includes(
+      "Intraoperative cholangiogram"
+    );
+
+  const renderSectionHeader = (
+    title: string,
+    sectionKey: keyof typeof expanded,
+    icon: React.ReactNode,
+    historyKey: string
+  ) => (
+    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+      <div
+        className="flex items-center gap-2 cursor-pointer flex-1"
+        onClick={() => toggleExpand(sectionKey)}
+      >
+        {icon}
+        <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
+        <ChevronDown
+          className={`w-5 h-5 text-gray-500 transition-transform ${
+            expanded[sectionKey] ? "transform rotate-180" : ""
+          }`}
+        />
+      </div>
+      <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => onUndo?.(historyKey)}
+          title="Undo"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => onRedo?.(historyKey)}
+          title="Redo"
+        >
+          <Redo2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+          onClick={() => onClear?.(historyKey)}
+          title="Clear Section"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderTeamField = (
+    label: string,
+    field: "surgeons" | "assistants" | "anaesthetists",
+    placeholder: string
+  ) => {
+    const values = cholecystectomy.preoperative?.[field] || [""];
+
+    return (
+      <div className="grid grid-cols-2 gap-4 items-start">
+        <label className="text-gray-800 font-medium">{label}</label>
+        <div className="space-y-2">
+          {values.map((value: string, index: number) => (
+            <div key={`${field}-${index}`} className="flex items-center gap-2">
+              <Input
+                className="flex-1"
+                type="text"
+                placeholder={placeholder}
+                value={value}
+                onChange={(e) => {
+                  const updated = [...values];
+                  updated[index] = e.target.value;
+                  updateCholecystectomy("preoperative", field, updated);
+                }}
+              />
+              {index === values.length - 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs px-2 py-1"
+                  onClick={() => updateCholecystectomy("preoperative", field, [...values, ""])}
+                >
+                  +
+                </Button>
+              )}
+              {values.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs px-2 py-1 text-red-600 hover:text-red-700"
+                  onClick={() =>
+                    updateCholecystectomy(
+                      "preoperative",
+                      field,
+                      values.filter((_: string, itemIndex: number) => itemIndex !== index)
+                    )
+                  }
+                >
+                  −
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="glass-card-light">
+        {renderSectionHeader(
+          "Patient Information",
+          "patientInfo",
+          <User className="h-5 w-5 text-gray-600" />,
+          "patientInfo"
+        )}
+        {expanded.patientInfo && (
+          <CardContent className="px-6 py-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Patient Name:</label>
+                <Input
+                  type="text"
+                  value={cholecystectomy.patientInfo?.name || ""}
+                  onChange={(e) =>
+                    updateCholecystectomy("patientInfo", "name", e.target.value)
+                  }
+                  placeholder="Enter Patient Name"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Patient ID:</label>
+                <Input
+                  type="text"
+                  value={cholecystectomy.patientInfo?.patientId || ""}
+                  onChange={(e) =>
+                    updateCholecystectomy("patientInfo", "patientId", e.target.value)
+                  }
+                  placeholder="Enter Patient ID"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
+                <div className="w-full">
+                  <Input
+                    type="date"
+                    lang="en-GB"
+                    value={cholecystectomy.patientInfo?.dateOfBirth || ""}
+                    onChange={(e) =>
+                      updateCholecystectomy("patientInfo", "dateOfBirth", e.target.value)
+                    }
+                  />
+                  {cholecystectomy.patientInfo?.dateOfBirth && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Display format: {formatDateOnly(cholecystectomy.patientInfo.dateOfBirth)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Age:</label>
+                <Input
+                  className="bg-gray-100"
+                  type="text"
+                  value={cholecystectomy.patientInfo?.age || ""}
+                  placeholder="Calculated from the Date Of Birth"
+                  readOnly
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Sex:</label>
+                <div className="space-y-2">
+                  <select
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    value={cholecystectomy.patientInfo?.sex || ""}
+                    onChange={(e) =>
+                      updateCholecystectomy("patientInfo", "sex", e.target.value)
+                    }
+                  >
+                    <option value="">Select Sex</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                  {cholecystectomy.patientInfo?.sex === "other" && (
+                    <Input
+                      type="text"
+                      placeholder="Please Specify"
+                      value={cholecystectomy.patientInfo?.sexOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy("patientInfo", "sexOther", e.target.value)
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Weight:</label>
+                <Input
+                  type="text"
+                  value={cholecystectomy.patientInfo?.weight || ""}
+                  onChange={(e) =>
+                    updateCholecystectomy("patientInfo", "weight", e.target.value)
+                  }
+                  placeholder="Enter Weight (Kg)"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">Height:</label>
+                <Input
+                  type="text"
+                  value={cholecystectomy.patientInfo?.height || ""}
+                  onChange={(e) =>
+                    updateCholecystectomy("patientInfo", "height", e.target.value)
+                  }
+                  placeholder="Enter Height (Cm)"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 items-center">
+                <label className="text-gray-800 font-medium">BMI:</label>
+                <Input
+                  className="bg-gray-100"
+                  type="text"
+                  value={cholecystectomy.patientInfo?.bmi || ""}
+                  placeholder="Calculated from Height and Weight"
+                  readOnly
+                />
+              </div>
+
+              <ASAClassificationSection
+                selectedASA={cholecystectomy.patientInfo?.asaScore || ""}
+                onASAChange={(value) => updateCholecystectomy("patientInfo", "asaScore", value)}
+                notes={cholecystectomy.patientInfo?.asaNotes || ""}
+                onNotesChange={(value) =>
+                  updateCholecystectomy("patientInfo", "asaNotes", value)
+                }
+                showNotes={true}
+              />
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="glass-card-light">
+        {renderSectionHeader(
+          "Preoperative Information",
+          "preoperative",
+          <Activity className="h-5 w-5 text-gray-600" />,
+          "preoperative"
+        )}
+        {expanded.preoperative && (
+          <CardContent className="px-6 py-4">
+            <div className="space-y-6">
+              <div className="space-y-4">
+                {renderTeamField("Surgeon:", "surgeons", "Enter Surgeon Name")}
+                {renderTeamField("Assistant:", "assistants", "Enter Assistant Name")}
+                {renderTeamField("Anaesthetist:", "anaesthetists", "Enter Anaesthetist Name")}
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {indicationOptions.map((option) => (
+                      <div className="flex items-center" key={`chole-indication-${option}`}>
+                        <Checkbox
+                          id={`chole-indication-${option}`}
+                          checked={toArray(cholecystectomy.preoperative?.indication).includes(
+                            option
+                          )}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "preoperative",
+                              "indication",
+                              option,
+                              cholecystectomy.preoperative?.indication
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`chole-indication-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {toArray(cholecystectomy.preoperative?.indication).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify other indication"
+                        value={cholecystectomy.preoperative?.indicationOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy("preoperative", "indicationOther", e.target.value)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 items-start">
+                  <label className="text-gray-800 font-medium">Operation Description:</label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Enter operation description"
+                    value={cholecystectomy.preoperative?.operationDescription || ""}
+                    onChange={(e) =>
+                      updateCholecystectomy(
+                        "preoperative",
+                        "operationDescription",
+                        e.target.value
+                      )
+                    }
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
+                  <div className="flex flex-wrap gap-4 ml-4">
+                    {urgencyOptions.map((option) => (
+                      <div className="flex items-center" key={`chole-urgency-${option}`}>
+                        <Checkbox
+                          id={`chole-urgency-${option}`}
+                          checked={cholecystectomy.preoperative?.procedureUrgency === option}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              updateCholecystectomy("preoperative", "procedureUrgency", option);
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`chole-urgency-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {imagingOptions.map((option) => (
+                      <div className="flex items-center" key={`chole-imaging-${option}`}>
+                        <Checkbox
+                          id={`chole-imaging-${option}`}
+                          checked={toArray(cholecystectomy.preoperative?.imaging).includes(option)}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "preoperative",
+                              "imaging",
+                              option,
+                              cholecystectomy.preoperative?.imaging
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`chole-imaging-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {toArray(cholecystectomy.preoperative?.imaging).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify other imaging"
+                        value={cholecystectomy.preoperative?.imagingOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy("preoperative", "imagingOther", e.target.value)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4 items-center">
+                    <label className="text-gray-800 font-medium">Start Time:</label>
+                    <Input
+                      type="time"
+                      value={cholecystectomy.preoperative?.startTime || ""}
+                      onChange={(e) => handleTimeChange("startTime", e.target.value)}
+                    />
+                    <div className="text-sm text-gray-600">24-hour format</div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 items-center">
+                    <label className="text-gray-800 font-medium">End Time:</label>
+                    <Input
+                      type="time"
+                      value={cholecystectomy.preoperative?.endTime || ""}
+                      onChange={(e) => handleTimeChange("endTime", e.target.value)}
+                    />
+                    <div className="text-sm text-gray-600">24-hour format</div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 items-center">
+                    <label className="text-gray-800 font-medium">Total Duration (Mins):</label>
+                    <Input
+                      type="text"
+                      value={cholecystectomy.preoperative?.duration || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy("preoperative", "duration", e.target.value)
+                      }
+                      placeholder="Auto-calculated or manual entry"
+                    />
+                    <div className="text-sm text-gray-600">
+                      {cholecystectomy.preoperative?.startTime &&
+                      cholecystectomy.preoperative?.endTime
+                        ? "Auto-calculated"
+                        : "Manual entry"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="glass-card-light">
+        {renderSectionHeader(
+          "Intraoperative Findings",
+          "intraoperative",
+          <Shield className="h-5 w-5 text-gray-600" />,
+          "intraoperative"
+        )}
+        {expanded.intraoperative && (
+          <CardContent className="px-6 py-4">
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Gallbladder Appearance:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {gallbladderAppearanceOptions.map((option) => (
+                    <div className="flex items-center" key={`chole-appearance-${option}`}>
+                      <Checkbox
+                        id={`chole-appearance-${option}`}
+                        checked={toArray(cholecystectomy.intraoperative?.gallbladderAppearance).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "intraoperative",
+                            "gallbladderAppearance",
+                            option,
+                            cholecystectomy.intraoperative?.gallbladderAppearance
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`chole-appearance-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.intraoperative?.gallbladderAppearance).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other gallbladder appearance"
+                      value={cholecystectomy.intraoperative?.gallbladderAppearanceOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "intraoperative",
+                          "gallbladderAppearanceOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Adhesions to gall bladder:
+                </p>
+                <div className="flex flex-wrap gap-4 ml-4">
+                  {adhesionOptions.map((option) => (
+                    <div className="flex items-center" key={`chole-adhesion-${option}`}>
+                      <Checkbox
+                        id={`chole-adhesion-${option}`}
+                        checked={cholecystectomy.intraoperative?.adhesionsToGallbladder === option}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy(
+                              "intraoperative",
+                              "adhesionsToGallbladder",
+                              option
+                            );
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`chole-adhesion-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="glass-card-light">
+        {renderSectionHeader(
+          "Procedure Details",
+          "procedure",
+          <Scissors className="h-5 w-5 text-gray-600" />,
+          "procedure"
+        )}
+        {expanded.procedure && (
+          <CardContent className="px-6 py-4">
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
+                <div className="flex flex-wrap gap-4 ml-4">
+                  {approachOptions.map((option) => (
+                    <div className="flex items-center" key={`chole-approach-${option}`}>
+                      <Checkbox
+                        id={`chole-approach-${option}`}
+                        checked={toArray(cholecystectomy.procedure?.approach).includes(option)}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "approach",
+                            option,
+                            cholecystectomy.procedure?.approach
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`chole-approach-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {isConvertedToOpen() && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Reason for Conversion:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {conversionReasonOptions.map((option) => (
+                      <div className="flex items-center" key={`chole-conversion-${option}`}>
+                        <Checkbox
+                          id={`chole-conversion-${option}`}
+                          checked={toArray(cholecystectomy.procedure?.reasonForConversion).includes(
+                            option
+                          )}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "procedure",
+                              "reasonForConversion",
+                              option,
+                              cholecystectomy.procedure?.reasonForConversion
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`chole-conversion-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {toArray(cholecystectomy.procedure?.reasonForConversion).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify other reason for conversion"
+                        value={cholecystectomy.procedure?.reasonForConversionOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "reasonForConversionOther",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-md font-medium text-gray-800 mb-3">Access and Ports</h3>
+                <div className="ml-4 mb-4">
+                  <div className="bg-gray-50 p-3 rounded border">
+                    <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-0.5 bg-black"></div>
+                        <span>Ports (with size label)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 border-2 border-amber-500 rounded-full"
+                          style={{ borderStyle: "dashed" }}
+                        ></div>
+                        <span>Ileostomy (dashed yellow circle)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-green-600 rounded-full"></div>
+                        <span>Colostomy (solid green circle)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-6 h-0.5 bg-red-900"
+                          style={{
+                            backgroundImage:
+                              "repeating-linear-gradient(90deg, #7f1d1d 0, #7f1d1d 4px, transparent 4px, transparent 8px)",
+                          }}
+                        ></div>
+                        <span>Incisions (dashed dark red line)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="ml-4">{diagramElement}</div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Subtotal cholecystectomy:
+                </p>
+                <div className="flex space-x-4 ml-4">
+                  {["Yes", "No"].map((option) => (
+                    <div className="flex items-center" key={`subtotal-${option}`}>
+                      <Checkbox
+                        id={`subtotal-${option}`}
+                        checked={cholecystectomy.procedure?.subtotalCholecystectomy === option}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy(
+                              "procedure",
+                              "subtotalCholecystectomy",
+                              option
+                            );
+                          }
+                        }}
+                      />
+                      <label htmlFor={`subtotal-${option}`} className="ml-2 block text-sm">
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {isSubtotalSelected() && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Reason for subtotal cholecystectomy:
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {subtotalReasonOptions.map((option) => (
+                      <div className="flex items-center" key={`subtotal-reason-${option}`}>
+                        <Checkbox
+                          id={`subtotal-reason-${option}`}
+                          checked={toArray(cholecystectomy.procedure?.subtotalReason).includes(
+                            option
+                          )}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "procedure",
+                              "subtotalReason",
+                              option,
+                              cholecystectomy.procedure?.subtotalReason
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`subtotal-reason-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {toArray(cholecystectomy.procedure?.subtotalReason).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify other subtotal reason"
+                        value={cholecystectomy.procedure?.subtotalReasonOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "subtotalReasonOther",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Gall bladder decompression required:
+                </p>
+                <div className="flex space-x-4 ml-4">
+                  {["Yes", "No"].map((option) => (
+                    <div className="flex items-center" key={`decompression-${option}`}>
+                      <Checkbox
+                        id={`decompression-${option}`}
+                        checked={
+                          cholecystectomy.procedure?.gallbladderDecompressionRequired === option
+                        }
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy(
+                              "procedure",
+                              "gallbladderDecompressionRequired",
+                              option
+                            );
+                          }
+                        }}
+                      />
+                      <label htmlFor={`decompression-${option}`} className="ml-2 block text-sm">
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-md font-medium text-gray-800">Critical View of Safety</h3>
+                {[
+                  ["Calot’s triangle dissected:", "calotsTriangleDissected"],
+                  ["Cystic duct identified:", "cysticDuctIdentified"],
+                  ["Cystic artery identified:", "cysticArteryIdentified"],
+                  [
+                    "Two structures entering gallbladder confirmed:",
+                    "twoStructuresConfirmed",
+                  ],
+                ].map(([label, field]) => (
+                  <div key={field}>
+                    <p className="text-sm font-medium text-gray-700 mb-2">{label}</p>
+                    <div className="flex space-x-4 ml-4">
+                      {["Yes", "No"].map((option) => (
+                        <div className="flex items-center" key={`${field}-${option}`}>
+                          <Checkbox
+                            id={`${field}-${option}`}
+                            checked={cholecystectomy.procedure?.[field] === option}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateCholecystectomy("procedure", field, option);
+                              }
+                            }}
+                          />
+                          <label htmlFor={`${field}-${option}`} className="ml-2 block text-sm">
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Cystic duct control:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {cysticDuctControlOptions.map((option) => (
+                    <div className="flex items-center" key={`duct-control-${option}`}>
+                      <Checkbox
+                        id={`duct-control-${option}`}
+                        checked={toArray(cholecystectomy.procedure?.cysticDuctControl).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "cysticDuctControl",
+                            option,
+                            cholecystectomy.procedure?.cysticDuctControl
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`duct-control-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.procedure?.cysticDuctControl).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other cystic duct control"
+                      value={cholecystectomy.procedure?.cysticDuctControlOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "cysticDuctControlOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Cystic artery control:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {cysticArteryControlOptions.map((option) => (
+                    <div className="flex items-center" key={`artery-control-${option}`}>
+                      <Checkbox
+                        id={`artery-control-${option}`}
+                        checked={toArray(cholecystectomy.procedure?.cysticArteryControl).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "cysticArteryControl",
+                            option,
+                            cholecystectomy.procedure?.cysticArteryControl
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`artery-control-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.procedure?.cysticArteryControl).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other cystic artery control"
+                      value={cholecystectomy.procedure?.cysticArteryControlOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "cysticArteryControlOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Gallbladder dissected from liver bed:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {liverBedDissectionOptions.map((option) => (
+                    <div className="flex items-center" key={`liver-bed-${option}`}>
+                      <Checkbox
+                        id={`liver-bed-${option}`}
+                        checked={toArray(
+                          cholecystectomy.procedure?.gallbladderDissectedFromLiverBed
+                        ).includes(option)}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "gallbladderDissectedFromLiverBed",
+                            option,
+                            cholecystectomy.procedure?.gallbladderDissectedFromLiverBed
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`liver-bed-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.procedure?.gallbladderDissectedFromLiverBed).includes(
+                  "Other"
+                ) && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other liver bed dissection method"
+                      value={
+                        cholecystectomy.procedure?.gallbladderDissectedFromLiverBedOther || ""
+                      }
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "gallbladderDissectedFromLiverBedOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Bile spillage:</p>
+                  <div className="flex space-x-4">
+                    {["Yes", "No"].map((option) => (
+                      <div className="flex items-center" key={`bile-spillage-${option}`}>
+                        <Checkbox
+                          id={`bile-spillage-${option}`}
+                          checked={cholecystectomy.procedure?.bileSpillage === option}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              updateCholecystectomy("procedure", "bileSpillage", option);
+                            }
+                          }}
+                        />
+                        <label htmlFor={`bile-spillage-${option}`} className="ml-2 block text-sm">
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Stones spillage:</p>
+                  <div className="flex space-x-4">
+                    {["Yes", "No"].map((option) => (
+                      <div className="flex items-center" key={`stones-spillage-${option}`}>
+                        <Checkbox
+                          id={`stones-spillage-${option}`}
+                          checked={cholecystectomy.procedure?.stonesSpillage === option}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              updateCholecystectomy("procedure", "stonesSpillage", option);
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`stones-spillage-${option}`}
+                          className="ml-2 block text-sm"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Additional Procedures:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {additionalProcedureOptions.map((option) => (
+                    <div className="flex items-center" key={`additional-procedure-${option}`}>
+                      <Checkbox
+                        id={`additional-procedure-${option}`}
+                        checked={toArray(cholecystectomy.procedure?.additionalProcedures).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "additionalProcedures",
+                            option,
+                            cholecystectomy.procedure?.additionalProcedures
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`additional-procedure-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {hasAdditionalDrain() && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Drain insertion site"
+                      value={cholecystectomy.procedure?.additionalProcedureDrainSite || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "additionalProcedureDrainSite",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+
+                {toArray(cholecystectomy.procedure?.additionalProcedures).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other additional procedure"
+                      value={cholecystectomy.procedure?.additionalProceduresOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "additionalProceduresOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              {hasCholangiogram() && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Cholangiogram findings (if done):
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {cholangiogramFindingOptions.map((option) => (
+                      <div className="flex items-center" key={`cholangiogram-${option}`}>
+                        <Checkbox
+                          id={`cholangiogram-${option}`}
+                          checked={toArray(cholecystectomy.procedure?.cholangiogramFindings).includes(
+                            option
+                          )}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "procedure",
+                              "cholangiogramFindings",
+                              option,
+                              cholecystectomy.procedure?.cholangiogramFindings
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`cholangiogram-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  {toArray(cholecystectomy.procedure?.cholangiogramFindings).includes(
+                    "Ductal stricture"
+                  ) && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify ductal stricture site"
+                        value={cholecystectomy.procedure?.cholangiogramStrictureSite || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "cholangiogramStrictureSite",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {toArray(cholecystectomy.procedure?.cholangiogramFindings).includes(
+                    "Dilatation"
+                  ) && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify dilatation"
+                        value={cholecystectomy.procedure?.cholangiogramDilatation || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "cholangiogramDilatation",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {toArray(cholecystectomy.procedure?.cholangiogramFindings).includes("Leaks") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify leak site"
+                        value={cholecystectomy.procedure?.cholangiogramLeakSite || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "cholangiogramLeakSite",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {toArray(cholecystectomy.procedure?.cholangiogramFindings).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify other cholangiogram finding"
+                        value={cholecystectomy.procedure?.cholangiogramOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy("procedure", "cholangiogramOther", e.target.value)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Gallbladder retrieval:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {gallbladderRetrievalOptions.map((option) => (
+                    <div className="flex items-center" key={`retrieval-${option}`}>
+                      <Checkbox
+                        id={`retrieval-${option}`}
+                        checked={toArray(cholecystectomy.procedure?.gallbladderRetrieval).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "procedure",
+                            "gallbladderRetrieval",
+                            option,
+                            cholecystectomy.procedure?.gallbladderRetrieval
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`retrieval-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.procedure?.gallbladderRetrieval).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other retrieval method"
+                      value={cholecystectomy.procedure?.gallbladderRetrievalOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "gallbladderRetrievalOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Drain insertion:</p>
+                <div className="flex space-x-4 ml-4">
+                  {["Yes", "No"].map((option) => (
+                    <div className="flex items-center" key={`drain-insertion-${option}`}>
+                      <Checkbox
+                        id={`drain-insertion-${option}`}
+                        checked={cholecystectomy.procedure?.drainInsertion === option}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy("procedure", "drainInsertion", option);
+                          }
+                        }}
+                      />
+                      <label htmlFor={`drain-insertion-${option}`} className="ml-2 block text-sm">
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="glass-card-light">
+        {renderSectionHeader(
+          "Closure",
+          "closure",
+          <Shield className="h-5 w-5 text-gray-600" />,
+          "closure"
+        )}
+        {expanded.closure && (
+          <CardContent className="px-6 py-4">
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Fascial closure:</p>
+                <div className="flex space-x-4 ml-4">
+                  {["Yes", "No"].map((option) => (
+                    <div className="flex items-center" key={`fascial-closure-${option}`}>
+                      <Checkbox
+                        id={`fascial-closure-${option}`}
+                        checked={cholecystectomy.closure?.fascialClosure === option}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy("closure", "fascialClosure", option);
+                          }
+                        }}
+                      />
+                      <label htmlFor={`fascial-closure-${option}`} className="ml-2 block text-sm">
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Skin closure method:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {skinClosureOptions.map((option) => (
+                    <div className="flex items-center" key={`skin-closure-${option}`}>
+                      <Checkbox
+                        id={`skin-closure-${option}`}
+                        checked={toArray(cholecystectomy.closure?.skinClosureMethod).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "closure",
+                            "skinClosureMethod",
+                            option,
+                            cholecystectomy.closure?.skinClosureMethod
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`skin-closure-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.closure?.skinClosureMethod).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other skin closure method"
+                      value={cholecystectomy.closure?.skinClosureOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy("closure", "skinClosureOther", e.target.value)
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-md font-medium text-gray-800 mb-3">Specimen</h3>
+                <div className="space-y-4 ml-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Gallbladder sent for histology:
+                    </p>
+                    <div className="flex space-x-4">
+                      {["Yes", "No"].map((option) => (
+                        <div className="flex items-center" key={`histology-${option}`}>
+                          <Checkbox
+                            id={`histology-${option}`}
+                            checked={
+                              cholecystectomy.closure?.gallbladderSentForHistology === option
+                            }
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateCholecystectomy(
+                                  "closure",
+                                  "gallbladderSentForHistology",
+                                  option
+                                );
+                              }
+                            }}
+                          />
+                          <label htmlFor={`histology-${option}`} className="ml-2 block text-sm">
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {cholecystectomy.closure?.gallbladderSentForHistology === "Yes" && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Please specify laboratory sent to:
+                      </p>
+                      <Input
+                        type="text"
+                        placeholder="Enter laboratory name"
+                        value={cholecystectomy.closure?.laboratoryName || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy("closure", "laboratoryName", e.target.value)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Intra-operative difficulty:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {intraoperativeDifficultyOptions.map((option) => (
+                    <div className="flex items-center" key={`difficulty-${option}`}>
+                      <Checkbox
+                        id={`difficulty-${option}`}
+                        checked={toArray(cholecystectomy.closure?.intraoperativeDifficulty).includes(
+                          option
+                        )}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "closure",
+                            "intraoperativeDifficulty",
+                            option,
+                            cholecystectomy.closure?.intraoperativeDifficulty
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`difficulty-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.closure?.intraoperativeDifficulty).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other intra-operative difficulty"
+                      value={cholecystectomy.closure?.intraoperativeDifficultyOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "closure",
+                          "intraoperativeDifficultyOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Complications:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                  {complicationOptions.map((option) => (
+                    <div className="flex items-center" key={`complication-${option}`}>
+                      <Checkbox
+                        id={`complication-${option}`}
+                        checked={toArray(cholecystectomy.closure?.complications).includes(option)}
+                        onCheckedChange={() =>
+                          toggleArrayValue(
+                            "closure",
+                            "complications",
+                            option,
+                            cholecystectomy.closure?.complications
+                          )
+                        }
+                      />
+                      <label
+                        htmlFor={`complication-${option}`}
+                        className="ml-2 block text-sm text-gray-700"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {toArray(cholecystectomy.closure?.complications).includes("Other") && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify other complication"
+                      value={cholecystectomy.closure?.complicationsOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy("closure", "complicationsOther", e.target.value)
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card className="glass-card-light">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <FileText className="h-4 w-4 text-gray-600" />
+              Additional Information
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => onUndo?.("additionalInfo")}
+                title="Undo"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => onRedo?.("additionalInfo")}
+                title="Redo"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                onClick={() => onClear?.("additionalInfo")}
+                title="Clear Section"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            rows={4}
+            placeholder="Enter any additional information"
+            value={cholecystectomy.additionalInfo?.additionalInformation || ""}
+            onChange={(e) =>
+              updateCholecystectomy("additionalInfo", "additionalInformation", e.target.value)
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="glass-card-light">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ClipboardList className="h-4 w-4 text-gray-600" />
+            Post Operative Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            rows={4}
+            placeholder="Enter post operative management details"
+            value={cholecystectomy.additionalInfo?.postOperativeManagement || ""}
+            onChange={(e) =>
+              updateCholecystectomy("additionalInfo", "postOperativeManagement", e.target.value)
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="glass-card-light">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FileText className="h-4 w-4 text-gray-600" />
+            Surgeon's Signature
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Surgeon's Signature:</p>
+              <div className="space-y-2">
+                <Input
+                  type="text"
+                  placeholder="Type signature name or leave blank to upload"
+                  value={cholecystectomy.additionalInfo?.surgeonSignatureText || ""}
+                  onChange={(e) =>
+                    updateCholecystectomy("additionalInfo", "surgeonSignatureText", e.target.value)
+                  }
+                />
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      updateCholecystectomy(
+                        "additionalInfo",
+                        "surgeonSignature",
+                        reader.result as string
+                      );
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                <p className="text-xs text-gray-500">Upload signature or stamp (Image/PDF)</p>
+                {cholecystectomy.additionalInfo?.surgeonSignature && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-green-600">✓ Signature uploaded</p>
+                    <div className="border rounded p-2 bg-gray-50">
+                      <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                      <img
+                        src={cholecystectomy.additionalInfo.surgeonSignature}
+                        alt="Signature preview"
+                        className="max-h-12 max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
+              <div className="space-y-2">
+                <Input
+                  type="datetime-local"
+                  value={cholecystectomy.additionalInfo?.dateTime || getLocalDateTimeValue()}
+                  onChange={(e) =>
+                    updateCholecystectomy("additionalInfo", "dateTime", e.target.value)
+                  }
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs px-2 py-1"
+                  onClick={() =>
+                    updateCholecystectomy("additionalInfo", "dateTime", getLocalDateTimeValue())
+                  }
+                >
+                  Set Current Date/Time
+                </Button>
+                {cholecystectomy.additionalInfo?.dateTime && (
+                  <p className="text-xs text-gray-500">
+                    Display format: {formatDateOnly(cholecystectomy.additionalInfo.dateTime)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};

@@ -348,7 +348,14 @@ export const generateAppendectomyPDF = async (
     const imaging = preop.imaging?.join(', ') || '';
     
     pdf.text(`Preoperative Imaging: ${imaging}`, col1X, preRow4Y);
-    y += 8;
+    y += 6;
+
+    const procedureUrgency = preop.procedureUrgency?.join(', ') || '';
+    if (procedureUrgency && procedureUrgency.trim()) {
+      pdf.text(`Procedure Urgency: ${procedureUrgency}`, col1X, y);
+      y += 6;
+    }
+    y += 2;
     
     // Add separator line
     pdf.setDrawColor(0, 0, 0);
@@ -372,10 +379,21 @@ export const generateAppendectomyPDF = async (
     const opFindingsCol1X = margin;
     const opFindingsCol2X = margin + 100;
     
+    // Operation Description row (on top of appendix appearance row)
+    const operationDescriptionFinding = procedure.operationDescription || '';
+    if (operationDescriptionFinding && operationDescriptionFinding.trim() && operationDescriptionFinding !== 'Not specified' && operationDescriptionFinding !== 'None') {
+      const opDescLines = pdf.splitTextToSize(`Operation Description: ${operationDescriptionFinding}`, 180);
+      opDescLines.forEach((line: string) => {
+        pdf.text(line, opFindingsCol1X, y);
+        y += 4;
+      });
+      y += 2;
+    }
+
     // Row 1: Appendix Appearance and Presence of Abscess
     const appendixAppearance = intraop.appendixAppearance?.join(', ') || '';
     const abscess = intraop.abscess || '';
-    
+
     let opRow1Y = y;
     if (appendixAppearance && appendixAppearance.trim() && appendixAppearance !== 'Not specified' && appendixAppearance !== 'None') {
       pdf.text(`Appendix Appearance: ${appendixAppearance}`, opFindingsCol1X, opRow1Y);
@@ -384,17 +402,17 @@ export const generateAppendectomyPDF = async (
       pdf.text(`Presence of Abscess: ${abscess}`, opFindingsCol2X, opRow1Y);
     }
     y += 6;
-    
-    // Row 2: Other Intra-abdominal Findings and Presence of Peritonitis
+
+    // Row 2: Presence of Peritonitis and Other Intra-abdominal Findings
     const otherFindings = intraop.otherFindings || '';
     const peritonitis = intraop.peritonitis?.join(', ') || '';
-    
+
     let opRow2Y = y;
-    if (otherFindings && otherFindings.trim() && otherFindings !== 'Not specified' && otherFindings !== 'None') {
-      pdf.text(`Other Intra-abdominal Findings: ${otherFindings}`, opFindingsCol1X, opRow2Y);
-    }
     if (peritonitis && peritonitis.trim() && peritonitis !== 'Not specified' && peritonitis !== 'None') {
       pdf.text(`Presence of Peritonitis: ${peritonitis}`, opFindingsCol2X, opRow2Y);
+    }
+    if (otherFindings && otherFindings.trim() && otherFindings !== 'Not specified' && otherFindings !== 'None') {
+      pdf.text(`Other Intra-abdominal Findings: ${otherFindings}`, opFindingsCol1X, opRow2Y);
     }
     y += 10;
     
@@ -505,58 +523,46 @@ export const generateAppendectomyPDF = async (
       addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
     }
     
+    // Direction of Dissection
+    let directionText = procedure.directionOfDissection?.join(', ') || '';
+    if (directionText.includes('Other') && procedure.directionOfDissectionOther) {
+      directionText = directionText.replace('Other', `Other: ${procedure.directionOfDissectionOther}`);
+    }
+    addContentLine(`Direction of Dissection: ${directionText}`, 6);
+
+    // Meso-Appendix Excision
+    const mesoExcision = procedure.mesoAppendixExcision?.join(', ') || '';
+    addContentLine(`Meso-Appendix Excision: ${mesoExcision}`, 6);
+
     // Method of Appendiceal Ligation
-    const ligationMethod = procedure.divisionMethod?.join(', ') || '';
+    let ligationMethod = procedure.divisionMethod?.join(', ') || '';
+    if (ligationMethod.includes('Other') && procedure.divisionOther) {
+      ligationMethod = ligationMethod.replace('Other', `Other: ${procedure.divisionOther}`);
+    }
     addContentLine(`Method of Appendiceal Ligation: ${ligationMethod}`, 6);
-    
+
     // Method of Appendiceal Vessel Ligation
-    const vesselLigation = procedure.mesenteryControl?.join(', ') || '';
+    let vesselLigation = procedure.mesenteryControl?.join(', ') || '';
+    if (vesselLigation.includes('Other') && procedure.mesenteryOther) {
+      vesselLigation = vesselLigation.replace('Other', `Other: ${procedure.mesenteryOther}`);
+    }
     addContentLine(`Method of Appendiceal Vessel Ligation: ${vesselLigation}`, 6);
-    
+
+    // Removal of Appendix
+    let removalText = procedure.removalOfAppendix?.join(', ') || '';
+    if (removalText.includes('Other') && procedure.removalOfAppendixOther) {
+      removalText = removalText.replace('Other', `Other: ${procedure.removalOfAppendixOther}`);
+    }
+    addContentLine(`Removal of Appendix: ${removalText}`, 6);
+
     // Peritoneal Lavage
     const lavage = procedure.lavage || '';
     addContentLine(`Peritoneal Lavage: ${lavage}`, 6);
-    
+
     // Drain Placement
     const drainPlacement = procedure.drainPlacement || '';
     const drainText = drainPlacement + (procedure.drainLocation ? ` (${procedure.drainLocation})` : '');
     addContentLine(`Drain Placement: ${drainText}`, 8);
-    
-    // COMPLICATIONS section (within PROCEDURE DETAILS column)
-    procedureY += 2; // Small spacing
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('COMPLICATIONS', procedureX, procedureY);
-    procedureY += 6;
-    
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'normal');
-    
-    // Intra-Operative Difficulty
-    const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
-    if (difficulty && difficulty.trim() && difficulty !== 'Not specified' && difficulty !== 'None') {
-      const maxWidth = procedureColumnWidth - 5;
-      const difficultyLines = pdf.splitTextToSize(`Intra-Operative Difficulty: ${difficulty}`, maxWidth);
-      difficultyLines.forEach((line: string) => {
-        pdf.text(line, procedureX, procedureY);
-        procedureY += 4;
-      });
-      procedureY += 2;
-    }
-    
-    // Intra-Operative Complications
-    const complications = Array.isArray(appendectomyData?.closure?.complications) 
-      ? appendectomyData.closure.complications.join(', ') 
-      : appendectomyData?.closure?.complications || '';
-    if (complications && complications.trim() && complications !== 'Not specified' && complications !== 'None') {
-      const maxWidth = procedureColumnWidth - 5;
-      const complicationLines = pdf.splitTextToSize(`Intra-Operative Complications: ${complications}`, maxWidth);
-      complicationLines.forEach((line: string) => {
-        pdf.text(line, procedureX, procedureY);
-        procedureY += 4;
-      });
-      procedureY += 2;
-    }
     
     // Move y position to after both columns - Page 1 ends here
     y = Math.max(procedureY, diagramY) + 8;
@@ -659,6 +665,43 @@ export const generateAppendectomyPDF = async (
     currentPage++;
     y = margin;
     
+    // COMPLICATIONS Section (moved to page 2, above CLOSURE)
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('COMPLICATIONS', margin, y);
+    y += 8;
+
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'normal');
+
+    const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
+    if (difficulty && difficulty.trim() && difficulty !== 'Not specified' && difficulty !== 'None') {
+      const difficultyLines = pdf.splitTextToSize(`Intra-Operative Difficulty: ${difficulty}`, 180);
+      difficultyLines.forEach((line: string) => {
+        pdf.text(line, margin, y);
+        y += 4;
+      });
+      y += 2;
+    }
+
+    const complications = Array.isArray(appendectomyData?.closure?.complications)
+      ? appendectomyData.closure.complications.join(', ')
+      : appendectomyData?.closure?.complications || '';
+    if (complications && complications.trim() && complications !== 'Not specified' && complications !== 'None') {
+      const complicationLines = pdf.splitTextToSize(`Intra-Operative Complications: ${complications}`, 180);
+      complicationLines.forEach((line: string) => {
+        pdf.text(line, margin, y);
+        y += 4;
+      });
+      y += 2;
+    }
+
+    // Add separator line after COMPLICATIONS
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.1);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
     // CLOSURE Section (full width with side-by-side layout)
     const closureSectionY = y;
     

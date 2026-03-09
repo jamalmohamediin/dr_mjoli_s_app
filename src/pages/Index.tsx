@@ -16,15 +16,23 @@ import { VentralHerniaReportPreview } from "@/components/VentralHerniaReportPrev
 import { AppendectomyReportPreview } from "@/components/AppendectomyReportPreview";
 import { RectalCancerReportPreview } from "@/components/RectalCancerReportPreview";
 import { RectalCancerForm } from "@/components/RectalCancerForm";
+import { SmallBowelSurgeryForm } from "@/components/SmallBowelSurgeryForm";
+import { SmallBowelSurgeryReportPreview } from "@/components/SmallBowelSurgeryReportPreview";
+import { CholecystectomyForm } from "@/components/CholecystectomyForm";
+import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
 import { generateFinalPDF, FinalDiagramCapture } from "@/utils/finalPdfGenerator";
 import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
 import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
+import { generateSmallBowelSurgeryPDF } from "@/utils/smallBowelSurgeryPdfGenerator";
+import { generateCholecystectomyPDF } from "@/utils/cholecystectomyPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
+import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
+import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 
@@ -216,7 +224,7 @@ const Index = () => {
         dateTime: ''
       }
     },
-    rectalCancer: {
+	    rectalCancer: {
       patientInfo: {
         name: '',
         patientId: '',
@@ -240,6 +248,9 @@ const Index = () => {
       },
       operationType: {
         type: [], // 'Colon' or 'Rectum'
+        operationFindings: '',
+        operationFindingsOptions: [],
+        operationFindingsOther: '',
         rectumOperationType: [],
         rectumOperationOther: '',
         neoadjuvantTreatment: '',
@@ -388,19 +399,21 @@ const Index = () => {
         stomaReason: [],
         stomaReasonOther: ''
       },
-      section5: {
-        operativeTime: '',
-        bloodLoss: '',
-        transfusionRequired: '',
-        additionalProcedures: [],
-        additionalProceduresOther: '',
-        fascialClosure: [],
-        sutureMaterial: '',
-        surgeonSignature: '',
-        date: ''
-      }
-    }
-  });
+	      section5: {
+	        operativeTime: '',
+	        bloodLoss: '',
+	        transfusionRequired: '',
+	        additionalProcedures: [],
+	        additionalProceduresOther: '',
+	        fascialClosure: [],
+	        sutureMaterial: '',
+	        surgeonSignature: '',
+	        date: ''
+	      }
+	    },
+      smallBowel: createInitialSmallBowelSurgeryState(),
+      cholecystectomy: createInitialCholecystectomyState()
+	  });
 
   // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
@@ -592,6 +605,69 @@ const Index = () => {
     closure: 0,
     procedureDetails: 0,
     procedureFindings: 0
+  });
+
+  const [smallBowelHistory, setSmallBowelHistory] = useState({
+    patientInfo: [currentReport.smallBowel?.patientInfo || createInitialSmallBowelSurgeryState().patientInfo],
+    preoperative: [currentReport.smallBowel?.preoperative || createInitialSmallBowelSurgeryState().preoperative],
+    operativeFindings: [currentReport.smallBowel?.operativeFindings || createInitialSmallBowelSurgeryState().operativeFindings],
+    procedure: [currentReport.smallBowel?.procedure || createInitialSmallBowelSurgeryState().procedure],
+    reconstruction: [currentReport.smallBowel?.reconstruction || createInitialSmallBowelSurgeryState().reconstruction],
+    operativeEvents: [currentReport.smallBowel?.operativeEvents || createInitialSmallBowelSurgeryState().operativeEvents],
+    closure: [currentReport.smallBowel?.closure || createInitialSmallBowelSurgeryState().closure],
+    additionalInfo: [currentReport.smallBowel?.additionalInfo || createInitialSmallBowelSurgeryState().additionalInfo],
+    procedureFindings: [currentReport.smallBowel?.procedureFindings || createInitialSmallBowelSurgeryState().procedureFindings]
+  });
+  const [smallBowelHistoryIndex, setSmallBowelHistoryIndex] = useState({
+    patientInfo: 0,
+    preoperative: 0,
+    operativeFindings: 0,
+    procedure: 0,
+    reconstruction: 0,
+    operativeEvents: 0,
+    closure: 0,
+    additionalInfo: 0,
+    procedureFindings: 0
+  });
+
+  const [cholecystectomyHistory, setCholecystectomyHistory] = useState({
+    patientInfo: [
+      currentReport.cholecystectomy?.patientInfo ||
+        createInitialCholecystectomyState().patientInfo,
+    ],
+    preoperative: [
+      currentReport.cholecystectomy?.preoperative ||
+        createInitialCholecystectomyState().preoperative,
+    ],
+    intraoperative: [
+      currentReport.cholecystectomy?.intraoperative ||
+        createInitialCholecystectomyState().intraoperative,
+    ],
+    procedure: [
+      currentReport.cholecystectomy?.procedure ||
+        createInitialCholecystectomyState().procedure,
+    ],
+    closure: [
+      currentReport.cholecystectomy?.closure ||
+        createInitialCholecystectomyState().closure,
+    ],
+    additionalInfo: [
+      currentReport.cholecystectomy?.additionalInfo ||
+        createInitialCholecystectomyState().additionalInfo,
+    ],
+    procedureFindings: [
+      currentReport.cholecystectomy?.procedureFindings ||
+        createInitialCholecystectomyState().procedureFindings,
+    ],
+  });
+  const [cholecystectomyHistoryIndex, setCholecystectomyHistoryIndex] = useState({
+    patientInfo: 0,
+    preoperative: 0,
+    intraoperative: 0,
+    procedure: 0,
+    closure: 0,
+    additionalInfo: 0,
+    procedureFindings: 0,
   });
 
   // Rectal Cancer specific state
@@ -986,6 +1062,8 @@ const Index = () => {
     const rectalCancer = data.rectalCancer || {};
     const ventralHernia = data.ventralHernia || {};
     const appendectomy = data.appendectomy || {};
+    const smallBowel = data.smallBowel || {};
+    const cholecystectomy = data.cholecystectomy || {};
     const gastroscopyFindings = data.gastroscopyFindings || {};
     const colonoscopyFindings = data.colonoscopyFindings || {};
     
@@ -994,10 +1072,12 @@ const Index = () => {
     const hasRectalData = rectalCancer.patientInfo?.name || rectalCancer.surgicalTeam?.surgeons?.some(s => s.trim()) || rectalCancer.operationType?.type?.length > 0;
     const hasVentralData = ventralHernia.patientInfo?.name || ventralHernia.preoperative?.surgeons?.some(s => s.trim()) || ventralHernia.operative?.herniaType?.length > 0;
     const hasAppendectomyData = appendectomy.patientInfo?.name || appendectomy.preoperative?.surgeons?.some(s => s.trim()) || appendectomy.procedure?.approach?.length > 0;
+    const hasSmallBowelData = smallBowel.patientInfo?.name || smallBowel.preoperative?.surgeons?.some((s: string) => s.trim()) || smallBowel.procedure?.approach?.length > 0;
+    const hasCholeData = cholecystectomy.patientInfo?.name || cholecystectomy.preoperative?.surgeons?.some((s: string) => s.trim()) || cholecystectomy.procedure?.approach?.length > 0;
     const hasEndoscopyData = gastroscopyFindings.findings?.length > 0 || colonoscopyFindings.findings?.length > 0 || data.selectedProcedures?.length > 0;
     const hasNotes = data.notes?.trim() || data.conclusion?.trim();
     
-    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasEndoscopyData || hasNotes;
+    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasSmallBowelData || hasCholeData || hasEndoscopyData || hasNotes;
   };
 
   // Appendectomy data is now handled by the main data loading above
@@ -1706,6 +1786,9 @@ const Index = () => {
       operationType: {
         type: [],
         typeOther: '',
+        operationFindings: '',
+        operationFindingsOptions: [],
+        operationFindingsOther: '',
         neoadjuvantTreatment: '',
         neoadjuvantDetails: ''
       },
@@ -1820,6 +1903,9 @@ const Index = () => {
       operationType: {
         type: [],
         typeOther: '',
+        operationFindings: '',
+        operationFindingsOptions: [],
+        operationFindingsOther: '',
         neoadjuvantTreatment: '',
         neoadjuvantDetails: ''
       },
@@ -1925,6 +2011,216 @@ const Index = () => {
     });
 
     toast.success("All rectal cancer data cleared successfully!");
+  };
+
+  const undoSmallBowel = (section: keyof typeof smallBowelHistory) => {
+    const currentIndex = smallBowelHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = smallBowelHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        smallBowel: {
+          ...prev.smallBowel,
+          [section]: previousState
+        }
+      }));
+
+      setSmallBowelHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} undo successful`);
+    }
+  };
+
+  const redoSmallBowel = (section: keyof typeof smallBowelHistory) => {
+    const currentIndex = smallBowelHistoryIndex[section];
+    const maxIndex = (smallBowelHistory[section] || []).length - 1;
+
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = smallBowelHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        smallBowel: {
+          ...prev.smallBowel,
+          [section]: nextState
+        }
+      }));
+
+      setSmallBowelHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} redo successful`);
+    }
+  };
+
+  const clearSmallBowel = (section: keyof typeof smallBowelHistory) => {
+    const initialSmallBowel = createInitialSmallBowelSurgeryState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      smallBowel: {
+        ...prev.smallBowel,
+        [section]: initialSmallBowel[section]
+      }
+    }));
+
+    setSmallBowelHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section] || []), initialSmallBowel[section]]
+    }));
+
+    setSmallBowelHistoryIndex(prev => ({
+      ...prev,
+      [section]: (smallBowelHistory[section] || []).length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  const clearAllSmallBowelData = () => {
+    const initialSmallBowel = createInitialSmallBowelSurgeryState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      smallBowel: initialSmallBowel
+    }));
+
+    setSmallBowelHistory({
+      patientInfo: [initialSmallBowel.patientInfo],
+      preoperative: [initialSmallBowel.preoperative],
+      operativeFindings: [initialSmallBowel.operativeFindings],
+      procedure: [initialSmallBowel.procedure],
+      reconstruction: [initialSmallBowel.reconstruction],
+      operativeEvents: [initialSmallBowel.operativeEvents],
+      closure: [initialSmallBowel.closure],
+      additionalInfo: [initialSmallBowel.additionalInfo],
+      procedureFindings: [initialSmallBowel.procedureFindings]
+    });
+
+    setSmallBowelHistoryIndex({
+      patientInfo: 0,
+      preoperative: 0,
+      operativeFindings: 0,
+      procedure: 0,
+      reconstruction: 0,
+      operativeEvents: 0,
+      closure: 0,
+      additionalInfo: 0,
+      procedureFindings: 0
+    });
+
+    toast.success("All small bowel surgery data cleared successfully!");
+  };
+
+  const undoCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
+    const currentIndex = cholecystectomyHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = cholecystectomyHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        cholecystectomy: {
+          ...prev.cholecystectomy,
+          [section]: previousState
+        }
+      }));
+
+      setCholecystectomyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} undo successful`);
+    }
+  };
+
+  const redoCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
+    const currentIndex = cholecystectomyHistoryIndex[section];
+    const maxIndex = (cholecystectomyHistory[section] || []).length - 1;
+
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = cholecystectomyHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        cholecystectomy: {
+          ...prev.cholecystectomy,
+          [section]: nextState
+        }
+      }));
+
+      setCholecystectomyHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} redo successful`);
+    }
+  };
+
+  const clearCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
+    const initialCholecystectomy = createInitialCholecystectomyState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      cholecystectomy: {
+        ...prev.cholecystectomy,
+        [section]: initialCholecystectomy[section]
+      }
+    }));
+
+    setCholecystectomyHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section] || []), initialCholecystectomy[section]]
+    }));
+
+    setCholecystectomyHistoryIndex(prev => ({
+      ...prev,
+      [section]: (cholecystectomyHistory[section] || []).length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  const clearAllCholecystectomyData = () => {
+    const initialCholecystectomy = createInitialCholecystectomyState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      cholecystectomy: initialCholecystectomy
+    }));
+
+    setCholecystectomyHistory({
+      patientInfo: [initialCholecystectomy.patientInfo],
+      preoperative: [initialCholecystectomy.preoperative],
+      intraoperative: [initialCholecystectomy.intraoperative],
+      procedure: [initialCholecystectomy.procedure],
+      closure: [initialCholecystectomy.closure],
+      additionalInfo: [initialCholecystectomy.additionalInfo],
+      procedureFindings: [initialCholecystectomy.procedureFindings]
+    });
+
+    setCholecystectomyHistoryIndex({
+      patientInfo: 0,
+      preoperative: 0,
+      intraoperative: 0,
+      procedure: 0,
+      closure: 0,
+      additionalInfo: 0,
+      procedureFindings: 0
+    });
+
+    toast.success("All cholecystectomy data cleared successfully!");
   };
 
   const clearAllAppendectomyData = () => {
@@ -2343,6 +2639,97 @@ const Index = () => {
     });
   };
 
+  const updateSmallBowel = (section: string, field: string, value: any) => {
+    setCurrentReport(prev => {
+      const newSmallBowel = {
+        ...prev.smallBowel,
+        [section]: {
+          ...prev.smallBowel?.[section],
+          [field]: value
+        }
+      };
+
+      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
+        const weight = field === 'weight' ? value : newSmallBowel.patientInfo?.weight;
+        const height = field === 'height' ? value : newSmallBowel.patientInfo?.height;
+        const bmi = calculateBMI(weight, height);
+        if (bmi) {
+          newSmallBowel.patientInfo.bmi = bmi;
+        }
+      }
+
+      if (section === 'patientInfo' && field === 'dateOfBirth') {
+        const age = calculateAge(value);
+        if (age) {
+          newSmallBowel.patientInfo.age = age;
+        }
+      }
+
+      setSmallBowelHistory(prevHistory => ({
+        ...prevHistory,
+        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newSmallBowel[section]]
+      }));
+
+      setSmallBowelHistoryIndex(prev => ({
+        ...prev,
+        [section]: (smallBowelHistory[section as keyof typeof smallBowelHistory] || []).length
+      }));
+
+      return {
+        ...prev,
+        smallBowel: newSmallBowel
+      };
+    });
+  };
+
+  const updateCholecystectomy = (section: string, field: string, value: any) => {
+    setCurrentReport(prev => {
+      const currentCholecystectomy = prev.cholecystectomy || createInitialCholecystectomyState();
+      const newCholecystectomy = {
+        ...currentCholecystectomy,
+        [section]: {
+          ...currentCholecystectomy?.[section],
+          [field]: value
+        }
+      };
+
+      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
+        const weight = field === 'weight' ? value : newCholecystectomy.patientInfo?.weight;
+        const height = field === 'height' ? value : newCholecystectomy.patientInfo?.height;
+        const bmi = calculateBMI(weight, height);
+        if (bmi) {
+          newCholecystectomy.patientInfo.bmi = bmi;
+        }
+      }
+
+      if (section === 'patientInfo' && field === 'dateOfBirth') {
+        const age = calculateAge(value);
+        if (age) {
+          newCholecystectomy.patientInfo.age = age;
+        }
+      }
+
+      setCholecystectomyHistory(prevHistory => ({
+        ...prevHistory,
+        [section]: [
+          ...(prevHistory[section as keyof typeof prevHistory] || []),
+          newCholecystectomy[section]
+        ]
+      }));
+
+      setCholecystectomyHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        [section]: (cholecystectomyHistory[section as keyof typeof cholecystectomyHistory] || [])
+          .length
+      }));
+
+      return {
+        ...prev,
+        cholecystectomy: newCholecystectomy
+      };
+    });
+  };
+
   const handleExportPDF = async (section?: string) => {
     console.log("=== EXPORT PDF CLICKED - NETLIFY PRODUCTION VERSION ===");
     console.log("Environment:", window.location.origin);
@@ -2453,15 +2840,117 @@ const Index = () => {
           link.href = url;
           const patientName = (currentReport.rectalCancer?.patientInfo?.name || currentReport.patientInfo?.name || 'patient').replace(/\s+/g, '_');
           const dob = formatDOBForFilename(currentReport.rectalCancer?.patientInfo?.dateOfBirth || currentReport.patientInfo?.dateOfBirth);
-          link.download = `${patientName}_${dob}_Rectal_Cancer_Surgery_Report.pdf`;
+          link.download = `${patientName}_${dob}_Colorectal_Resection_Report.pdf`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
           
-          toast.success("Rectal cancer surgery report PDF generated successfully!");
+          toast.success("Colorectal resection report PDF generated successfully!");
         } else {
           throw new Error(result.error || "Failed to generate rectal cancer PDF");
+        }
+        return;
+      }
+
+      if (exportSection === "smallBowel") {
+        console.log("📋 Exporting small bowel surgery live report");
+        console.log("Small bowel data:", currentReport.smallBowel);
+
+        let surgicalMarkings = [];
+        try {
+          if (currentReport.smallBowel?.procedureFindings?.findings) {
+            const markings = JSON.parse(currentReport.smallBowel.procedureFindings.findings);
+            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
+              surgicalMarkings = markings;
+            }
+          }
+        } catch (e) {
+          // Not JSON, no surgical markings
+        }
+
+        const result = await generateSmallBowelSurgeryPDF(
+          currentReport.smallBowel?.patientInfo?.name || 'Unknown Patient',
+          currentReport.smallBowel?.patientInfo?.patientId || 'N/A',
+          surgicalMarkings,
+          currentReport.smallBowel,
+          currentReport.smallBowel?.patientInfo
+        );
+
+        if (result.success && result.blob) {
+          const url = URL.createObjectURL(result.blob);
+          const link = document.createElement('a');
+          link.href = url;
+
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const formattedDate = `${day}_${month}_${year}`;
+
+          const cleanPatientName = (currentReport.smallBowel?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanPatientId = (currentReport.smallBowel?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
+
+          link.download = `${cleanPatientName}_${cleanPatientId}_Small_Bowel_Surgery_Report_${formattedDate}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          toast.success("Small bowel surgery report PDF generated successfully!");
+        } else {
+          throw new Error(result.error || "Failed to generate small bowel surgery PDF");
+        }
+        return;
+      }
+
+      if (exportSection === "cholecystectomy") {
+        console.log("📋 Exporting cholecystectomy live report");
+        console.log("Cholecystectomy data:", currentReport.cholecystectomy);
+
+        let surgicalMarkings = [];
+        try {
+          if (currentReport.cholecystectomy?.procedureFindings?.findings) {
+            const markings = JSON.parse(currentReport.cholecystectomy.procedureFindings.findings);
+            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
+              surgicalMarkings = markings;
+            }
+          }
+        } catch (e) {
+          // Not JSON, no surgical markings
+        }
+
+        const result = await generateCholecystectomyPDF(
+          currentReport.cholecystectomy?.patientInfo?.name || 'Unknown Patient',
+          currentReport.cholecystectomy?.patientInfo?.patientId || 'N/A',
+          surgicalMarkings,
+          currentReport.cholecystectomy,
+          currentReport.cholecystectomy?.patientInfo
+        );
+
+        if (result.success && result.blob) {
+          const url = URL.createObjectURL(result.blob);
+          const link = document.createElement('a');
+          link.href = url;
+
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const formattedDate = `${day}_${month}_${year}`;
+
+          const cleanPatientName = (currentReport.cholecystectomy?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanPatientId = (currentReport.cholecystectomy?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
+
+          link.download = `${cleanPatientName}_${cleanPatientId}_Cholecystectomy_Report_${formattedDate}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          toast.success("Cholecystectomy report PDF generated successfully!");
+        } else {
+          throw new Error(result.error || "Failed to generate cholecystectomy PDF");
         }
         return;
       }
@@ -2814,8 +3303,8 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
+	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+	                  <TabsList className="grid w-full grid-cols-6">
                     <TabsTrigger value="procedure" className="flex items-center gap-2">
                       <Microscope className="h-4 w-4" />
                       Endoscopy
@@ -2828,11 +3317,19 @@ const Index = () => {
                       <Shield className="h-4 w-4" />
                       Ventral Hernia Repair
                     </TabsTrigger>
-                    <TabsTrigger value="rectal" className="flex items-center gap-2">
-                      <Activity className="h-4 w-4" />
-                      Rectal Cancer Surgery
-                    </TabsTrigger>
-                  </TabsList>
+	                    <TabsTrigger value="rectal" className="flex items-center gap-2">
+	                      <Activity className="h-4 w-4" />
+	                      Colorectal Resection
+	                    </TabsTrigger>
+                      <TabsTrigger value="smallBowel" className="flex items-center gap-2">
+                        <Scissors className="h-4 w-4" />
+                        Small Bowel Surgery
+                      </TabsTrigger>
+                      <TabsTrigger value="cholecystectomy" className="flex items-center gap-2">
+                        <Scissors className="h-4 w-4" />
+                        Cholecystectomy
+                      </TabsTrigger>
+	                  </TabsList>
                   
                   <TabsContent value="procedure" className="mt-6 space-y-6">
                     {/* Patient Information */}
@@ -4041,6 +4538,37 @@ const Index = () => {
                             </div>
 
 
+                            {/* Operation Description - moved here after Preoperative Imaging */}
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full min-h-[100px]"
+                                placeholder="Please describe the surgical approach and key procedural steps"
+                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
+                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
+                              />
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Emergency', 'Semi-Emergency', 'Semi-Elective', 'Elective'].map((urgency) => (
+                                  <div className="flex items-center" key={`urgency-${urgency}`}>
+                                    <Checkbox
+                                      id={`urgency-${urgency}`}
+                                      checked={((currentReport.appendectomy.preoperative as any)?.procedureUrgency || []).includes(urgency)}
+                                      onCheckedChange={(checked) => {
+                                        const currentUrgency = ((currentReport.appendectomy.preoperative as any)?.procedureUrgency || []);
+                                        const newUrgency = checked ? [...currentUrgency, urgency] : currentUrgency.filter((u: string) => u !== urgency);
+                                        updateAppendectomy('preoperative', 'procedureUrgency', newUrgency);
+                                      }}
+                                    />
+                                    <label htmlFor={`urgency-${urgency}`} className="ml-2 block text-sm text-gray-700">{urgency}</label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
@@ -4071,17 +4599,6 @@ const Index = () => {
                                   </div>
                                 ))}
                               </div>
-                            </div>
-
-                            {/* Operation Description - moved here after Preoperative Imaging */}
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                              <Textarea 
-                                className="w-full min-h-[100px]"
-                                placeholder="Please describe the surgical approach and key procedural steps"
-                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
-                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
-                              />
                             </div>
 
                             {/* Duration of Operation with Start and End Times - moved here after Preoperative Imaging */}
@@ -4365,6 +4882,16 @@ const Index = () => {
 
                             {/* Intraoperative Findings - moved from Section III */}
                             <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Findings:</p>
+                              <Input 
+                                type="text" 
+                                className="ml-4 w-full"
+                                value={(currentReport.appendectomy?.intraoperative as any)?.operationFindings || ''}
+                                onChange={(e) => updateAppendectomy('intraoperative', 'operationFindings', e.target.value)}
+                              />
+                            </div>
+
+                            <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Appendix Appearance:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
                                 {['Normal', 'Inflamed', 'Gangrenous', 'Perforated'].map(appearance => (
@@ -4450,6 +4977,61 @@ const Index = () => {
                             </div>
 
                             <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Direction of Dissection:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Antigrade', 'Retrograde', 'Other'].map(direction => (
+                                  <div className="flex items-center" key={`direction-${direction}`}>
+                                    <Checkbox
+                                      id={`direction-${direction}`}
+                                      checked={(currentReport.appendectomy?.procedure as any)?.directionOfDissection?.includes(direction)}
+                                      onCheckedChange={(checked) => {
+                                        const currentDirections = ((currentReport.appendectomy?.procedure as any)?.directionOfDissection || []);
+                                        if (checked) {
+                                          updateAppendectomy('procedure', 'directionOfDissection', [...currentDirections, direction]);
+                                        } else {
+                                          updateAppendectomy('procedure', 'directionOfDissection', currentDirections.filter((d: string) => d !== direction));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`direction-${direction}`} className="ml-2 block text-sm text-gray-700">{direction}</label>
+                                    {direction === 'Other' && (currentReport.appendectomy?.procedure as any)?.directionOfDissection?.includes('Other') && (
+                                      <Input
+                                        type="text"
+                                        className="ml-2 w-32"
+                                        value={(currentReport.appendectomy?.procedure as any)?.directionOfDissectionOther || ''}
+                                        onChange={(e) => updateAppendectomy('procedure', 'directionOfDissectionOther', e.target.value)}
+                                        placeholder="Please Specify"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Meso -Appendix Excision:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['None', 'Complete', 'Partial'].map(excision => (
+                                  <div className="flex items-center" key={`mesoExcision-${excision}`}>
+                                    <Checkbox
+                                      id={`mesoExcision-${excision}`}
+                                      checked={(currentReport.appendectomy?.procedure as any)?.mesoAppendixExcision?.includes(excision)}
+                                      onCheckedChange={(checked) => {
+                                        const currentExcision = ((currentReport.appendectomy?.procedure as any)?.mesoAppendixExcision || []);
+                                        if (checked) {
+                                          updateAppendectomy('procedure', 'mesoAppendixExcision', [...currentExcision, excision]);
+                                        } else {
+                                          updateAppendectomy('procedure', 'mesoAppendixExcision', currentExcision.filter((m: string) => m !== excision));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`mesoExcision-${excision}`} className="ml-2 block text-sm text-gray-700">{excision}</label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Method of Appendiceal Ligation:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
                                 {['Stapler', 'Hemoloc', 'Endoloop', 'Tie', 'Energy device', 'Diathermy', 'Other'].map(method => (
@@ -4480,10 +5062,12 @@ const Index = () => {
                               </div>
                             </div>
 
+                            </div>
+
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Method of Appendiceal Vessel Ligation:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
-                                {['Ligature', 'Energy Device', 'Stapler', 'Other'].map(control => (
+                                {['Ligature', 'Energy Device', 'Stapler', 'Diathermy', 'Other'].map(control => (
                                   <div className="flex items-center" key={`mesentery-${control}`}>
                                     <Checkbox 
                                       id={`mesentery-${control}`} 
@@ -4504,6 +5088,38 @@ const Index = () => {
                                         className="ml-2 w-32"
                                         value={currentReport.appendectomy?.procedure?.mesenteryOther || ''}
                                         onChange={(e) => updateAppendectomy('procedure', 'mesenteryOther', e.target.value)}
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Removal of Appendix:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Through Port', 'Endo bag', 'Through Wound', 'Other'].map(removal => (
+                                  <div className="flex items-center" key={`removal-${removal}`}>
+                                    <Checkbox
+                                      id={`removal-${removal}`}
+                                      checked={(currentReport.appendectomy?.procedure as any)?.removalOfAppendix?.includes(removal)}
+                                      onCheckedChange={(checked) => {
+                                        const currentRemoval = ((currentReport.appendectomy?.procedure as any)?.removalOfAppendix || []);
+                                        if (checked) {
+                                          updateAppendectomy('procedure', 'removalOfAppendix', [...currentRemoval, removal]);
+                                        } else {
+                                          updateAppendectomy('procedure', 'removalOfAppendix', currentRemoval.filter((r: string) => r !== removal));
+                                        }
+                                      }}
+                                    />
+                                    <label htmlFor={`removal-${removal}`} className="ml-2 block text-sm text-gray-700">{removal}</label>
+                                    {removal === 'Other' && (currentReport.appendectomy?.procedure as any)?.removalOfAppendix?.includes('Other') && (
+                                      <Input
+                                        type="text"
+                                        className="ml-2 w-32"
+                                        value={(currentReport.appendectomy?.procedure as any)?.removalOfAppendixOther || ''}
+                                        onChange={(e) => updateAppendectomy('procedure', 'removalOfAppendixOther', e.target.value)}
+                                        placeholder="Please Specify"
                                       />
                                     )}
                                   </div>
@@ -4649,7 +5265,7 @@ const Index = () => {
                                   </div>
                                 ))}
                               </div>
-                            </div>
+
                           </div>
                         </CardContent>
                       )}
@@ -5623,6 +6239,49 @@ const Index = () => {
                             </div>
 
                             <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full"
+                                rows={3}
+                                placeholder="Enter operation description"
+                                value={currentReport.ventralHernia?.operative?.operationDescription || ''}
+                                onChange={(e) => updateReport('ventralHernia', {
+                                  ...currentReport.ventralHernia,
+                                  operative: {
+                                    ...currentReport.ventralHernia?.operative,
+                                    operationDescription: e.target.value
+                                  }
+                                })}
+                              />
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Emergency', 'Semi-Emergency', 'Semi-Elective', 'Elective'].map((urgency) => (
+                                  <div className="flex items-center" key={`ventral-urgency-${urgency}`}>
+                                    <Checkbox
+                                      id={`ventral-urgency-${urgency}`}
+                                      checked={((currentReport.ventralHernia?.preoperative as any)?.procedureUrgency || []).includes(urgency)}
+                                      onCheckedChange={(checked) => {
+                                        const currentUrgency = ((currentReport.ventralHernia?.preoperative as any)?.procedureUrgency || []);
+                                        const updated = checked ? [...currentUrgency, urgency] : currentUrgency.filter((u: string) => u !== urgency);
+                                        updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          preoperative: {
+                                            ...currentReport.ventralHernia?.preoperative,
+                                            procedureUrgency: updated
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <label htmlFor={`ventral-urgency-${urgency}`} className="ml-2 block text-sm text-gray-700">{urgency}</label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
                               <div className="space-y-2 ml-4">
                                 {['None', 'Ultrasound', 'CT Scan', 'MRI'].map(imaging => (
@@ -5687,24 +6346,6 @@ const Index = () => {
                                   />
                                 </div>
                               </div>
-                            </div>
-
-                            {/* Operation Description Section - moved here after Preoperative Imaging */}
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                              <Textarea 
-                                className="w-full"
-                                rows={3}
-                                placeholder="Enter operation description"
-                                value={currentReport.ventralHernia?.operative?.operationDescription || ''}
-                                onChange={(e) => updateReport('ventralHernia', {
-                                  ...currentReport.ventralHernia,
-                                  operative: {
-                                    ...currentReport.ventralHernia?.operative,
-                                    operationDescription: e.target.value
-                                  }
-                                })}
-                              />
                             </div>
 
                             {/* Duration of operation with Start/End times - moved here after Preoperative Imaging */}
@@ -7530,7 +8171,7 @@ const Index = () => {
                   </div>
                   </TabsContent>
                   
-                  <TabsContent value="rectal" className="mt-6 space-y-6">
+	                  <TabsContent value="rectal" className="mt-6 space-y-6">
                     <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
                       {/* Left Column - Form Sections */}
                       <div className="2xl:col-span-2 space-y-6">
@@ -7543,7 +8184,7 @@ const Index = () => {
                                   <Activity className="w-6 h-6 text-red-600" />
                                 </div>
                                 <h1 className="text-2xl font-bold text-gray-800">
-                                  Rectal Cancer Surgery - Synoptic Operative Report
+                                  Colorectal Resection - Synoptic Operative Report
                                 </h1>
                               </div>
                               <div className="flex space-x-2">
@@ -7612,7 +8253,7 @@ const Index = () => {
                           <CardTitle className="flex items-center gap-2 text-sm">
                             <FileText className="h-4 w-4 text-gray-600" />
                             Live Report
-                            <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of rectal cancer surgery findings</span>
+                            <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of colorectal resection findings</span>
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -7634,9 +8275,197 @@ const Index = () => {
                         </CardContent>
                       </Card>
                     </div>
+	                    </div>
+	                  </TabsContent>
+                  
+                  <TabsContent value="smallBowel" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <Card className="glass-card-light">
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex-shrink-0 p-2 bg-red-100 rounded-md">
+                                  <Scissors className="w-6 h-6 text-red-600" />
+                                </div>
+                                <h1 className="text-2xl font-bold text-gray-800">
+                                  Small Bowel Surgery - Synoptic Operative Report
+                                </h1>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={() => handleExportPDF('smallBowel')}
+                                  disabled={isGeneratingPDF}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={clearAllSmallBowelData}
+                                  title="Clear all small bowel surgery data"
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Clear All Data
+                                </Button>
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </Card>
+
+                        <SmallBowelSurgeryForm
+                          currentReport={currentReport}
+                          updateSmallBowel={updateSmallBowel}
+                          onExportPDF={() => handleExportPDF('smallBowel')}
+                          onUndo={(section) => {
+                            undoSmallBowel(section as keyof typeof smallBowelHistory);
+                          }}
+                          onRedo={(section) => {
+                            redoSmallBowel(section as keyof typeof smallBowelHistory);
+                          }}
+                          onClear={(section) => {
+                            clearSmallBowel(section as keyof typeof smallBowelHistory);
+                          }}
+                          onClearAll={clearAllSmallBowelData}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Small Bowel Surgery"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={() => {}}
+                              onProcedureFindingsUpdate={(data) => {
+                                updateSmallBowel('procedureFindings', 'findings', data.findings);
+                                updateSmallBowel(
+                                  'procedureFindings',
+                                  'additionalNotes',
+                                  data.additionalNotes || ''
+                                );
+                              }}
+                              customImage={appendectomyImage}
+                            />
+                          }
+                        />
+                      </div>
+
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-sm">
+                              <FileText className="h-4 w-4 text-gray-600" />
+                              Live Report
+                              <span className="text-xs text-gray-500 font-normal ml-2">
+                                Real-time preview of small bowel surgery findings
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <SmallBowelSurgeryReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
                     </div>
                   </TabsContent>
-                </Tabs>
+
+                  <TabsContent value="cholecystectomy" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <Card className="glass-card-light">
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex-shrink-0 p-2 bg-amber-100 rounded-md">
+                                  <Scissors className="w-6 h-6 text-amber-600" />
+                                </div>
+                                <h1 className="text-2xl font-bold text-gray-800">
+                                  Cholecystectomy - Synoptic Operative Report
+                                </h1>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={() => handleExportPDF('cholecystectomy')}
+                                  disabled={isGeneratingPDF}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={clearAllCholecystectomyData}
+                                  title="Clear all cholecystectomy data"
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Clear All Data
+                                </Button>
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </Card>
+
+                        <CholecystectomyForm
+                          currentReport={currentReport}
+                          updateCholecystectomy={updateCholecystectomy}
+                          onExportPDF={() => handleExportPDF('cholecystectomy')}
+                          onUndo={(section) => {
+                            undoCholecystectomy(section as keyof typeof cholecystectomyHistory);
+                          }}
+                          onRedo={(section) => {
+                            redoCholecystectomy(section as keyof typeof cholecystectomyHistory);
+                          }}
+                          onClear={(section) => {
+                            clearCholecystectomy(section as keyof typeof cholecystectomyHistory);
+                          }}
+                          onClearAll={clearAllCholecystectomyData}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Cholecystectomy"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={() => {}}
+                              onProcedureFindingsUpdate={(data) => {
+                                updateCholecystectomy('procedureFindings', 'findings', data.findings);
+                                updateCholecystectomy(
+                                  'procedureFindings',
+                                  'additionalNotes',
+                                  data.additionalNotes || ''
+                                );
+                              }}
+                              customImage={appendectomyImage}
+                            />
+                          }
+                        />
+                      </div>
+
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-sm">
+                              <FileText className="h-4 w-4 text-gray-600" />
+                              Live Report
+                              <span className="text-xs text-gray-500 font-normal ml-2">
+                                Real-time preview of cholecystectomy findings
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <CholecystectomyReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+	                </Tabs>
               </CardContent>
             </Card>
           </div>

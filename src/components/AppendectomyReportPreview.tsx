@@ -356,6 +356,11 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
                 <span className="font-medium">Anaesthetist:</span> {appendectomy.preoperative.anaesthetist}
               </p>
             )}
+            {((appendectomy.preoperative as any)?.procedureUrgency || []).length > 0 && (
+              <p className="text-xs text-gray-700">
+                <span className="font-medium">Procedure Urgency:</span> {((appendectomy.preoperative as any).procedureUrgency || []).join(', ')}
+              </p>
+            )}
             {/* Duration of Operation - moved here per user request */}
             {(appendectomy.preoperative.duration || appendectomy.preoperative.startTime || appendectomy.preoperative.endTime) && (
               <div className="mt-2">
@@ -464,6 +469,14 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             })()
           )}
           
+          {/* Operation Findings */}
+          {(appendectomy.intraoperative as any)?.operationFindings && (
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-gray-600">Operation Findings</h5>
+              <p className="text-xs text-gray-700">{(appendectomy.intraoperative as any).operationFindings}</p>
+            </div>
+          )}
+
           {/* Appendix Appearance */}
           {appendectomy.intraoperative.appendixAppearance.length > 0 && (
             <div className="space-y-2">
@@ -512,6 +525,34 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             </div>
           )}
           
+          {/* Direction of Dissection */}
+          {((appendectomy.procedure as any)?.directionOfDissection || []).length > 0 && (
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-gray-600">Direction of Dissection</h5>
+              <div className="flex flex-wrap gap-1">
+                {((appendectomy.procedure as any).directionOfDissection || []).map((item: string, index: number) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {item === 'Other' && (appendectomy.procedure as any).directionOfDissectionOther
+                      ? `Other: ${(appendectomy.procedure as any).directionOfDissectionOther}`
+                      : item}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Meso-Appendix Excision */}
+          {((appendectomy.procedure as any)?.mesoAppendixExcision || []).length > 0 && (
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-gray-600">Meso-Appendix Excision</h5>
+              <div className="flex flex-wrap gap-1">
+                {((appendectomy.procedure as any).mesoAppendixExcision || []).map((item: string, index: number) => (
+                  <Badge key={index} variant="outline" className="text-xs">{item}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Method of Appendiceal Ligation */}
           {appendectomy.procedure.divisionMethod.length > 0 && (
             <div className="space-y-2">
@@ -544,6 +585,22 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             </div>
           )}
           
+          {/* Removal of Appendix */}
+          {((appendectomy.procedure as any)?.removalOfAppendix || []).length > 0 && (
+            <div className="space-y-2">
+              <h5 className="text-xs font-medium text-gray-600">Removal of Appendix</h5>
+              <div className="flex flex-wrap gap-1">
+                {((appendectomy.procedure as any).removalOfAppendix || []).map((item: string, index: number) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {item === 'Other' && (appendectomy.procedure as any).removalOfAppendixOther
+                      ? `Other: ${(appendectomy.procedure as any).removalOfAppendixOther}`
+                      : item}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Peritoneal Lavage */}
           {appendectomy.procedure.lavage && (
             <div className="space-y-2">
@@ -599,6 +656,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             </div>
           )}
         
+
         {/* Fascial Closure */}
         {appendectomy.closure.fascialClosure && (
           <div className="space-y-2">

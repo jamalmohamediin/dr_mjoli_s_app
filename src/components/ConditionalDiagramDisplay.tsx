@@ -47,6 +47,8 @@ export const ConditionalDiagramDisplay = ({
     "Appendicectomy": appendectomyImage,
     "Ventral Hernia Repair": appendectomyImage,
     "Rectal Cancer Surgery": appendectomyImage,
+    "Small Bowel Surgery": appendectomyImage,
+    "Cholecystectomy": appendectomyImage,
   };
 
   // Define which procedures show the OLD diagrams - changed default to false

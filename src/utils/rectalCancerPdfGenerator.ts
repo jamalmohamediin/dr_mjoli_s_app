@@ -237,7 +237,7 @@ export const generateRectalCancerPDF = async (
     // Add the Report Title
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('COLON AND RECTUM RESECTION REPORT', pageWidth / 2, y, { align: 'center' });
+    pdf.text('COLORECTAL RESECTION REPORT', pageWidth / 2, y, { align: 'center' });
     y += 8;
     
     // PATIENT INFORMATION Section
@@ -348,20 +348,37 @@ export const generateRectalCancerPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Row 1: Operation Findings (conditional - only for Colon operation type)
+    // Row 1: Operation Findings (conditional - for Colon or Rectum operation type)
     const operationTypeArray = rectalCancerData?.operationType?.type || [];
     const isColonSelected = Array.isArray(operationTypeArray) ? operationTypeArray.includes('Colon') : false;
-    const colonOperationFindings = rectalCancerData?.operationType?.operationFindings || '';
+    const isRectumSelected = Array.isArray(operationTypeArray) ? operationTypeArray.includes('Rectum') : false;
+    const operationFindingsDescription = rectalCancerData?.operationType?.operationFindings || '';
+    const operationFindingsOptions = rectalCancerData?.operationType?.operationFindingsOptions || [];
+    const operationFindingsSelectionText = operationFindingsOptions
+      .map((option: string) => {
+        if (option === 'Other' && rectalCancerData?.operationType?.operationFindingsOther?.trim()) {
+          return `Other: ${rectalCancerData.operationType.operationFindingsOther}`;
+        }
+        return option;
+      })
+      .join(', ');
+    const operativeFindingsWidth = pageWidth - (margin * 2);
+    const addOperativeFindingsField = (label: string, value: string) => {
+      if (!value || !value.trim()) return;
+      const lines = pdf.splitTextToSize(`${label}: ${value}`, operativeFindingsWidth);
+      lines.forEach((line: string) => {
+        pdf.text(line, col1X, y);
+        y += lineSpacing;
+      });
+    };
     
-    // Only show "Operation Findings:" if Colon is selected AND there are findings
-    if (isColonSelected && colonOperationFindings && colonOperationFindings.trim()) {
-      pdf.text(`Operation Findings: ${colonOperationFindings}`, col1X, y);
-      y += lineSpacing;
+    // Only show the operation findings fields if Colon or Rectum is selected
+    if (isColonSelected || isRectumSelected) {
+      addOperativeFindingsField('Operation Findings', operationFindingsSelectionText);
+      addOperativeFindingsField('Description of Operation Findings', operationFindingsDescription);
     }
     
     // Row 2 & 3: Rectum-specific fields (conditional - only show when Rectum is selected)
-    const isRectumSelected = Array.isArray(operationTypeArray) ? operationTypeArray.includes('Rectum') : false;
-    
     if (isRectumSelected) {
       // Row 2: Findings and Mesorectal Completeness (two columns)
       const findings = rectalCancerData?.findings?.description || '';
