@@ -29,7 +29,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, className }) => 
 
 export const GlassContainer: React.FC<AppLayoutProps> = ({ children, className }) => {
   return (
-    <div className={cn("glass-container py-8", className)}>
+    <div className={cn("glass-container py-4 sm:py-8", className)}>
       {children}
     </div>
   );
@@ -50,19 +50,19 @@ export const GlassHeader: React.FC<{ title: string; subtitle?: string; icon?: Re
   className 
 }) => {
   return (
-    <div className={cn("text-center mb-12", className)}>
+    <div className={cn("text-center mb-8 sm:mb-12", className)}>
       {icon && (
-        <div className="flex justify-center mb-6">
-          <div className="glass-card p-6 hover:scale-105 transition-transform duration-300">
+        <div className="mb-4 flex justify-center sm:mb-6">
+          <div className="glass-card p-4 hover:scale-105 transition-transform duration-300 sm:p-6">
             {icon}
           </div>
         </div>
       )}
-      <h1 className="text-4xl font-bold text-black text-shadow-glass mb-4">
+      <h1 className="mb-3 text-3xl font-bold leading-tight text-black text-shadow-glass sm:mb-4 sm:text-4xl">
         {title}
       </h1>
       {subtitle && (
-        <p className="text-xl glass-text-muted max-w-2xl mx-auto">
+        <p className="glass-text-muted mx-auto max-w-2xl text-base sm:text-xl">
           {subtitle}
         </p>
       )}

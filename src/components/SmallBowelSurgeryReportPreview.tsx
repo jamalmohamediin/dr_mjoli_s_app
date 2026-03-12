@@ -356,6 +356,12 @@ export const SmallBowelSurgeryReportPreview = ({
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-gray-600">Procedure Details</h5>
           <div className="space-y-1 text-xs text-gray-700">
+            {smallBowel?.procedure?.operationDone && (
+              <div>
+                <span className="font-medium">Operation Done:</span>{" "}
+                {smallBowel.procedure.operationDone}
+              </div>
+            )}
             {toArray(smallBowel?.procedure?.approach).length > 0 && (
               <div>
                 <span className="font-medium">Surgical Approach:</span>{" "}
@@ -371,12 +377,6 @@ export const SmallBowelSurgeryReportPreview = ({
                 ).join(", ")}
               </div>
             )}
-            {smallBowel?.procedure?.operationDone && (
-              <div>
-                <span className="font-medium">Operation Done:</span>{" "}
-                {smallBowel.procedure.operationDone}
-              </div>
-            )}
             {procedurePerformed.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 <span className="font-medium mr-1">Procedure Performed:</span>
@@ -388,23 +388,27 @@ export const SmallBowelSurgeryReportPreview = ({
               </div>
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              {smallBowel?.procedure?.lengthResected && (
-                <div>
-                  <span className="font-medium">Length Resected:</span>{" "}
-                  {smallBowel.procedure.lengthResected} cm
-                </div>
-              )}
-              {toArray(smallBowel?.procedure?.margins).length > 0 && (
-                <div>
-                  <span className="font-medium">Margins:</span>{" "}
-                  {toArray(smallBowel.procedure.margins).join(", ")}
-                </div>
-              )}
-              {vascularControl.length > 0 && (
-                <div className="col-span-2">
-                  <span className="font-medium">Method of Vascular Control:</span>{" "}
-                  {vascularControl.join(", ")}
-                </div>
+              {toArray(smallBowel?.procedure?.procedurePerformed).includes("Small Bowel Resection") && (
+                <>
+                  {smallBowel?.procedure?.lengthResected && (
+                    <div>
+                      <span className="font-medium">Length Resected:</span>{" "}
+                      {smallBowel.procedure.lengthResected} cm
+                    </div>
+                  )}
+                  {toArray(smallBowel?.procedure?.margins).length > 0 && (
+                    <div>
+                      <span className="font-medium">Margins:</span>{" "}
+                      {toArray(smallBowel.procedure.margins).join(", ")}
+                    </div>
+                  )}
+                  {vascularControl.length > 0 && (
+                    <div className="col-span-2">
+                      <span className="font-medium">Method of Vascular Control:</span>{" "}
+                      {vascularControl.join(", ")}
+                    </div>
+                  )}
+                </>
               )}
               {smallBowel?.procedure?.adhesiolysis && (
                 <div>

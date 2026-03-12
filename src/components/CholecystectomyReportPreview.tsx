@@ -368,7 +368,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
         <div className="space-y-2 text-xs text-gray-700">
           {appearance.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              <span className="font-medium mr-1">Gallbladder appearance:</span>
+              <span className="font-medium mr-1">Gall Bladder Appearance:</span>
               {appearance.map((item) => (
                 <Badge key={item} variant="secondary" className="text-xs">
                   {item}
@@ -378,7 +378,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           )}
           {cholecystectomy?.intraoperative?.adhesionsToGallbladder && (
             <div>
-              <span className="font-medium">Adhesions to gall bladder:</span>{" "}
+              <span className="font-medium">Adhesions to Gall Bladder:</span>{" "}
               {cholecystectomy.intraoperative.adhesionsToGallbladder}
             </div>
           )}
@@ -409,22 +409,25 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           )}
           {cholecystectomy?.procedure?.subtotalCholecystectomy && (
             <div>
-              <span className="font-medium">Subtotal cholecystectomy:</span>{" "}
+              <span className="font-medium">Subtotal Cholecystectomy:</span>{" "}
               {cholecystectomy.procedure.subtotalCholecystectomy}
             </div>
           )}
           {subtotalReasons.length > 0 && (
             <div>
-              <span className="font-medium">Reason for subtotal cholecystectomy:</span>{" "}
+              <span className="font-medium">Reason for Subtotal Cholecystectomy:</span>{" "}
               {subtotalReasons.join(", ")}
             </div>
           )}
           {cholecystectomy?.procedure?.gallbladderDecompressionRequired && (
             <div>
-              <span className="font-medium">Gall bladder decompression required:</span>{" "}
+              <span className="font-medium">Gall Bladder Decompression Required:</span>{" "}
               {cholecystectomy.procedure.gallbladderDecompressionRequired}
             </div>
           )}
+          <div>
+            <span className="font-medium">Critical View of Safety:</span>
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             {cholecystectomy?.procedure?.calotsTriangleDissected && (
               <div>
@@ -434,20 +437,20 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
             )}
             {cholecystectomy?.procedure?.cysticDuctIdentified && (
               <div>
-                <span className="font-medium">Cystic duct identified:</span>{" "}
+                <span className="font-medium">Cystic Duct Identified:</span>{" "}
                 {cholecystectomy.procedure.cysticDuctIdentified}
               </div>
             )}
             {cholecystectomy?.procedure?.cysticArteryIdentified && (
               <div>
-                <span className="font-medium">Cystic artery identified:</span>{" "}
+                <span className="font-medium">Cystic Artery Identified:</span>{" "}
                 {cholecystectomy.procedure.cysticArteryIdentified}
               </div>
             )}
             {cholecystectomy?.procedure?.twoStructuresConfirmed && (
               <div>
                 <span className="font-medium">
-                  Two structures entering gallbladder confirmed:
+                  Two Structures Entering Gall Bladder Confirmed:
                 </span>{" "}
                 {cholecystectomy.procedure.twoStructuresConfirmed}
               </div>
@@ -455,31 +458,31 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           </div>
           {cysticDuctControl.length > 0 && (
             <div>
-              <span className="font-medium">Cystic duct control:</span>{" "}
+              <span className="font-medium">Cystic Duct Control:</span>{" "}
               {cysticDuctControl.join(", ")}
             </div>
           )}
           {cysticArteryControl.length > 0 && (
             <div>
-              <span className="font-medium">Cystic artery control:</span>{" "}
+              <span className="font-medium">Cystic Artery Control:</span>{" "}
               {cysticArteryControl.join(", ")}
             </div>
           )}
           {liverBedDissection.length > 0 && (
             <div>
-              <span className="font-medium">Gallbladder dissected from liver bed:</span>{" "}
+              <span className="font-medium">Gall Bladder Dissected from Liver Bed:</span>{" "}
               {liverBedDissection.join(", ")}
             </div>
           )}
           {cholecystectomy?.procedure?.bileSpillage && (
             <div>
-              <span className="font-medium">Bile spillage:</span>{" "}
+              <span className="font-medium">Bile Spillage:</span>{" "}
               {cholecystectomy.procedure.bileSpillage}
             </div>
           )}
           {cholecystectomy?.procedure?.stonesSpillage && (
             <div>
-              <span className="font-medium">Stones spillage:</span>{" "}
+              <span className="font-medium">Stones Spillage:</span>{" "}
               {cholecystectomy.procedure.stonesSpillage}
             </div>
           )}
@@ -494,7 +497,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           )}
           {cholangiogramFindings.length > 0 && (
             <div>
-              <span className="font-medium">Cholangiogram findings:</span>{" "}
+              <span className="font-medium">Cholangiogram Findings:</span>{" "}
               {cholangiogramFindings.join(", ")}
               {cholecystectomy?.procedure?.cholangiogramStrictureSite
                 ? ` | Stricture site: ${cholecystectomy.procedure.cholangiogramStrictureSite}`
@@ -509,14 +512,20 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           )}
           {retrieval.length > 0 && (
             <div>
-              <span className="font-medium">Gallbladder retrieval:</span>{" "}
+              <span className="font-medium">Gall Bladder Retrieval:</span>{" "}
               {retrieval.join(", ")}
             </div>
           )}
           {cholecystectomy?.procedure?.drainInsertion && (
             <div>
-              <span className="font-medium">Drain insertion:</span>{" "}
-              {cholecystectomy.procedure.drainInsertion}
+              <span className="font-medium">Drain Insertion:</span> {cholecystectomy.procedure.drainInsertion}
+              {cholecystectomy.procedure.drainInsertion === 'Yes' && (
+                <>
+                  {toArray(cholecystectomy?.procedure?.drainType).length > 0 ? ` | Type: ${toArray(cholecystectomy.procedure.drainType).join(', ')}` : ''}
+                  {toArray(cholecystectomy?.procedure?.intraPeritonealPlacement).length > 0 ? ` | Placement: ${toArray(cholecystectomy.procedure.intraPeritonealPlacement).join(', ')}` : ''}
+                  {toArray(cholecystectomy?.procedure?.drainExitSite).length > 0 ? ` | Exit Site: ${toArray(cholecystectomy.procedure.drainExitSite).join(', ')}` : ''}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -529,19 +538,20 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
         <div className="space-y-2 text-xs text-gray-700">
           {cholecystectomy?.closure?.fascialClosure && (
             <div>
-              <span className="font-medium">Fascial closure:</span>{" "}
-              {cholecystectomy.closure.fascialClosure}
+              <span className="font-medium">Fascial Closure:</span> {cholecystectomy.closure.fascialClosure}
+              {cholecystectomy.closure.fascialClosure === 'Yes' && toArray(cholecystectomy?.closure?.fascialClosureSites).length > 0 ? ` | Sites: ${toArray(cholecystectomy.closure.fascialClosureSites).join(', ')}` : ''}
+              {cholecystectomy.closure.fascialClosure === 'Yes' && toArray(cholecystectomy?.closure?.fascialSutureMaterial).length > 0 ? ` | Suture: ${toArray(cholecystectomy.closure.fascialSutureMaterial).join(', ')}` : ''}
             </div>
           )}
-          {skinClosure.length > 0 && (
+          {cholecystectomy?.closure?.skinClosure && (
             <div>
-              <span className="font-medium">Skin closure method:</span>{" "}
-              {skinClosure.join(", ")}
+              <span className="font-medium">Skin Closure:</span> {cholecystectomy.closure.skinClosure}
+              {cholecystectomy.closure.skinClosure === 'Yes' && skinClosure.length > 0 ? ` | Method: ${skinClosure.join(', ')}` : ''}
             </div>
           )}
           {cholecystectomy?.closure?.gallbladderSentForHistology && (
             <div>
-              <span className="font-medium">Gallbladder sent for histology:</span>{" "}
+              <span className="font-medium">Gall Bladder Sent for Histology:</span>{" "}
               {cholecystectomy.closure.gallbladderSentForHistology}
               {cholecystectomy?.closure?.laboratoryName
                 ? ` (${cholecystectomy.closure.laboratoryName})`
@@ -550,7 +560,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           )}
           {difficulty.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              <span className="font-medium mr-1">Intra-operative difficulty:</span>
+              <span className="font-medium mr-1">Intra-Operative Difficulty:</span>
               {difficulty.map((item) => (
                 <Badge key={item} variant="secondary" className="text-xs">
                   {item}

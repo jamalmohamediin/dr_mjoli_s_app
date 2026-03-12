@@ -285,3 +285,27 @@ All colors MUST be HSL.
 
   /* Note: rely on lang="en-GB" for dd/mm/yyyy ordering to preserve native separators */
 }
+
+@media (max-width: 639px) {
+  .mobile-form-layout .grid[class*="grid-cols-2"],
+  .mobile-form-layout .grid[class*="grid-cols-3"],
+  .mobile-form-layout .grid[class*="grid-cols-4"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .mobile-form-layout .ml-4 {
+    margin-left: 0 !important;
+  }
+
+  .mobile-form-layout .w-16,
+  .mobile-form-layout .w-20,
+  .mobile-form-layout .w-24,
+  .mobile-form-layout .w-48 {
+    width: 100% !important;
+  }
+
+  .mobile-form-layout .flex[class*="items-center"][class*="gap-2"] {
+    align-items: stretch;
+  }
+}

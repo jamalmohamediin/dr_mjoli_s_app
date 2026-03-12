@@ -898,6 +898,7 @@ export const SmallBowelSurgeryForm = ({
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
+
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
                 <div className="flex flex-wrap gap-4 ml-4">
@@ -1023,6 +1024,7 @@ export const SmallBowelSurgeryForm = ({
                 )}
               </div>
 
+              {toArray(smallBowel.procedure?.procedurePerformed).includes("Small Bowel Resection") && (
               <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                 <h4 className="font-semibold text-gray-800">Resection</h4>
                 <div>
@@ -1100,6 +1102,7 @@ export const SmallBowelSurgeryForm = ({
                   )}
                 </div>
               </div>
+              )}
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Adhesiolysis:</p>

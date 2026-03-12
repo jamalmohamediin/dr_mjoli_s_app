@@ -28,17 +28,24 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
   const [portSize, setPortSize] = useState<'5mm' | '10/11mm' | '12mm' | '15mm'>('12mm');
   const [stomaType, setStomaType] = useState<'ileostomy' | 'colostomy'>('ileostomy');
 
-  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     };
   };
+
+  const getCanvasCoordinates = (
+    e:
+      | React.MouseEvent<HTMLCanvasElement>
+      | React.PointerEvent<HTMLCanvasElement>
+      | React.Touch
+  ) => getCanvasCoordinatesFromPoint(e.clientX, e.clientY);
 
   const drawMarkings = useCallback(() => {
     const canvas = canvasRef.current;
@@ -143,18 +150,21 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
   };
 
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!activeTool) return;
+    e.preventDefault();
     const coords = getCanvasCoordinates(e);
 
     if (activeTool === 'incision') {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
       setIsDrawing(true);
       setStartPoint(coords);
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !startPoint || activeTool !== 'incision') return;
+    e.preventDefault();
     const coords = getCanvasCoordinates(e);
     drawMarkings();
     const tempIncision: IncisionMarking = { id: 'temp', type: 'incision', start: startPoint, end: coords };
@@ -162,9 +172,8 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
     if (ctx) drawIncision(ctx, tempIncision);
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const finishMarking = (coords: { x: number; y: number }) => {
     if (!activeTool) return;
-    const coords = getCanvasCoordinates(e);
     let newMarking: SurgicalMarking | null = null;
 
     if (activeTool === 'port') {
@@ -189,6 +198,23 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
 
     setIsDrawing(false);
     setStartPoint(null);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!activeTool) return;
+    e.preventDefault();
+    const coords = getCanvasCoordinates(e);
+    finishMarking(coords);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!activeTool) return;
+    e.preventDefault();
+    drawMarkings();
+    setIsDrawing(false);
+    setStartPoint(null);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
   const toggleTool = (tool: Tool) => {
@@ -217,13 +243,17 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
 
   return (
     <div className="space-y-4">
-      <Card className="p-3 flex flex-wrap gap-4 items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <Button onClick={() => toggleTool('port')} variant={activeTool === 'port' ? 'default' : 'outline'}>
+      <Card className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
+        <div className="flex w-full flex-col items-center gap-2 sm:w-auto">
+          <Button
+            onClick={() => toggleTool('port')}
+            variant={activeTool === 'port' ? 'default' : 'outline'}
+            className="w-full sm:w-auto"
+          >
             Ports and Size
           </Button>
           {activeTool === 'port' && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
               {(['5mm', '10/11mm', '12mm', '15mm'] as const).map(size => (
                 <div key={size} className="flex items-center gap-1">
                   <Checkbox 
@@ -238,12 +268,16 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-2">
-          <Button onClick={() => toggleTool('stoma')} variant={activeTool === 'stoma' ? 'default' : 'outline'}>
+        <div className="flex w-full flex-col items-center gap-2 sm:w-auto">
+          <Button
+            onClick={() => toggleTool('stoma')}
+            variant={activeTool === 'stoma' ? 'default' : 'outline'}
+            className="w-full sm:w-auto"
+          >
             Stoma Site
           </Button>
           {activeTool === 'stoma' && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
               {(['ileostomy', 'colostomy'] as const).map(type => (
                 <div key={type} className="flex items-center gap-1">
                   <Checkbox 
@@ -258,22 +292,34 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
           )}
         </div>
 
-        <Button onClick={() => toggleTool('incision')} variant={activeTool === 'incision' ? 'default' : 'outline'}>
+        <Button
+          onClick={() => toggleTool('incision')}
+          variant={activeTool === 'incision' ? 'default' : 'outline'}
+          className="w-full sm:w-auto"
+        >
           Access Incision
         </Button>
-        <Button variant="outline" onClick={handleUndo} disabled={historyIndex === 0}>Undo</Button>
-        <Button variant="outline" onClick={handleRedo} disabled={historyIndex === history.length - 1}>Redo</Button>
+        <Button variant="outline" onClick={handleUndo} disabled={historyIndex === 0} className="w-full sm:w-auto">Undo</Button>
+        <Button variant="outline" onClick={handleRedo} disabled={historyIndex === history.length - 1} className="w-full sm:w-auto">Redo</Button>
       </Card>
 
-      <div className="relative border rounded-lg overflow-hidden" style={{ cursor: activeTool ? 'crosshair' : 'default' }}>
-        <img ref={imageRef} alt="Surgical diagram" className="hidden" />
-        <canvas
-          ref={canvasRef}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          className="w-full h-auto"
-        />
+      <div className="relative mx-auto flex w-full justify-center rounded-lg border bg-white p-2 sm:p-4">
+        <div className="w-full max-w-[480px]">
+          <img ref={imageRef} alt="Surgical diagram" className="hidden" />
+          <canvas
+            ref={canvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onPointerLeave={handlePointerCancel}
+            className="mx-auto block h-auto w-full max-w-[480px] select-none"
+            style={{
+              cursor: activeTool ? 'crosshair' : 'default',
+              touchAction: activeTool ? 'none' : 'manipulation',
+            }}
+          />
+        </div>
       </div>
     </div>
   );

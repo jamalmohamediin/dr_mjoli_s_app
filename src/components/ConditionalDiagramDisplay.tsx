@@ -101,16 +101,16 @@ export const ConditionalDiagramDisplay = ({
     const diagramImage = surgicalProceduresMap[activeSurgicalProcedureName];
     return (
       <Card className="glass-card-light">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="px-4 pt-4 text-center sm:px-6 sm:text-left">
+          <CardTitle className="flex items-center justify-center gap-2 sm:justify-start">
             <Stethoscope className="h-5 w-5 text-gray-600" />
 {activeSurgicalProcedureName === "Appendectomy" ? "Appendicectomy" : activeSurgicalProcedureName} Diagram
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="mx-auto max-w-md sm:mx-0">
             Mark Ports, Stomas, and Incisions on the diagram below.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-4 sm:px-6">
           <SurgicalDiagram
             diagramImage={diagramImage}
             onUpdate={(markings) => {

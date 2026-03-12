@@ -483,7 +483,7 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     }
   };
 
-  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
@@ -492,10 +492,14 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
     const scaleY = canvas.height / rect.height;
     
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
     };
   };
+
+  const getCanvasCoordinates = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.Touch
+  ) => getCanvasCoordinatesFromPoint(e.clientX, e.clientY);
   
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (drawingMode === 'mark') {
@@ -725,12 +729,40 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
           <canvas
             ref={canvasRef}
             onMouseDown={handleMouseDown}
+            onTouchStart={(e) => {
+              const touch = e.touches[0];
+              if (!touch) return;
+              e.preventDefault();
+              const coords = getCanvasCoordinates(touch);
+
+              if (drawingMode === 'mark') {
+                // Clear any previous selections when starting a new finding
+                setSelectedLocations([]);
+                setSelectedFindings([]);
+                setCustomLocation('');
+                setCustomFinding('');
+
+                const tempFinding: Finding = {
+                  id: `temp_${Date.now()}`,
+                  x: coords.x,
+                  y: coords.y,
+                  type: 'Pending',
+                  location: 'To be specified',
+                  description: 'Tap to add details'
+                };
+
+                setFindings(prev => [...prev, tempFinding]);
+                setPendingPosition(coords);
+                setShowingDropdown(true);
+              }
+            }}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             className="max-w-full h-auto select-none"
             style={{ 
               maxHeight: '400px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              touchAction: 'manipulation'
             }}
           />
 

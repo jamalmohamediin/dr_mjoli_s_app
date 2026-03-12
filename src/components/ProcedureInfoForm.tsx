@@ -101,7 +101,7 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
       <div className="mb-2">
         <Label htmlFor="indication" className="text-xs font-medium">Clinical Indication</Label>
         <div className="space-y-2">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Textarea
                 id="indication"
@@ -130,7 +130,7 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
                 setTempIndication('');
               }}
               disabled={!tempIndication.trim()}
-              className="self-start mt-0.5"
+              className="mt-0.5 w-full self-start sm:w-auto"
             >
               <Save className="h-3 w-3 mr-1" />
               Save
@@ -243,8 +243,8 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
 
 
       {/* Row 3: Procedure Date and Duration in one row */}
-      <div className="grid grid-cols-1 gap-2 mt-2">
-        <div className="grid grid-cols-2 gap-4">
+      <div className="mt-2 grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           <div className="space-y-0.5">
             <Label htmlFor="date" className="text-xs font-medium">Procedure Date:</Label>
             <Input
@@ -257,29 +257,35 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
           </div>
           <div className="space-y-0.5">
             <Label className="text-xs font-medium">Duration of Operation:</Label>
-            <div className="flex items-center gap-2 text-xs">
-              <span>Start Time:</span>
-              <Input
-                type="time"
-                value={formData.operationStartTime}
-                onChange={(e) => handleChange('operationStartTime', e.target.value)}
-                className="w-20"
-              />
-              <span>End Time:</span>
-              <Input
-                type="time"
-                value={formData.operationEndTime}
-                onChange={(e) => handleChange('operationEndTime', e.target.value)}
-                className="w-20"
-              />
-              <span>Total Duration:</span>
-              <Input
-                type="number"
-                value={formData.operationDuration}
-                onChange={(e) => handleChange('operationDuration', e.target.value)}
-                placeholder="min"
-                className="w-16"
-              />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="space-y-1">
+                <span className="text-xs">Start Time</span>
+                <Input
+                  type="time"
+                  value={formData.operationStartTime}
+                  onChange={(e) => handleChange('operationStartTime', e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs">End Time</span>
+                <Input
+                  type="time"
+                  value={formData.operationEndTime}
+                  onChange={(e) => handleChange('operationEndTime', e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs">Total Duration</span>
+                <Input
+                  type="number"
+                  value={formData.operationDuration}
+                  onChange={(e) => handleChange('operationDuration', e.target.value)}
+                  placeholder="min"
+                  className="w-full"
+                />
+              </div>
             </div>
           </div>
         </div>

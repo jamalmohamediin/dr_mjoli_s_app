@@ -3280,7 +3280,7 @@ const Index = () => {
           <div className="2xl:col-span-3">
             <Card className="shadow-glass-heavy">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Microscope className="h-5 w-5 text-gray-600" />
@@ -3293,7 +3293,7 @@ const Index = () => {
                   <Button 
                     variant="destructive" 
                     size="sm" 
-                    className="text-xs"
+                    className="w-full text-xs sm:w-auto"
                     onClick={() => handleClearData()}
                     title="Clear all endoscopy data"
                   >
@@ -3303,29 +3303,29 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent>
-	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-	                  <TabsList className="grid w-full grid-cols-6">
-                    <TabsTrigger value="procedure" className="flex items-center gap-2">
+	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
+	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-6 sm:overflow-visible">
+                    <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       <Microscope className="h-4 w-4" />
                       Endoscopy
                     </TabsTrigger>
-                    <TabsTrigger value="appendectomy" className="flex items-center gap-2">
+                    <TabsTrigger value="appendectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       <Scissors className="h-4 w-4" />
                       Appendicectomy
                     </TabsTrigger>
-                    <TabsTrigger value="hernia" className="flex items-center gap-2">
+                    <TabsTrigger value="hernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       <Shield className="h-4 w-4" />
                       Ventral Hernia Repair
                     </TabsTrigger>
-	                    <TabsTrigger value="rectal" className="flex items-center gap-2">
+	                    <TabsTrigger value="rectal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
 	                      <Activity className="h-4 w-4" />
 	                      Colorectal Resection
 	                    </TabsTrigger>
-                      <TabsTrigger value="smallBowel" className="flex items-center gap-2">
+                      <TabsTrigger value="smallBowel" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         <Scissors className="h-4 w-4" />
                         Small Bowel Surgery
                       </TabsTrigger>
-                      <TabsTrigger value="cholecystectomy" className="flex items-center gap-2">
+                      <TabsTrigger value="cholecystectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         <Scissors className="h-4 w-4" />
                         Cholecystectomy
                       </TabsTrigger>
@@ -4833,7 +4833,7 @@ const Index = () => {
                               <h3 className="text-md font-medium text-gray-800 mb-3">Access and Ports</h3>
                               
                               {/* Legend/Key */}
-                              <div className="ml-4 mb-4">
+                              <div className="mb-4 sm:ml-4">
                                 <div className="bg-gray-50 p-3 rounded border">
                                   <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
                                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
@@ -4857,26 +4857,22 @@ const Index = () => {
                                 </div>
                               </div>
                               
-                              <div className="ml-4">
-                                <Card className="glass-card-light">
-                                  <CardContent>
-                                    <ConditionalDiagramDisplay
-                                      selectedProcedures={['Appendectomy']}
-                                      onGastroscopyUpdate={() => {}}
-                                      onColonoscopyUpdate={(data) => {
-                                        // Handle appendicectomy diagram updates here
-                                        console.log('Appendicectomy diagram update:', data);
-                                      }}
-                                      onProcedureFindingsUpdate={(data) => {
-                                        // Store surgical markings in appendectomy procedureFindings
-                                        updateAppendectomy('procedureFindings', 'findings', data.findings);
-                                        updateAppendectomy('procedureFindings', 'additionalNotes', data.additionalNotes || '');
-                                      }}
-                                      currentProcedureFindings={{ findings: '', additionalNotes: '' }}
-                                      customImage={appendectomyImage}
-                                    />
-                                  </CardContent>
-                                </Card>
+                              <div className="sm:ml-4">
+                                <ConditionalDiagramDisplay
+                                  selectedProcedures={['Appendectomy']}
+                                  onGastroscopyUpdate={() => {}}
+                                  onColonoscopyUpdate={(data) => {
+                                    // Handle appendicectomy diagram updates here
+                                    console.log('Appendicectomy diagram update:', data);
+                                  }}
+                                  onProcedureFindingsUpdate={(data) => {
+                                    // Store surgical markings in appendectomy procedureFindings
+                                    updateAppendectomy('procedureFindings', 'findings', data.findings);
+                                    updateAppendectomy('procedureFindings', 'additionalNotes', data.additionalNotes || '');
+                                  }}
+                                  currentProcedureFindings={{ findings: '', additionalNotes: '' }}
+                                  customImage={appendectomyImage}
+                                />
                               </div>
                             </div>
 
@@ -6961,7 +6957,7 @@ const Index = () => {
                               <h3 className="text-md font-medium text-gray-800 mb-3">Interactive Body Diagram</h3>
                               
                               {/* Legend/Key */}
-                              <div className="ml-4 mb-4">
+                              <div className="mb-4 sm:ml-4">
                                 <div className="bg-gray-50 p-3 rounded border">
                                   <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
                                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
@@ -6985,26 +6981,22 @@ const Index = () => {
                                 </div>
                               </div>
                               
-                              <div className="ml-4">
-                                <Card className="glass-card-light">
-                                  <CardContent>
-                                    <ConditionalDiagramDisplay
-                                      selectedProcedures={['Ventral Hernia Repair']}
-                                      onGastroscopyUpdate={() => {}}
-                                      onColonoscopyUpdate={(data) => {
-                                        // Handle hernia diagram updates here
-                                        console.log('Hernia diagram update:', data);
-                                      }}
-                                      onProcedureFindingsUpdate={(data) => {
-                                        // Store surgical markings in ventral hernia procedureFindings
-                                        updateVentralHernia('procedureFindings', 'findings', data.findings);
-                                        updateVentralHernia('procedureFindings', 'additionalNotes', data.additionalNotes || '');
-                                      }}
-                                      currentProcedureFindings={{ findings: '', additionalNotes: '' }}
-                                      customImage={appendectomyImage}
-                                    />
-                                  </CardContent>
-                                </Card>
+                              <div className="sm:ml-4">
+                                <ConditionalDiagramDisplay
+                                  selectedProcedures={['Ventral Hernia Repair']}
+                                  onGastroscopyUpdate={() => {}}
+                                  onColonoscopyUpdate={(data) => {
+                                    // Handle hernia diagram updates here
+                                    console.log('Hernia diagram update:', data);
+                                  }}
+                                  onProcedureFindingsUpdate={(data) => {
+                                    // Store surgical markings in ventral hernia procedureFindings
+                                    updateVentralHernia('procedureFindings', 'findings', data.findings);
+                                    updateVentralHernia('procedureFindings', 'additionalNotes', data.additionalNotes || '');
+                                  }}
+                                  currentProcedureFindings={{ findings: '', additionalNotes: '' }}
+                                  customImage={appendectomyImage}
+                                />
                               </div>
                             </div>
                           </div>
