@@ -34,6 +34,7 @@ import { initialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 interface SmallBowelSurgeryFormProps {
   currentReport: any;
   updateSmallBowel: (section: string, field: string, value: any) => void;
+  onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
   onClear?: (section: string) => void;
@@ -116,6 +117,7 @@ const toArray = (value: unknown): string[] => {
 export const SmallBowelSurgeryForm = ({
   currentReport,
   updateSmallBowel,
+  onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
   onClear,
@@ -331,7 +333,7 @@ export const SmallBowelSurgeryForm = ({
                 <PatientInfoFields
                   patientInfo={smallBowel.patientInfo}
                   onFieldChange={(field, value) => updateSmallBowel("patientInfo", field, value)}
-                  onBulkUpdate={updatePatientInfoFields}
+                  onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
                   currentExtractedPatientInfo={currentExtractedPatientInfo}
                   onCurrentPatientChange={onCurrentPatientChange}
                 />

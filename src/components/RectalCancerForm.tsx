@@ -13,6 +13,7 @@ import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/uti
 interface RectalCancerFormProps {
   currentReport: any;
   updateRectalCancer: (section: string, field: string, value: any) => void;
+  onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
   onSave?: (section: string) => void;
@@ -27,6 +28,7 @@ interface RectalCancerFormProps {
 export const RectalCancerForm = ({
   currentReport,
   updateRectalCancer,
+  onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
   onSave,
@@ -313,7 +315,7 @@ export const RectalCancerForm = ({
                 <PatientInfoFields
                   patientInfo={currentReport.rectalCancer.patientInfo}
                   onFieldChange={(field, value) => updateRectalCancer("patientInfo", field, value)}
-                  onBulkUpdate={updatePatientInfoFields}
+                  onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
                   currentExtractedPatientInfo={currentExtractedPatientInfo}
                   onCurrentPatientChange={onCurrentPatientChange}
                 />

@@ -24,6 +24,7 @@ import {
 interface CholecystectomyFormProps {
   currentReport: any;
   updateCholecystectomy: (section: string, field: string, value: any) => void;
+  onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
   onClear?: (section: string) => void;
@@ -181,6 +182,7 @@ const toArray = (value: unknown): string[] => {
 export const CholecystectomyForm = ({
   currentReport,
   updateCholecystectomy,
+  onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
   onClear,
@@ -388,7 +390,7 @@ export const CholecystectomyForm = ({
               onFieldChange={(field, value) =>
                 updateCholecystectomy("patientInfo", field, value)
               }
-              onBulkUpdate={updatePatientInfoFields}
+              onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
               currentExtractedPatientInfo={currentExtractedPatientInfo}
               onCurrentPatientChange={onCurrentPatientChange}
             />

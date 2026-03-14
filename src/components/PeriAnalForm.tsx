@@ -25,6 +25,7 @@ import {
 interface PeriAnalFormProps {
   currentReport: any;
   updatePeriAnal: (section: string, field: string, value: any) => void;
+  onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
   onClear?: (section: string) => void;
@@ -308,6 +309,7 @@ const FieldRow = ({
 export const PeriAnalForm = ({
   currentReport,
   updatePeriAnal,
+  onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
   onClear,
@@ -577,7 +579,7 @@ export const PeriAnalForm = ({
             <PatientInfoFields
               patientInfo={periAnal.patientInfo}
               onFieldChange={(field, value) => updatePeriAnal("patientInfo", field, value)}
-              onBulkUpdate={updatePatientInfoFields}
+              onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
               currentExtractedPatientInfo={currentExtractedPatientInfo}
               onCurrentPatientChange={onCurrentPatientChange}
             />

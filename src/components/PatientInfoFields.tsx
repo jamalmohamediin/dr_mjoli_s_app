@@ -10,6 +10,7 @@ import {
   createEmptyPatientStickerPatch,
   formatPatientStickerDate,
   hasExtractedPatientStickerData,
+  hasMeaningfulPatientInfoSyncData,
   hasPatientStickerMode,
   normalizePatientInfo,
   normalizePatientStickerPayload,
@@ -136,15 +137,49 @@ export const PatientInfoFields = ({
       window.clearTimeout(timeout);
 
       if (!response.ok) {
-        throw new Error(`Sticker extraction failed (${response.status})`);
+        const rawBody = await response.text();
+        let payload: any = null;
+
+        if (rawBody.trim()) {
+          try {
+            payload = JSON.parse(rawBody);
+          } catch (parseError) {
+            throw new Error(`Sticker extraction failed (${response.status})`);
+          }
+        }
+
+        throw new Error(
+          payload?.error ||
+            payload?.message ||
+            `Sticker extraction failed (${response.status})`,
+        );
       }
 
-      const payload = await response.json();
+      const rawBody = await response.text();
+      if (!rawBody.trim()) {
+        throw new Error("Sticker extraction returned an empty response.");
+      }
+
+      let payload: any;
+      try {
+        payload = JSON.parse(rawBody);
+      } catch (parseError) {
+        throw new Error("Sticker extraction returned an invalid response.");
+      }
+
       if (payload?.success === false) {
         throw new Error(payload?.error || payload?.message || "Sticker extraction failed");
       }
 
       const extracted = normalizePatientStickerPayload(payload);
+      if (!hasMeaningfulPatientInfoSyncData(extracted)) {
+        throw new Error(
+          payload?.error ||
+            payload?.message ||
+            "No patient sticker details could be extracted from the image.",
+        );
+      }
+
       applyUpdates({
         ...extracted,
         stickerMode: true,

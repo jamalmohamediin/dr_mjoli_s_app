@@ -41,6 +41,7 @@ import { createInitialPeriAnalState } from "@/utils/periAnal";
 import {
   createInitialPatientInfoState,
   hasExtractedPatientStickerData,
+  mergePatientInfoUpdates,
 } from "@/utils/patientSticker";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
@@ -3165,6 +3166,220 @@ const Index = () => {
     });
   };
 
+  const updateAppendectomyPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.appendectomy?.patientInfo);
+
+    setCurrentReport(prev => {
+      nextPatientInfo = mergePatientInfoUpdates(prev.appendectomy?.patientInfo, updates);
+      const newAppendectomy = {
+        ...prev.appendectomy,
+        patientInfo: nextPatientInfo,
+      };
+      const newReport = {
+        ...prev,
+        appendectomy: newAppendectomy,
+      };
+
+      if (enablePersistence) {
+        autoSaveAppendectomy(newReport.appendectomy);
+      }
+
+      return newReport;
+    });
+
+    setAppendectomyHistory(prevHistory => {
+      const newHistory = { ...prevHistory };
+      const currentIndex = appendectomyHistoryIndex.patientInfo;
+      const patientInfoHistory = [...(newHistory.patientInfo || []).slice(0, currentIndex + 1), nextPatientInfo];
+
+      newHistory.patientInfo =
+        patientInfoHistory.length > 20 ? patientInfoHistory.slice(-20) : patientInfoHistory;
+
+      setAppendectomyHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: (newHistory.patientInfo?.length || 1) - 1,
+      }));
+
+      return newHistory;
+    });
+  };
+
+  const updateVentralHerniaPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.ventralHernia?.patientInfo);
+
+    setCurrentReport(prev => {
+      nextPatientInfo = mergePatientInfoUpdates(prev.ventralHernia?.patientInfo, updates);
+
+      return {
+        ...prev,
+        ventralHernia: {
+          ...prev.ventralHernia,
+          patientInfo: nextPatientInfo,
+        },
+      };
+    });
+
+    setVentralHerniaHistory(prevHistory => {
+      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
+
+      setVentralHerniaHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: patientInfoHistory.length - 1,
+      }));
+
+      return {
+        ...prevHistory,
+        patientInfo: patientInfoHistory,
+      };
+    });
+  };
+
+  const updateRectalCancerPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.rectalCancer?.patientInfo);
+
+    setCurrentReport(prev => {
+      nextPatientInfo = mergePatientInfoUpdates(prev.rectalCancer?.patientInfo, updates);
+
+      return {
+        ...prev,
+        rectalCancer: {
+          ...prev.rectalCancer,
+          patientInfo: nextPatientInfo,
+        },
+      };
+    });
+
+    setRectalCancerHistory(prevHistory => {
+      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
+
+      setRectalCancerHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: patientInfoHistory.length - 1,
+      }));
+
+      return {
+        ...prevHistory,
+        patientInfo: patientInfoHistory,
+      };
+    });
+  };
+
+  const updateSmallBowelPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.smallBowel?.patientInfo);
+
+    setCurrentReport(prev => {
+      nextPatientInfo = mergePatientInfoUpdates(prev.smallBowel?.patientInfo, updates);
+
+      return {
+        ...prev,
+        smallBowel: {
+          ...prev.smallBowel,
+          patientInfo: nextPatientInfo,
+        },
+      };
+    });
+
+    setSmallBowelHistory(prevHistory => {
+      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
+
+      setSmallBowelHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: patientInfoHistory.length - 1,
+      }));
+
+      return {
+        ...prevHistory,
+        patientInfo: patientInfoHistory,
+      };
+    });
+  };
+
+  const updateCholecystectomyPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.cholecystectomy?.patientInfo);
+
+    setCurrentReport(prev => {
+      const currentCholecystectomy = prev.cholecystectomy || createInitialCholecystectomyState();
+      nextPatientInfo = mergePatientInfoUpdates(currentCholecystectomy.patientInfo, updates);
+
+      return {
+        ...prev,
+        cholecystectomy: {
+          ...currentCholecystectomy,
+          patientInfo: nextPatientInfo,
+        },
+      };
+    });
+
+    setCholecystectomyHistory(prevHistory => {
+      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
+
+      setCholecystectomyHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: patientInfoHistory.length - 1,
+      }));
+
+      return {
+        ...prevHistory,
+        patientInfo: patientInfoHistory,
+      };
+    });
+  };
+
+  const updatePeriAnalPatientInfoBulk = (updates: Record<string, any>) => {
+    if (Object.keys(updates || {}).length === 0) {
+      return;
+    }
+
+    let nextPatientInfo = createInitialPatientInfoState(currentReport.periAnal?.patientInfo);
+
+    setCurrentReport(prev => {
+      const currentPeriAnal = prev.periAnal || createInitialPeriAnalState();
+      nextPatientInfo = mergePatientInfoUpdates(currentPeriAnal.patientInfo, updates);
+
+      return {
+        ...prev,
+        periAnal: {
+          ...currentPeriAnal,
+          patientInfo: nextPatientInfo,
+        },
+      };
+    });
+
+    setPeriAnalHistory(prevHistory => {
+      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
+
+      setPeriAnalHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        patientInfo: patientInfoHistory.length - 1,
+      }));
+
+      return {
+        ...prevHistory,
+        patientInfo: patientInfoHistory,
+      };
+    });
+  };
+
   const handleExportPDF = async (section?: string) => {
     console.log("=== EXPORT PDF CLICKED - NETLIFY PRODUCTION VERSION ===");
     console.log("Environment:", window.location.origin);
@@ -4689,13 +4904,9 @@ const Index = () => {
 	                            onFieldChange={(field, value) =>
 	                              updateAppendectomy("patientInfo", field, value)
 	                            }
-	                            onBulkUpdate={(updates) => {
-	                              Object.entries(updates).forEach(([field, value]) => {
-	                                updateAppendectomy("patientInfo", field, value);
-	                              });
-	                            }}
-                            currentExtractedPatientInfo={currentExtractedPatientInfo}
-                            onCurrentPatientChange={updateCurrentExtractedPatient}
+	                            onBulkUpdate={updateAppendectomyPatientInfoBulk}
+	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                            onCurrentPatientChange={updateCurrentExtractedPatient}
 	                          />
                         </CardContent>
                       )}
@@ -6169,13 +6380,9 @@ const Index = () => {
 	                            onFieldChange={(field, value) =>
 	                              updateVentralHernia("patientInfo", field, value)
 	                            }
-	                            onBulkUpdate={(updates) => {
-	                              Object.entries(updates).forEach(([field, value]) => {
-	                                updateVentralHernia("patientInfo", field, value);
-	                              });
-	                            }}
-                            currentExtractedPatientInfo={currentExtractedPatientInfo}
-                            onCurrentPatientChange={updateCurrentExtractedPatient}
+	                            onBulkUpdate={updateVentralHerniaPatientInfoBulk}
+	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                            onCurrentPatientChange={updateCurrentExtractedPatient}
 	                          />
                         </CardContent>
                       )}
@@ -8475,12 +8682,13 @@ const Index = () => {
                         </Card>
 
                         {/* Rectal Cancer Form Component */}
-	                        <RectalCancerForm 
-	                          currentReport={currentReport}
-	                          updateRectalCancer={updateRectalCancer}
-                          currentExtractedPatientInfo={currentExtractedPatientInfo}
-                          onCurrentPatientChange={updateCurrentExtractedPatient}
-	                          onExportPDF={() => handleExportPDF('rectalCancer')}
+		                        <RectalCancerForm 
+		                          currentReport={currentReport}
+		                          updateRectalCancer={updateRectalCancer}
+		                          onBulkPatientInfoUpdate={updateRectalCancerPatientInfoBulk}
+	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                          onCurrentPatientChange={updateCurrentExtractedPatient}
+		                          onExportPDF={() => handleExportPDF('rectalCancer')}
                           onUndo={(section) => {
                             undoRectalCancer(section as keyof typeof rectalCancerHistory);
                           }}
@@ -8579,12 +8787,13 @@ const Index = () => {
                           </CardHeader>
                         </Card>
 
-	                        <SmallBowelSurgeryForm
-	                          currentReport={currentReport}
-	                          updateSmallBowel={updateSmallBowel}
-                          currentExtractedPatientInfo={currentExtractedPatientInfo}
-                          onCurrentPatientChange={updateCurrentExtractedPatient}
-	                          onExportPDF={() => handleExportPDF('smallBowel')}
+		                        <SmallBowelSurgeryForm
+		                          currentReport={currentReport}
+		                          updateSmallBowel={updateSmallBowel}
+		                          onBulkPatientInfoUpdate={updateSmallBowelPatientInfoBulk}
+	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                          onCurrentPatientChange={updateCurrentExtractedPatient}
+		                          onExportPDF={() => handleExportPDF('smallBowel')}
                           onUndo={(section) => {
                             undoSmallBowel(section as keyof typeof smallBowelHistory);
                           }}
@@ -8675,12 +8884,13 @@ const Index = () => {
                           </CardHeader>
                         </Card>
 
-	                        <CholecystectomyForm
-	                          currentReport={currentReport}
-	                          updateCholecystectomy={updateCholecystectomy}
-                          currentExtractedPatientInfo={currentExtractedPatientInfo}
-                          onCurrentPatientChange={updateCurrentExtractedPatient}
-	                          onExportPDF={() => handleExportPDF('cholecystectomy')}
+		                        <CholecystectomyForm
+		                          currentReport={currentReport}
+		                          updateCholecystectomy={updateCholecystectomy}
+		                          onBulkPatientInfoUpdate={updateCholecystectomyPatientInfoBulk}
+	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                          onCurrentPatientChange={updateCurrentExtractedPatient}
+		                          onExportPDF={() => handleExportPDF('cholecystectomy')}
                           onUndo={(section) => {
                             undoCholecystectomy(section as keyof typeof cholecystectomyHistory);
                           }}
@@ -8771,12 +8981,13 @@ const Index = () => {
                           </CardHeader>
                         </Card>
 
-	                        <PeriAnalForm
-	                          currentReport={currentReport}
-	                          updatePeriAnal={updatePeriAnal}
-                          currentExtractedPatientInfo={currentExtractedPatientInfo}
-                          onCurrentPatientChange={updateCurrentExtractedPatient}
-	                          onExportPDF={() => handleExportPDF('periAnal')}
+		                        <PeriAnalForm
+		                          currentReport={currentReport}
+		                          updatePeriAnal={updatePeriAnal}
+		                          onBulkPatientInfoUpdate={updatePeriAnalPatientInfoBulk}
+	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+	                          onCurrentPatientChange={updateCurrentExtractedPatient}
+		                          onExportPDF={() => handleExportPDF('periAnal')}
                           onUndo={(section) => {
                             undoPeriAnal(section as keyof typeof periAnalHistory);
                           }}

@@ -139,7 +139,7 @@ export const hasExtractedPatientStickerData = (patientInfo?: any) => {
     return false;
   }
 
-  return PATIENT_STICKER_SHARED_SYNC_KEYS.some((key) => hasTextValue(info[key]));
+  return hasMeaningfulPatientInfoSyncData(info);
 };
 
 export const normalizePatientInfo = (patientInfo?: any) => {
@@ -150,6 +150,72 @@ export const normalizePatientInfo = (patientInfo?: any) => {
   }
 
   return normalized;
+};
+
+export const hasMeaningfulPatientInfoSyncData = (patientInfo?: any) => {
+  const info = normalizePatientInfo(patientInfo);
+  return PATIENT_STICKER_SHARED_SYNC_KEYS.some((key) => hasTextValue(info[key]));
+};
+
+export const calculatePatientAge = (dateOfBirth: string) => {
+  const raw = String(dateOfBirth || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const birthDate = new Date(raw);
+  if (Number.isNaN(birthDate.getTime())) {
+    return "";
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? String(age) : "";
+};
+
+export const calculatePatientBMI = (weight: string, height: string) => {
+  const weightNum = Number.parseFloat(String(weight || "").trim());
+  const heightNum = Number.parseFloat(String(height || "").trim());
+
+  if (!weightNum || !heightNum || heightNum <= 0) {
+    return "";
+  }
+
+  const heightInMeters = heightNum / 100;
+  const bmi = weightNum / (heightInMeters * heightInMeters);
+  return Number.isFinite(bmi) ? bmi.toFixed(1) : "";
+};
+
+export const mergePatientInfoUpdates = (
+  currentPatientInfo: any,
+  updates: Record<string, any> = {},
+) => {
+  const nextInfo = createInitialPatientInfoState({
+    ...(currentPatientInfo || {}),
+    ...updates,
+  });
+
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "dateOfBirth") &&
+    !Object.prototype.hasOwnProperty.call(updates, "age")
+  ) {
+    nextInfo.age = calculatePatientAge(nextInfo.dateOfBirth);
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "weight") ||
+    Object.prototype.hasOwnProperty.call(updates, "height")
+  ) {
+    nextInfo.bmi = calculatePatientBMI(nextInfo.weight, nextInfo.height);
+  }
+
+  return nextInfo;
 };
 
 const pad = (value: number) => value.toString().padStart(2, "0");
