@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateWithSuffix, formatReportDate, formatDateOnly, formatDateDDMMYYYY, formatDateTimeWithColon } from './dateFormatter';
-import { getFullASAText } from './asaDescriptions';
+import { getPatientInfoPdfSections } from './patientSticker';
 
 // Function to calculate signature dimensions while maintaining aspect ratio
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
@@ -251,52 +251,46 @@ export const generateAppendectomyPDF = async (
     const col1X = margin;
     const col2X = margin + 62;
     const col3X = margin + 124;
-    
-    // Row 1: Name, Patient ID
-    const row1Y = y;
-    const name = patientInfo.name || '';
-    const patientIdValue = patientInfo.patientId || patientId || '';
-    
+    const writePatientRow = (row: string[]) => {
+      const rowLines = [
+        pdf.splitTextToSize(row[0] || '', 58),
+        pdf.splitTextToSize(row[1] || '', 58),
+        pdf.splitTextToSize(row[2] || '', 58),
+      ];
+      const lineCount = Math.max(rowLines[0].length, rowLines[1].length, rowLines[2].length, 1);
+      checkPageBreak(lineCount * 4.5 + 2);
+
+      for (let index = 0; index < lineCount; index++) {
+        if (rowLines[0][index]) pdf.text(rowLines[0][index], col1X, y);
+        if (rowLines[1][index]) pdf.text(rowLines[1][index], col2X, y);
+        if (rowLines[2][index]) pdf.text(rowLines[2][index], col3X, y);
+        y += 4.5;
+      }
+      y += 1.5;
+    };
+
+    const patientSections = getPatientInfoPdfSections(patientInfo, patientName, patientId);
+
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Name: ${name}`, col1X, row1Y);
-    pdf.text(`Patient ID: ${patientIdValue}`, col2X, row1Y);
-    y += 6;
-    
-    // Row 2: Date Of Birth, Age, Sex
-    const row2Y = y;
-    const dob = patientInfo.dateOfBirth ? formatDateDDMMYYYY(patientInfo.dateOfBirth) : '';
-    const age = patientInfo.age || '';
-    const sex = patientInfo.sex ? (patientInfo.sex === 'other' && patientInfo.sexOther ? patientInfo.sexOther : patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase()) : '';
-    
-    pdf.text(`Date Of Birth: ${dob}`, col1X, row2Y);
-    pdf.text(`Age: ${age}`, col2X, row2Y);
-    pdf.text(`Sex: ${sex}`, col3X, row2Y);
-    y += 6;
-    
-    // Row 3: Weight, Height, BMI
-    const row3Y = y;
-    const weight = patientInfo.weight ? `${patientInfo.weight} kg` : '';
-    const height = patientInfo.height ? `${patientInfo.height} cm` : '';
-    const bmi = patientInfo.bmi || '';
-    
-    pdf.text(`Weight: ${weight}`, col1X, row3Y);
-    pdf.text(`Height: ${height}`, col2X, row3Y);
-    pdf.text(`BMI: ${bmi}`, col3X, row3Y);
-    y += 6;
-    
-    // Row 4: ASA Score
-    const row4Y = y;
-    const asaScore = patientInfo.asaScore ? getFullASAText(patientInfo.asaScore) : '';
-    
-    pdf.text(`ASA Score: ${asaScore}`, col1X, row4Y);
-    y += 6;
-    
-    // Row 5: ASA Notes (below ASA Score)
-    const row5Y = y;
-    const asaNotes = patientInfo.asaNotes || '';
-    
-    pdf.text(`ASA Notes: ${asaNotes}`, col1X, row5Y);
-    y += 8;
+    patientSections.forEach((section, sectionIndex) => {
+      if (section.title) {
+        checkPageBreak(7);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.text(section.title, margin, y);
+        y += 5;
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      section.rows.forEach((row) => writePatientRow(row));
+
+      if (sectionIndex < patientSections.length - 1) {
+        y += 1;
+      }
+    });
+
+    y += 2;
     
     // Add separator line
     pdf.setDrawColor(0, 0, 0);

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" role="img" aria-labelledby="title desc">
+  <title id="title">Female Perineal Anatomy Diagram</title>
+  <desc id="desc">Clean unlabeled female perineal anatomy base diagram for interactive surgical markings.</desc>
+  <defs>
+    <radialGradient id="canvasGlow" cx="50%" cy="40%" r="75%">
+      <stop offset="0%" stop-color="#fffaf6"/>
+      <stop offset="100%" stop-color="#f3e7dd"/>
+    </radialGradient>
+    <linearGradient id="outerSkin" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f4dcc8"/>
+      <stop offset="100%" stop-color="#ddb397"/>
+    </linearGradient>
+    <linearGradient id="innerLabia" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#d68882"/>
+      <stop offset="100%" stop-color="#b95858"/>
+    </linearGradient>
+    <linearGradient id="vestibule" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#b04f54"/>
+      <stop offset="100%" stop-color="#7f2730"/>
+    </linearGradient>
+    <filter id="softShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="7" stdDeviation="10" flood-color="#885a42" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="720" height="720" fill="url(#canvasGlow)"/>
+  <g filter="url(#softShadow)">
+    <path
+      d="M95 145C145 93 213 70 286 69H434C507 70 575 93 625 145C678 199 681 300 648 383C620 454 574 505 522 542C478 573 429 594 360 604C291 594 242 573 198 542C146 505 100 454 72 383C39 300 42 199 95 145Z"
+      fill="url(#outerSkin)"
+    />
+    <path
+      d="M205 152C239 132 279 122 323 119H397C441 122 481 132 515 152C473 196 432 214 360 214C288 214 247 196 205 152Z"
+      fill="#efc7ac"
+      opacity="0.75"
+    />
+    <path
+      d="M204 213C234 228 254 264 264 314C270 346 280 389 308 438C324 466 339 481 360 497C381 481 396 466 412 438C440 389 450 346 456 314C466 264 486 228 516 213C490 286 480 346 489 398C497 448 514 485 533 514C478 561 425 588 360 598C295 588 242 561 187 514C206 485 223 448 231 398C240 346 230 286 204 213Z"
+      fill="#edc2a4"
+      opacity="0.82"
+    />
+    <path
+      d="M291 208C312 198 334 193 360 193C386 193 408 198 429 208C438 251 438 288 431 323C424 361 409 400 360 457C311 400 296 361 289 323C282 288 282 251 291 208Z"
+      fill="url(#innerLabia)"
+    />
+    <path
+      d="M329 228C339 220 349 216 360 216C371 216 381 220 391 228C396 259 394 288 389 318C384 350 374 380 360 403C346 380 336 350 331 318C326 288 324 259 329 228Z"
+      fill="#efb7b1"
+      opacity="0.9"
+    />
+    <path
+      d="M337 250C343 244 350 241 360 241C370 241 377 244 383 250C387 274 386 296 382 319C378 343 371 364 360 382C349 364 342 343 338 319C334 296 333 274 337 250Z"
+      fill="url(#vestibule)"
+    />
+    <ellipse cx="360" cy="277" rx="17" ry="12" fill="#f1c6c0"/>
+    <ellipse cx="360" cy="330" rx="23" ry="33" fill="#60202a"/>
+    <ellipse cx="360" cy="330" rx="13" ry="20" fill="#3d1018"/>
+    <path d="M360 176C349 184 343 193 340 207C353 201 367 201 380 207C377 193 371 184 360 176Z" fill="#d57d79"/>
+    <path d="M327 467C338 480 348 488 360 494C372 488 382 480 393 467" fill="none" stroke="#7b4d3f" stroke-linecap="round" stroke-width="5"/>
+    <path d="M345 515C350 535 353 554 355 575" fill="none" stroke="#936654" stroke-linecap="round" stroke-width="5"/>
+    <path d="M375 515C370 535 367 554 365 575" fill="none" stroke="#936654" stroke-linecap="round" stroke-width="5"/>
+    <ellipse cx="360" cy="602" rx="14" ry="24" fill="#69473e"/>
+    <ellipse cx="360" cy="602" rx="7" ry="13" fill="#382421"/>
+  </g>
+</svg>

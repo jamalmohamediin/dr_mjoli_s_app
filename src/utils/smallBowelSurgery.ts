@@ -1,17 +1,7 @@
+import { createInitialPatientInfoState } from "@/utils/patientSticker";
+
 export const initialSmallBowelSurgeryState = {
-  patientInfo: {
-    name: "",
-    patientId: "",
-    dateOfBirth: "",
-    age: "",
-    sex: "",
-    sexOther: "",
-    weight: "",
-    height: "",
-    bmi: "",
-    asaScore: "",
-    asaNotes: "",
-  },
+  patientInfo: createInitialPatientInfoState(),
   preoperative: {
     surgeons: [""],
     assistants: [""],

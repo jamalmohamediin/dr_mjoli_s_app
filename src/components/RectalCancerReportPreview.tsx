@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatDateOnly, formatDateWithSuffix, formatReportDate } from "@/utils/dateFormatter";
 import { getFullASAText } from '@/utils/asaDescriptions';
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 
 interface RectalCancerReportPreviewProps {
   report: {
@@ -229,6 +230,8 @@ interface RectalCancerReportPreviewProps {
 
 export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewProps) => {
   const rectalCancer = report.rectalCancer;
+  const rectalPatientEntries = getPatientInfoDisplayEntries(rectalCancer?.patientInfo);
+  const legacyPatientEntries = getPatientInfoDisplayEntries(report.patientInfo);
   const primaryApproachList = Array.isArray(rectalCancer?.surgicalApproach?.primaryApproach)
     ? rectalCancer?.surgicalApproach?.primaryApproach || []
     : rectalCancer?.surgicalApproach?.primaryApproach
@@ -550,37 +553,15 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
         </div>
         
         {/* Patient Information Section */}
-        {(rectalCancer?.patientInfo?.name || rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim())) && (
+        {(rectalPatientEntries.length > 0 || rectalCancer?.surgicalTeam?.surgeons?.some(s => s?.trim())) && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-              {rectalCancer?.patientInfo?.name && (
-                <div><span className="font-medium">Name:</span> {rectalCancer.patientInfo.name}</div>
-              )}
-              {rectalCancer?.patientInfo?.patientId && (
-                <div><span className="font-medium">Patient ID:</span> {rectalCancer.patientInfo.patientId}</div>
-              )}
-              {rectalCancer?.patientInfo?.dateOfBirth && (
-                <div><span className="font-medium">Date of Birth:</span> {formatDateOnly(rectalCancer.patientInfo.dateOfBirth)}</div>
-              )}
-              {rectalCancer?.patientInfo?.age && (
-                <div><span className="font-medium">Age:</span> {rectalCancer.patientInfo.age}</div>
-              )}
-              {rectalCancer?.patientInfo?.sex && (
-                <div><span className="font-medium">Sex:</span> {rectalCancer.patientInfo.sex === 'other' && rectalCancer.patientInfo.sexOther ? rectalCancer.patientInfo.sexOther : rectalCancer.patientInfo.sex.charAt(0).toUpperCase() + rectalCancer.patientInfo.sex.slice(1)}</div>
-              )}
-              {rectalCancer?.patientInfo?.weight && (
-                <div><span className="font-medium">Weight:</span> {rectalCancer.patientInfo.weight} kg</div>
-              )}
-              {rectalCancer?.patientInfo?.height && (
-                <div><span className="font-medium">Height:</span> {rectalCancer.patientInfo.height} cm</div>
-              )}
-              {rectalCancer?.patientInfo?.bmi && (
-                <div><span className="font-medium">BMI:</span> {rectalCancer.patientInfo.bmi}</div>
-              )}
-              {rectalCancer?.patientInfo?.asaScore && (
-                <div><span className="font-medium">ASA Score:</span> {getFullASAText(rectalCancer.patientInfo.asaScore)}</div>
-              )}
+              {rectalPatientEntries.map((entry) => (
+                <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+                  <span className="font-medium">{entry.label}:</span> {entry.value}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -775,37 +756,16 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
         )}
         
         {/* Patient Information */}
-        {(report.patientInfo?.dateOfBirth || report.patientInfo?.age || report.patientInfo?.sex || report.patientInfo?.weight || report.patientInfo?.asaScore) && (
+        {legacyPatientEntries.length > 0 && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-              {report.patientInfo?.dateOfBirth && (
-                <div><span className="font-medium">Date Of Birth:</span> {formatDateOnly(report.patientInfo.dateOfBirth)}</div>
-              )}
-              {report.patientInfo?.age && (
-                <div><span className="font-medium">Age:</span> {report.patientInfo.age}</div>
-              )}
-              {report.patientInfo?.sex && (
-                <div><span className="font-medium">Sex:</span> {report.patientInfo.sex.charAt(0).toUpperCase() + report.patientInfo.sex.slice(1).toLowerCase()}</div>
-              )}
-              {report.patientInfo?.weight && (
-                <div><span className="font-medium">Weight:</span> {report.patientInfo.weight} kg</div>
-              )}
-              {report.patientInfo?.height && (
-                <div><span className="font-medium">Height:</span> {report.patientInfo.height} cm</div>
-              )}
-              {report.patientInfo?.bmi && (
-                <div><span className="font-medium">BMI:</span> {report.patientInfo.bmi}</div>
-              )}
-              {report.patientInfo?.asaScore && (
-                <div className="col-span-2"><span className="font-medium">ASA Score:</span> {getFullASAText(report.patientInfo.asaScore)}</div>
-              )}
+              {legacyPatientEntries.map((entry) => (
+                <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+                  <span className="font-medium">{entry.label}:</span> {entry.value}
+                </div>
+              ))}
             </div>
-            {report.patientInfo?.asaNotes && (
-              <div className="text-xs text-gray-700 mt-2">
-                <span className="font-medium">ASA Notes:</span> {report.patientInfo.asaNotes}
-              </div>
-            )}
           </div>
         )}
         

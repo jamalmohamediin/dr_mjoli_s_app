@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import { formatDateWithSuffix, formatDateOnly, formatDateDDMMYYYY } from './dateFormatter';
-import { getFullASAText } from './asaDescriptions';
+import { getPatientInfoPdfSections } from './patientSticker';
 
 export interface FinalDiagramCapture {
   canvasImageData?: string;
@@ -116,6 +116,44 @@ export const generateFinalPDF = async (
       }
       return currentY;
     };
+
+    const writePatientRows = (rows: string[][]) => {
+      rows.forEach((row) => {
+        const col1Lines = pdf.splitTextToSize(row[0] || '', 58);
+        const col2Lines = pdf.splitTextToSize(row[1] || '', 58);
+        const col3Lines = pdf.splitTextToSize(row[2] || '', 58);
+        const lineCount = Math.max(col1Lines.length, col2Lines.length, col3Lines.length, 1);
+
+        checkPageBreak(lineCount * 4 + 2);
+
+        for (let index = 0; index < lineCount; index++) {
+          if (col1Lines[index]) pdf.text(col1Lines[index], col1X, y);
+          if (col2Lines[index]) pdf.text(col2Lines[index], col2X, y);
+          if (col3Lines[index]) pdf.text(col3Lines[index], col3X, y);
+          y += 4;
+        }
+      });
+    };
+
+    const writePatientSections = (sections: Array<{ title: string; rows: string[][] }>) => {
+      sections.forEach((section, index) => {
+        if (section.title) {
+          checkPageBreak(7);
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(section.title, margin, y);
+          y += 5;
+        }
+
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        writePatientRows(section.rows);
+
+        if (index < sections.length - 1) {
+          y += 2;
+        }
+      });
+    };
     
     // HEADER - Exact template format matching the new structure
     const leftX = margin;
@@ -168,57 +206,14 @@ export const generateFinalPDF = async (
     y += 8;
     
     // PATIENT INFORMATION section
-    if (reportData?.patientInfo) {
+    const patientSections = getPatientInfoPdfSections(reportData?.patientInfo, patientName, patientId);
+    if (patientSections.length > 0) {
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'bold');
       pdf.text('PATIENT INFORMATION', margin, y);
       y += 6;
       
-      pdf.setFontSize(8);
-      pdf.setFont('helvetica', 'normal');
-      
-      // Row 1: Name, Patient ID, (3 columns properly aligned)
-      const patientName = reportData.patientInfo.name || '';
-      const patientId = reportData.patientInfo.patientId || '';
-      
-      pdf.text(`Name: ${patientName}`, col1X, y);
-      pdf.text(`Patient ID: ${patientId}`, col2X, y);
-      // Third column intentionally left empty for this row
-      y += 4;
-      
-      // Row 2: Date of Birth, Age, Sex (3 columns aligned)  
-      const dob = reportData.patientInfo.dateOfBirth ? 
-        formatDateDDMMYYYY(reportData.patientInfo.dateOfBirth) : '';
-      const age = reportData.patientInfo.age || '';
-      const gender = reportData.patientInfo.sex || reportData.patientInfo.gender || '';
-      
-      pdf.text(`Date Of Birth: ${dob}`, col1X, y);
-      pdf.text(`Age: ${age}`, col2X, y);
-      pdf.text(`Sex: ${gender}`, col3X, y);
-      y += 4;
-      
-      // Row 3: Weight, Height, BMI (3 columns aligned)
-      const weight = reportData.patientInfo.weight ? `${reportData.patientInfo.weight}` : '';
-      const height = reportData.patientInfo.height ? `${reportData.patientInfo.height}` : '';
-      const bmi = reportData.patientInfo.bmi || '';
-      
-      pdf.text(`Weight: ${weight}`, col1X, y);
-      pdf.text(`Height: ${height}`, col2X, y);
-      pdf.text(`BMI: ${bmi}`, col3X, y);
-      y += 4;
-      
-      // Row 4: ASA Score 
-      const asaText = reportData.patientInfo.asaScore ? getFullASAText(reportData.patientInfo.asaScore) : '';
-      
-      pdf.text(`ASA Score: ${asaText}`, col1X, y);
-      y += 4;
-      
-      // ASA Notes below ASA Score
-      const asaNotes = reportData.patientInfo.asaNotes || '';
-      if (hasValue(asaNotes)) {
-        pdf.text(`ASA Notes: ${asaNotes}`, col1X, y);
-        y += 4;
-      }
+      writePatientSections(patientSections);
       
       y += 4; // Extra spacing before separator
       

@@ -1,8 +1,8 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateWithSuffix, formatReportDate, formatDateOnly, formatDateDDMMYYYY, formatDateTimeWithColon } from './dateFormatter';
-import { getFullASAText } from './asaDescriptions';
 import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
+import { getPatientInfoPdfSections } from './patientSticker';
 
 // Helper function to render label and value with different font weights
 const renderLabelValue = (pdf: any, label: string, value: string, x: number, y: number) => {
@@ -254,35 +254,45 @@ export const generateRectalCancerPDF = async (
     const col2X = margin + 65; // Better spacing for three columns
     const col3X = margin + 130; // Better spacing for three columns
     const twoCol2X = margin + 95; // For two-column layouts
-    
-    // Row 1: Name and Patient ID
-    let currentX = margin;
     const lineSpacing = 5; // Increased for better readability and spacing
-    
-    pdf.text(`Name: ${patientInfo?.name || patientName || ''}`, col1X, y);
-    pdf.text(`Patient ID: ${patientInfo?.patientId || patientId || ''}`, col2X, y);
-    y += lineSpacing;
-    
-    // Row 2: Date Of Birth, Age, Sex
-    pdf.text(`Date Of Birth: ${patientInfo?.dateOfBirth ? formatDateDDMMYYYY(patientInfo.dateOfBirth) : ''}`, col1X, y);
-    pdf.text(`Age: ${patientInfo?.age || ''}`, col2X, y);
-    const sexValue = patientInfo?.sex ? (patientInfo.sex === 'other' && patientInfo.sexOther ? patientInfo.sexOther : patientInfo.sex.charAt(0).toUpperCase() + patientInfo.sex.slice(1).toLowerCase()) : '';
-    pdf.text(`Sex: ${sexValue}`, col3X, y);
-    y += lineSpacing;
-    
-    // Row 3: Weight, Height, BMI
-    pdf.text(`Weight: ${patientInfo?.weight || ''}`, col1X, y);
-    pdf.text(`Height: ${patientInfo?.height || ''}`, col2X, y);
-    pdf.text(`BMI: ${patientInfo?.bmi || ''}`, col3X, y);
-    y += lineSpacing;
-    
-    // Row 4: ASA Score
-    pdf.text(`ASA Score: ${patientInfo?.asaScore ? getFullASAText(patientInfo.asaScore) : ''}`, col1X, y);
-    y += lineSpacing;
-    
-    // Row 5: ASA Notes (below ASA Score)
-    pdf.text(`ASA Notes: ${patientInfo?.asaNotes || ''}`, col1X, y);
-    y += 8;
+    const writePatientRow = (row: string[]) => {
+      const rowLines = [
+        pdf.splitTextToSize(row[0] || '', 60),
+        pdf.splitTextToSize(row[1] || '', 60),
+        pdf.splitTextToSize(row[2] || '', 60),
+      ];
+      const lineCount = Math.max(rowLines[0].length, rowLines[1].length, rowLines[2].length, 1);
+      checkPageBreak(lineCount * lineSpacing + 2);
+
+      for (let index = 0; index < lineCount; index++) {
+        if (rowLines[0][index]) pdf.text(rowLines[0][index], col1X, y);
+        if (rowLines[1][index]) pdf.text(rowLines[1][index], col2X, y);
+        if (rowLines[2][index]) pdf.text(rowLines[2][index], col3X, y);
+        y += lineSpacing;
+      }
+    };
+
+    const patientSections = getPatientInfoPdfSections(patientInfo, patientName, patientId);
+
+    patientSections.forEach((section, sectionIndex) => {
+      if (section.title) {
+        checkPageBreak(7);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text(section.title, margin, y);
+        y += 5;
+      }
+
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      section.rows.forEach((row) => writePatientRow(row));
+
+      if (sectionIndex < patientSections.length - 1) {
+        y += 1;
+      }
+    });
+
+    y += 3;
     
     // Separator line
     pdf.setDrawColor(0, 0, 0);

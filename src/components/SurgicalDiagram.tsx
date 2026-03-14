@@ -7,26 +7,32 @@ import { PortMarking, StomaMarking, IncisionMarking, SurgicalMarking } from '@/t
 interface SurgicalDiagramProps {
   diagramImage: string;
   onUpdate: (markings: SurgicalMarking[]) => void;
+  initialMarkings?: SurgicalMarking[];
 }
 
 type Tool = 'port' | 'stoma' | 'incision';
 
-export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, onUpdate }) => {
+export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
+  diagramImage,
+  onUpdate,
+  initialMarkings = [],
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  const [markings, setMarkings] = useState<SurgicalMarking[]>([]);
+  const [markings, setMarkings] = useState<SurgicalMarking[]>(initialMarkings);
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   
-  // Undo/Redo state - Initialize with empty array as first history entry
-  const [history, setHistory] = useState<SurgicalMarking[][]>([[]]);
+  // Undo/Redo state - Initialize with current markings as first history entry
+  const [history, setHistory] = useState<SurgicalMarking[][]>([initialMarkings]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [historyInitialized, setHistoryInitialized] = useState(false);
 
   const [portSize, setPortSize] = useState<'5mm' | '10/11mm' | '12mm' | '15mm'>('12mm');
   const [stomaType, setStomaType] = useState<'ileostomy' | 'colostomy'>('ileostomy');
+  const serializedInitialMarkings = JSON.stringify(initialMarkings);
 
   const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -71,11 +77,17 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({ diagramImage, 
   // Initialize history properly when component mounts
   useEffect(() => {
     if (!historyInitialized) {
-      setHistory([[]]);
+      setHistory([initialMarkings]);
       setHistoryIndex(0);
       setHistoryInitialized(true);
     }
-  }, [historyInitialized]);
+  }, [historyInitialized, initialMarkings]);
+
+  useEffect(() => {
+    setMarkings(initialMarkings);
+    setHistory([initialMarkings]);
+    setHistoryIndex(0);
+  }, [diagramImage, serializedInitialMarkings, initialMarkings]);
 
   useEffect(() => {
     const image = imageRef.current;

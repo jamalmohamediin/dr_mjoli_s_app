@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, Trash2, X, Save } from "lucide-react";
-import { formatDateWithSuffix, formatReportDate, formatDateOnly } from "@/utils/dateFormatter";
+import { formatDateWithSuffix, formatReportDate } from "@/utils/dateFormatter";
 import { getFullASAText } from '@/utils/asaDescriptions';
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 
 interface VentralHerniaReportPreviewProps {
   report: {
@@ -32,28 +33,10 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
 
   const ventralHernia = report.ventralHernia;
   if (!ventralHernia) return null;
-
-  const formatPatientName = (name: string) => {
-    if (!name) return 'Not specified';
-    return name.split(' ').map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(' ');
-  };
-
-  const formatGender = (gender: string) => {
-    if (!gender) return 'Not specified';
-    return gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase();
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Not specified';
-    return formatDateOnly(dateString);
-  };
+  const patientEntries = getPatientInfoDisplayEntries(ventralHernia.patientInfo);
 
   // Check if there's any data to display
-  const hasPatientData = Object.values(ventralHernia.patientInfo || {}).some(value => 
-    Array.isArray(value) ? value.length > 0 : value
-  );
+  const hasPatientData = patientEntries.length > 0;
   const hasPreoperativeData = Object.values(ventralHernia.preoperative || {}).some(value => 
     Array.isArray(value) ? value.length > 0 : value
   );
@@ -105,51 +88,16 @@ export const VentralHerniaReportPreview = ({ report, onEditVentralHerniaField }:
         </div>
         
         {/* Patient Information */}
-        {(ventralHernia.patientInfo.name || ventralHernia.patientInfo.patientId || ventralHernia.patientInfo.dateOfBirth || ventralHernia.patientInfo.age || ventralHernia.patientInfo.sex || ventralHernia.patientInfo.weight || ventralHernia.patientInfo.height || ventralHernia.patientInfo.bmi || ventralHernia.patientInfo.asaScore) && (
+        {patientEntries.length > 0 && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-              {ventralHernia.patientInfo.name && (
-                <div><span className="font-medium">Patient:</span> {formatPatientName(ventralHernia.patientInfo.name)}</div>
-              )}
-              {ventralHernia.patientInfo.patientId && (
-                <div><span className="font-medium">Patient ID:</span> {ventralHernia.patientInfo.patientId}</div>
-              )}
-              {ventralHernia.patientInfo.dateOfBirth && (
-                <div><span className="font-medium">Date Of Birth:</span> {formatDate(ventralHernia.patientInfo.dateOfBirth)}</div>
-              )}
-              {ventralHernia.patientInfo.age && (
-                <div><span className="font-medium">Age:</span> {ventralHernia.patientInfo.age}</div>
-              )}
-              {ventralHernia.patientInfo.sex && (
-                <div><span className="font-medium">Sex:</span> {ventralHernia.patientInfo.sex.toLowerCase() === 'other' && ventralHernia.patientInfo.sexOther
-                  ? ventralHernia.patientInfo.sexOther
-                  : formatGender(ventralHernia.patientInfo.sex)}</div>
-              )}
-              {ventralHernia.patientInfo.weight && (
-                <div><span className="font-medium">Weight:</span> {ventralHernia.patientInfo.weight} kg</div>
-              )}
-              {ventralHernia.patientInfo.height && (
-                <div><span className="font-medium">Height:</span> {ventralHernia.patientInfo.height} cm</div>
-              )}
-              {ventralHernia.patientInfo.bmi && (
-                <div><span className="font-medium">BMI:</span> {ventralHernia.patientInfo.bmi}</div>
-              )}
+              {patientEntries.map((entry) => (
+                <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+                  <span className="font-medium">{entry.label}:</span> {entry.value}
+                </div>
+              ))}
             </div>
-            {ventralHernia.patientInfo.asaScore && (
-              <div className="flex items-center gap-1">
-                <span className="text-xs font-medium text-gray-600">ASA Score:</span>
-                <Badge variant="outline" className="text-xs">
-                  {getFullASAText(ventralHernia.patientInfo.asaScore)}
-                </Badge>
-              </div>
-            )}
-            {ventralHernia.patientInfo.asaNotes && (
-              <div className="mt-2">
-                <span className="text-xs font-medium text-gray-600">ASA Notes:</span>
-                <p className="text-xs text-gray-700 mt-1">{ventralHernia.patientInfo.asaNotes}</p>
-              </div>
-            )}
           </div>
         )}
         

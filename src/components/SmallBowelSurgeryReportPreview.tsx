@@ -1,8 +1,8 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatDateOnly } from "@/utils/dateFormatter";
 import { getFullASAText } from "@/utils/asaDescriptions";
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 
 interface SmallBowelSurgeryReportPreviewProps {
   report: any;
@@ -28,9 +28,10 @@ export const SmallBowelSurgeryReportPreview = ({
   report,
 }: SmallBowelSurgeryReportPreviewProps) => {
   const smallBowel = report.smallBowel;
+  const patientEntries = getPatientInfoDisplayEntries(smallBowel?.patientInfo);
 
   const hasData =
-    smallBowel?.patientInfo?.name ||
+    patientEntries.length > 0 ||
     smallBowel?.preoperative?.surgeons?.some((item: string) => item?.trim()) ||
     smallBowel?.operativeFindings?.pathology?.length > 0 ||
     smallBowel?.procedure?.approach?.length > 0 ||
@@ -139,64 +140,11 @@ export const SmallBowelSurgeryReportPreview = ({
       <div className="space-y-2">
         <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-          {smallBowel?.patientInfo?.name && (
-            <div>
-              <span className="font-medium">Name:</span> {smallBowel.patientInfo.name}
+          {patientEntries.map((entry) => (
+            <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+              <span className="font-medium">{entry.label}:</span> {entry.value}
             </div>
-          )}
-          {smallBowel?.patientInfo?.patientId && (
-            <div>
-              <span className="font-medium">Patient ID:</span> {smallBowel.patientInfo.patientId}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.dateOfBirth && (
-            <div>
-              <span className="font-medium">Date of Birth:</span>{" "}
-              {formatDateOnly(smallBowel.patientInfo.dateOfBirth)}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.age && (
-            <div>
-              <span className="font-medium">Age:</span> {smallBowel.patientInfo.age}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.sex && (
-            <div>
-              <span className="font-medium">Sex:</span>{" "}
-              {smallBowel.patientInfo.sex === "other" && smallBowel.patientInfo.sexOther
-                ? smallBowel.patientInfo.sexOther
-                : `${smallBowel.patientInfo.sex.charAt(0).toUpperCase()}${smallBowel.patientInfo.sex
-                    .slice(1)
-                    .toLowerCase()}`}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.weight && (
-            <div>
-              <span className="font-medium">Weight:</span> {smallBowel.patientInfo.weight} kg
-            </div>
-          )}
-          {smallBowel?.patientInfo?.height && (
-            <div>
-              <span className="font-medium">Height:</span> {smallBowel.patientInfo.height} cm
-            </div>
-          )}
-          {smallBowel?.patientInfo?.bmi && (
-            <div>
-              <span className="font-medium">BMI:</span> {smallBowel.patientInfo.bmi}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.asaScore && (
-            <div className="col-span-2">
-              <span className="font-medium">ASA Score:</span>{" "}
-              {getFullASAText(smallBowel.patientInfo.asaScore)}
-            </div>
-          )}
-          {smallBowel?.patientInfo?.asaNotes && (
-            <div className="col-span-2">
-              <span className="font-medium">Additional Notes:</span>{" "}
-              {smallBowel.patientInfo.asaNotes}
-            </div>
-          )}
+          ))}
         </div>
       </div>
 

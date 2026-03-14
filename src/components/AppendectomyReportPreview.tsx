@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatDateWithSuffix, formatReportDate, formatDateOnly } from "@/utils/dateFormatter";
 import { getFullASAText } from '@/utils/asaDescriptions';
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from '@/assets/appendectomy.jpg';
 
 interface AppendectomyReportPreviewProps {
@@ -187,6 +188,7 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
 
 export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewProps) => {
   const appendectomy = report.appendectomy;
+  const patientEntries = getPatientInfoDisplayEntries(appendectomy?.patientInfo);
 
   if (!appendectomy) {
     return (
@@ -200,7 +202,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
   const hasData = (
     appendectomy.preoperative.indication.length > 0 ||
     appendectomy.intraoperative.appendixAppearance.length > 0 ||
-    appendectomy.patientInfo.name ||
+    patientEntries.length > 0 ||
     appendectomy.preoperative.surgeons?.some(s => s.trim()) ||
     appendectomy.intraoperative.abscess ||
     appendectomy.intraoperative.peritonitis.length > 0 ||
@@ -276,47 +278,16 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         </div>
         
         {/* Patient Information */}
-        {(appendectomy.patientInfo.name || appendectomy.patientInfo.patientId || appendectomy.patientInfo.dateOfBirth || appendectomy.patientInfo.age || appendectomy.patientInfo.sex || appendectomy.patientInfo.weight || appendectomy.patientInfo.height || appendectomy.patientInfo.bmi || appendectomy.patientInfo.asaScore.length > 0) && (
+        {patientEntries.length > 0 && (
           <div className="space-y-2">
             <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-              {appendectomy.patientInfo.name && (
-                <div><span className="font-medium">Patient:</span> {appendectomy.patientInfo.name}</div>
-              )}
-              {appendectomy.patientInfo.patientId && (
-                <div><span className="font-medium">Patient ID:</span> {appendectomy.patientInfo.patientId}</div>
-              )}
-              {appendectomy.patientInfo.dateOfBirth && (
-                <div><span className="font-medium">Date Of Birth:</span> {formatDateOnly(appendectomy.patientInfo.dateOfBirth)}</div>
-              )}
-              {appendectomy.patientInfo.age && (
-                <div><span className="font-medium">Age:</span> {appendectomy.patientInfo.age}</div>
-              )}
-              {appendectomy.patientInfo.sex && (
-                <div><span className="font-medium">Sex:</span> {appendectomy.patientInfo.sex === 'other' && appendectomy.patientInfo.sexOther ? appendectomy.patientInfo.sexOther : appendectomy.patientInfo.sex.charAt(0).toUpperCase() + appendectomy.patientInfo.sex.slice(1).toLowerCase()}</div>
-              )}
-              {appendectomy.patientInfo.weight && (
-                <div><span className="font-medium">Weight:</span> {appendectomy.patientInfo.weight} kg</div>
-              )}
-              {appendectomy.patientInfo.height && (
-                <div><span className="font-medium">Height:</span> {appendectomy.patientInfo.height} cm</div>
-              )}
-              {appendectomy.patientInfo.bmi && (
-                <div><span className="font-medium">BMI:</span> {appendectomy.patientInfo.bmi}</div>
-              )}
+              {patientEntries.map((entry) => (
+                <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+                  <span className="font-medium">{entry.label}:</span> {entry.value}
+                </div>
+              ))}
             </div>
-            {appendectomy.patientInfo.asaScore && (
-              <div className="mt-2">
-                <span className="text-xs font-medium text-gray-600">ASA Score:</span>
-                <p className="text-xs text-gray-700 mt-1">{getFullASAText(appendectomy.patientInfo.asaScore)}</p>
-              </div>
-            )}
-            {appendectomy.patientInfo.asaNotes && (
-              <div className="mt-2">
-                <span className="text-xs font-medium text-gray-600">ASA Notes:</span>
-                <p className="text-xs text-gray-700 mt-1">{appendectomy.patientInfo.asaNotes}</p>
-              </div>
-            )}
           </div>
         )}
         

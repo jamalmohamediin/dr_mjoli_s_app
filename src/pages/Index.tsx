@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FileText, Microscope, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, Scissors, Shield, Activity, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { PatientInfoForm } from "@/components/PatientInfoForm";
+import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { ProcedureInfoForm } from "@/components/ProcedureInfoForm";
 import { ProcedureTypeSelection } from "@/components/ProcedureTypeSelection";
 import { ConditionalDiagramDisplay } from "@/components/ConditionalDiagramDisplay";
@@ -20,6 +21,8 @@ import { SmallBowelSurgeryForm } from "@/components/SmallBowelSurgeryForm";
 import { SmallBowelSurgeryReportPreview } from "@/components/SmallBowelSurgeryReportPreview";
 import { CholecystectomyForm } from "@/components/CholecystectomyForm";
 import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
+import { PeriAnalForm } from "@/components/PeriAnalForm";
+import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
@@ -28,19 +31,96 @@ import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
 import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
 import { generateSmallBowelSurgeryPDF } from "@/utils/smallBowelSurgeryPdfGenerator";
 import { generateCholecystectomyPDF } from "@/utils/cholecystectomyPdfGenerator";
+import { generatePeriAnalPDF } from "@/utils/periAnalPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
 import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
+import { createInitialPeriAnalState } from "@/utils/periAnal";
+import {
+  createInitialPatientInfoState,
+  hasExtractedPatientStickerData,
+} from "@/utils/patientSticker";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
+import periAnalNeutralImage from "@/assets/peri-anal-neutral.svg";
+import periAnalFemaleImage from "@/assets/peri-anal-female.svg";
+
+const hasMeaningfulPatientInfoData = (patientInfo: any): boolean =>
+  Object.values(createInitialPatientInfoState(patientInfo)).some((value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+
+    return Boolean(value);
+  });
+
+const normalizeReportPatientInfos = (report: any) => ({
+  ...report,
+  patientInfo: createInitialPatientInfoState(report?.patientInfo),
+  appendectomy: report?.appendectomy
+    ? {
+        ...report.appendectomy,
+        patientInfo: createInitialPatientInfoState(report.appendectomy?.patientInfo),
+      }
+    : report?.appendectomy,
+  ventralHernia: report?.ventralHernia
+    ? {
+        ...report.ventralHernia,
+        patientInfo: createInitialPatientInfoState(report.ventralHernia?.patientInfo),
+      }
+    : report?.ventralHernia,
+  rectalCancer: report?.rectalCancer
+    ? {
+        ...report.rectalCancer,
+        patientInfo: createInitialPatientInfoState(report.rectalCancer?.patientInfo),
+      }
+    : report?.rectalCancer,
+  smallBowel: report?.smallBowel
+    ? {
+        ...report.smallBowel,
+        patientInfo: createInitialPatientInfoState(report.smallBowel?.patientInfo),
+      }
+    : report?.smallBowel,
+  cholecystectomy: report?.cholecystectomy
+    ? {
+        ...report.cholecystectomy,
+        patientInfo: createInitialPatientInfoState(report.cholecystectomy?.patientInfo),
+      }
+    : report?.cholecystectomy,
+  periAnal: report?.periAnal
+    ? {
+        ...report.periAnal,
+        patientInfo: createInitialPatientInfoState(report.periAnal?.patientInfo),
+      }
+    : report?.periAnal,
+});
+
+const getCurrentExtractedPatientInfoFromReport = (report: any) => {
+  const candidates = [
+    report?.patientInfo,
+    report?.appendectomy?.patientInfo,
+    report?.ventralHernia?.patientInfo,
+    report?.rectalCancer?.patientInfo,
+    report?.smallBowel?.patientInfo,
+    report?.cholecystectomy?.patientInfo,
+    report?.periAnal?.patientInfo,
+  ];
+
+  const match = candidates.find((candidate) => hasExtractedPatientStickerData(candidate));
+  return createInitialPatientInfoState(match);
+};
 
 const Index = () => {
   
   
   const [currentReport, setCurrentReport] = useState({
-    patientInfo: {} as any,
+    patientInfo: createInitialPatientInfoState() as any,
     gastroscopyFindings: { findings: [] } as any,
     colonoscopyFindings: { findings: [] } as any,
     media: [] as any[],
@@ -72,19 +152,7 @@ const Index = () => {
       dateTime: ''
     },
     appendectomy: {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -137,19 +205,7 @@ const Index = () => {
       }
     },
     ventralHernia: {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -225,18 +281,7 @@ const Index = () => {
       }
     },
 	    rectalCancer: {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       surgicalTeam: {
         surgeons: [''],
         assistants: [''],
@@ -411,11 +456,15 @@ const Index = () => {
 	        date: ''
 	      }
 	    },
-      smallBowel: createInitialSmallBowelSurgeryState(),
-      cholecystectomy: createInitialCholecystectomyState()
-	  });
+	      smallBowel: createInitialSmallBowelSurgeryState(),
+	      cholecystectomy: createInitialCholecystectomyState(),
+	      periAnal: createInitialPeriAnalState()
+		  });
+  const [currentExtractedPatientInfo, setCurrentExtractedPatientInfo] = useState(
+    createInitialPatientInfoState(),
+  );
 
-  // Helper function to calculate duration between start and end times
+	  // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
     if (!startTime || !endTime) return '';
     
@@ -451,9 +500,7 @@ const Index = () => {
 
   // Appendectomy history management for undo/redo
   const [appendectomyHistory, setAppendectomyHistory] = useState({
-    patientInfo: [currentReport.appendectomy?.patientInfo || {
-      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
-    }],
+    patientInfo: [createInitialPatientInfoState(currentReport.appendectomy?.patientInfo)],
     preoperative: [currentReport.appendectomy?.preoperative || {
       surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
     }],
@@ -481,9 +528,7 @@ const Index = () => {
 
   // Ventral Hernia history management for undo/redo
   const [ventralHerniaHistory, setVentralHerniaHistory] = useState({
-    patientInfo: [currentReport.ventralHernia?.patientInfo || {
-      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
-    }],
+    patientInfo: [createInitialPatientInfoState(currentReport.ventralHernia?.patientInfo)],
     preoperative: [currentReport.ventralHernia?.preoperative || {
       surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
     }],
@@ -521,7 +566,7 @@ const Index = () => {
 
   // Endoscopy history management for undo/redo
   const [endoscopyHistory, setEndoscopyHistory] = useState({
-    patientInfo: [currentReport.patientInfo || {}],
+    patientInfo: [createInitialPatientInfoState(currentReport.patientInfo)],
     procedureInfo: [{ 
       selectedProcedures: currentReport.selectedProcedures || [],
       procedure: currentReport.procedure || {},
@@ -546,9 +591,7 @@ const Index = () => {
 
   // Rectal Cancer history management for undo/redo
   const [rectalCancerHistory, setRectalCancerHistory] = useState({
-    patientInfo: [currentReport.rectalCancer?.patientInfo || {
-      name: '', patientId: '', dateOfBirth: '', age: '', sex: '', sexOther: '', weight: '', height: '', bmi: '', asaScore: '', asaNotes: ''
-    }],
+    patientInfo: [createInitialPatientInfoState(currentReport.rectalCancer?.patientInfo)],
     operationType: [currentReport.rectalCancer?.operationType || {
       type: [], typeOther: '', neoadjuvantTreatment: '', neoadjuvantDetails: ''
     }],
@@ -608,7 +651,7 @@ const Index = () => {
   });
 
   const [smallBowelHistory, setSmallBowelHistory] = useState({
-    patientInfo: [currentReport.smallBowel?.patientInfo || createInitialSmallBowelSurgeryState().patientInfo],
+    patientInfo: [createInitialPatientInfoState(currentReport.smallBowel?.patientInfo)],
     preoperative: [currentReport.smallBowel?.preoperative || createInitialSmallBowelSurgeryState().preoperative],
     operativeFindings: [currentReport.smallBowel?.operativeFindings || createInitialSmallBowelSurgeryState().operativeFindings],
     procedure: [currentReport.smallBowel?.procedure || createInitialSmallBowelSurgeryState().procedure],
@@ -632,8 +675,7 @@ const Index = () => {
 
   const [cholecystectomyHistory, setCholecystectomyHistory] = useState({
     patientInfo: [
-      currentReport.cholecystectomy?.patientInfo ||
-        createInitialCholecystectomyState().patientInfo,
+      createInitialPatientInfoState(currentReport.cholecystectomy?.patientInfo),
     ],
     preoperative: [
       currentReport.cholecystectomy?.preoperative ||
@@ -666,6 +708,53 @@ const Index = () => {
     intraoperative: 0,
     procedure: 0,
     closure: 0,
+    additionalInfo: 0,
+    procedureFindings: 0,
+  });
+
+  const [periAnalHistory, setPeriAnalHistory] = useState({
+    patientInfo: [
+      createInitialPatientInfoState(currentReport.periAnal?.patientInfo),
+    ],
+    preoperative: [
+      currentReport.periAnal?.preoperative ||
+        createInitialPeriAnalState().preoperative,
+    ],
+    findings: [
+      currentReport.periAnal?.findings || createInitialPeriAnalState().findings,
+    ],
+    woundManagement: [
+      currentReport.periAnal?.woundManagement ||
+        createInitialPeriAnalState().woundManagement,
+    ],
+    complications: [
+      currentReport.periAnal?.complications ||
+        createInitialPeriAnalState().complications,
+    ],
+    postOperativePlan: [
+      currentReport.periAnal?.postOperativePlan ||
+        createInitialPeriAnalState().postOperativePlan,
+    ],
+    specimen: [
+      currentReport.periAnal?.specimen || createInitialPeriAnalState().specimen,
+    ],
+    additionalInfo: [
+      currentReport.periAnal?.additionalInfo ||
+        createInitialPeriAnalState().additionalInfo,
+    ],
+    procedureFindings: [
+      currentReport.periAnal?.procedureFindings ||
+        createInitialPeriAnalState().procedureFindings,
+    ],
+  });
+  const [periAnalHistoryIndex, setPeriAnalHistoryIndex] = useState({
+    patientInfo: 0,
+    preoperative: 0,
+    findings: 0,
+    woundManagement: 0,
+    complications: 0,
+    postOperativePlan: 0,
+    specimen: 0,
     additionalInfo: 0,
     procedureFindings: 0,
   });
@@ -715,6 +804,17 @@ const Index = () => {
     }
   }, [currentReport.followUp, isEditingFollowUp, tempFollowUpOther, tempFollowUpNotes]);
 
+  useEffect(() => {
+    if (hasExtractedPatientStickerData(currentExtractedPatientInfo)) {
+      return;
+    }
+
+    const derivedPatient = getCurrentExtractedPatientInfoFromReport(currentReport);
+    if (hasExtractedPatientStickerData(derivedPatient)) {
+      setCurrentExtractedPatientInfo(derivedPatient);
+    }
+  }, [currentExtractedPatientInfo, currentReport]);
+
   
 
   
@@ -742,17 +842,20 @@ const Index = () => {
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   };
+  const updateCurrentExtractedPatient = (patientInfo: any) => {
+    setCurrentExtractedPatientInfo(createInitialPatientInfoState(patientInfo));
+  };
   const handleUndo = () => {
     if (historyIndex > 0) {
       setHistoryIndex(historyIndex - 1);
-      setCurrentReport(JSON.parse(JSON.stringify(history[historyIndex - 1])));
+      setCurrentReport(normalizeReportPatientInfos(JSON.parse(JSON.stringify(history[historyIndex - 1]))));
       toast.success('Undone');
     }
   };
   const handleRedo = () => {
     if (historyIndex < history.length - 1) {
       setHistoryIndex(historyIndex + 1);
-      setCurrentReport(JSON.parse(JSON.stringify(history[historyIndex + 1])));
+      setCurrentReport(normalizeReportPatientInfos(JSON.parse(JSON.stringify(history[historyIndex + 1]))));
       toast.success('Redone');
     }
   };
@@ -768,7 +871,7 @@ const Index = () => {
         const updated = { ...prev };
         
         if (section === 'patientInfo') {
-          updated.patientInfo = JSON.parse(JSON.stringify(previousState));
+          updated.patientInfo = createInitialPatientInfoState(JSON.parse(JSON.stringify(previousState)));
         } else if (section === 'procedureInfo') {
           updated.selectedProcedures = previousState.selectedProcedures || [];
           updated.procedure = previousState.procedure || {};
@@ -807,7 +910,7 @@ const Index = () => {
         const updated = { ...prev };
         
         if (section === 'patientInfo') {
-          updated.patientInfo = JSON.parse(JSON.stringify(nextState));
+          updated.patientInfo = createInitialPatientInfoState(JSON.parse(JSON.stringify(nextState)));
         } else if (section === 'procedureInfo') {
           updated.selectedProcedures = nextState.selectedProcedures || [];
           updated.procedure = nextState.procedure || {};
@@ -837,7 +940,7 @@ const Index = () => {
     let initialState: any = {};
     
     if (section === 'patientInfo') {
-      initialState = {};
+      initialState = createInitialPatientInfoState();
     } else if (section === 'procedureInfo') {
       initialState = {
         selectedProcedures: [],
@@ -902,7 +1005,7 @@ const Index = () => {
     
     switch (section) {
       case 'patientInfo':
-        initialState = {};
+        initialState = createInitialPatientInfoState();
         break;
       case 'procedureInfo':
         initialState = {};
@@ -967,7 +1070,7 @@ const Index = () => {
 
   const clearAllEndoscopyData = () => {
     const initialEndoscopyData = {
-      patientInfo: {},
+      patientInfo: createInitialPatientInfoState(),
       procedureInfo: {},
       gastroscopyFindings: { findings: [] },
       colonoscopyFindings: { findings: [] },
@@ -1008,14 +1111,34 @@ const Index = () => {
 
     // Reset all history to initial states
     setEndoscopyHistory({
-      patientInfo: [{}],
-      procedureInfo: [{}],
+      patientInfo: [createInitialPatientInfoState()],
+      procedureInfo: [{
+        selectedProcedures: [],
+        procedure: {},
+        gastroscopyCanvasData: '',
+        colonoscopyCanvasData: '',
+      }],
       gastroscopyFindings: [{ findings: [] }],
       colonoscopyFindings: [{ findings: [] }],
-      specimen: [{}],
+      specimen: [{
+        sentForPathology: '',
+        laboratoryName: '',
+        otherSpecimensTaken: '',
+        otherSpecimensDetails: '',
+      }],
       conclusion: [''],
-      followUp: [{}],
-      signature: [{}]
+      followUp: [{
+        enabled: false,
+        options: [],
+        other: '',
+        notes: '',
+        postOperativeManagement: '',
+      }],
+      signature: [{
+        surgeonSignature: '',
+        surgeonSignatureText: '',
+        dateTime: '',
+      }]
     });
 
     setEndoscopyHistoryIndex({
@@ -1047,7 +1170,230 @@ const Index = () => {
     if (enablePersistence) {
       const savedData = loadFromStorage('endoscopy_report');
       if (savedData) {
-        setCurrentReport(savedData);
+        const restoredReport = normalizeReportPatientInfos({
+          ...currentReport,
+          ...savedData,
+          appendectomy: {
+            ...currentReport.appendectomy,
+            ...(savedData.appendectomy || {}),
+          },
+          ventralHernia: {
+            ...currentReport.ventralHernia,
+            ...(savedData.ventralHernia || {}),
+          },
+          rectalCancer: {
+            ...currentReport.rectalCancer,
+            ...(savedData.rectalCancer || {}),
+          },
+          smallBowel: {
+            ...currentReport.smallBowel,
+            ...(savedData.smallBowel || {}),
+          },
+          cholecystectomy: {
+            ...currentReport.cholecystectomy,
+            ...(savedData.cholecystectomy || {}),
+          },
+          periAnal: {
+            ...currentReport.periAnal,
+            ...(savedData.periAnal || {}),
+          },
+        });
+
+        setCurrentReport(restoredReport);
+        setHistory([JSON.parse(JSON.stringify(restoredReport))]);
+        setHistoryIndex(0);
+        setAppendectomyHistory({
+          patientInfo: [restoredReport.appendectomy?.patientInfo || createInitialPatientInfoState()],
+          preoperative: [restoredReport.appendectomy?.preoperative || {
+            surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
+          }],
+          intraoperative: [restoredReport.appendectomy?.intraoperative || {
+            appendixAppearance: [], abscess: '', peritonitis: [], otherFindings: ''
+          }],
+          procedure: [restoredReport.appendectomy?.procedure || {
+            approach: [], reasonForConversion: '', operationDescription: '', incisionType: [], incisionOther: '', trocarPlacement: '', divisionMethod: [], divisionOther: '', mesenteryControl: [], mesenteryOther: '', lavage: '', drainPlacement: '', drainLocation: ''
+          }],
+          closure: [restoredReport.appendectomy?.closure || {
+            fascialClosure: '', skinClosure: [], skinOther: '', complications: '', complicationDetails: '', pathology: '', otherSpecimens: '', specimenDetails: '', surgeonSignature: '', dateTime: ''
+          }],
+          procedureFindings: [restoredReport.appendectomy?.procedureFindings || {
+            findings: '', additionalNotes: ''
+          }]
+        });
+        setAppendectomyHistoryIndex({
+          patientInfo: 0,
+          preoperative: 0,
+          intraoperative: 0,
+          procedure: 0,
+          closure: 0,
+          procedureFindings: 0
+        });
+        setVentralHerniaHistory({
+          patientInfo: [restoredReport.ventralHernia?.patientInfo || createInitialPatientInfoState()],
+          preoperative: [restoredReport.ventralHernia?.preoperative || {
+            surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
+          }],
+          operative: [restoredReport.ventralHernia?.operative || {
+            herniaType: [], herniaTypeOther: '', herniaSite: [], herniaSiteOther: '', herniaDefects: '', numberOfDefects: '', contents: [], contentsOther: '', strangulation: '', meshInSitu: '', approach: [], approachOther: '', conversionReason: [], conversionReasonOther: '', trocarNumber: '', operationDescription: ''
+          }],
+          procedure: [restoredReport.ventralHernia?.procedure || {
+            dissection: '', sacExcised: '', fatDissected: '', defectClosed: '', closureTechnique: [], closureTechniqueOther: '', closureMaterial: [], closureMaterialOther: '', repairType: '', meshType: [], meshPlacementOther: '', meshMaterial: [], meshMaterialOther: '', meshLength: '', meshWidth: '', fixation: [], fixationOther: '', intraOperativeDifficulty: [], intraOperativeDifficultyOther: '', primaryRepair: [], primaryRepairOther: '', complications: [], complicationOther: '', haemostasis: '', drain: '', drainDetails: '', fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: '', specimenSent: [], specimenOther: '', laboratoryName: '', additionalNotes: '', postOperativeManagement: ''
+          }],
+          procedureFindings: [restoredReport.ventralHernia?.procedureFindings || {
+            findings: '', additionalNotes: ''
+          }]
+        });
+        setVentralHerniaHistoryIndex({
+          patientInfo: 0,
+          preoperative: 0,
+          operative: 0,
+          procedure: 0,
+          procedureFindings: 0
+        });
+        setEndoscopyHistory({
+          patientInfo: [restoredReport.patientInfo],
+          procedureInfo: [{
+            selectedProcedures: restoredReport.selectedProcedures || [],
+            procedure: restoredReport.procedure || {},
+            gastroscopyCanvasData: restoredReport.gastroscopyCanvasData || '',
+            colonoscopyCanvasData: restoredReport.colonoscopyCanvasData || ''
+          }],
+          procedureTypes: [{
+            gastroscopyFindings: restoredReport.gastroscopyFindings || { findings: [] },
+            colonoscopyFindings: restoredReport.colonoscopyFindings || { findings: [] },
+            procedureFindings: restoredReport.procedureFindings || { findings: '', additionalNotes: '' }
+          }],
+          specimen: [restoredReport.specimen || {
+            sentForPathology: '', laboratoryName: '', otherSpecimensTaken: '', otherSpecimensDetails: ''
+          }]
+        });
+        setEndoscopyHistoryIndex({
+          patientInfo: 0,
+          procedureInfo: 0,
+          procedureTypes: 0,
+          specimen: 0
+        });
+        setRectalCancerHistory({
+          patientInfo: [restoredReport.rectalCancer?.patientInfo || createInitialPatientInfoState()],
+          operationType: [restoredReport.rectalCancer?.operationType || {
+            type: [], typeOther: '', neoadjuvantTreatment: '', neoadjuvantDetails: ''
+          }],
+          surgicalApproach: [restoredReport.rectalCancer?.surgicalApproach || {
+            primaryApproach: [], conversionReason: [], conversionReasonOther: '', trocarNumber: ''
+          }],
+          mobilizationAndResection: [restoredReport.rectalCancer?.mobilizationAndResection || {
+            extentOfMobilization: [],
+            extentOfMobilizationOther: '',
+            vesselLigation: [],
+            vesselLigationOther: '',
+            imvLigation: '',
+            hemostasisTechnique: [],
+            hemostasisTechniqueOther: '',
+            lymphNodeDissection: '',
+            lymphNodeDissectionOther: '',
+            proximalTransection: [],
+            proximalTransectionOther: '',
+            distalTransection: [],
+            distalTransectionOther: '',
+            analCanalTransection: [],
+            analCanalTransectionOther: '',
+            enBlocResection: [],
+            enBlocResectionOther: '',
+            mobilization: [],
+            mobilizationOther: '',
+            mesorectalExcision: [],
+            mesorectalExcisionOther: '',
+            distanceFromAnalVerge: ''
+          }],
+          reconstruction: [restoredReport.rectalCancer?.reconstruction || {
+            reconstructionType: [], anastomosisDetails: {}, stomaDetails: {}, reconstructionOther: ''
+          }],
+          operativeEvents: [restoredReport.rectalCancer?.operativeEvents || {
+            intraoperativeComplications: [], intraoperativeComplicationsOther: '', drainInsertion: '', drainDetails: '', specimenExtraction: '', extractionSite: '', additionalProcedures: []
+          }],
+          closure: [restoredReport.rectalCancer?.closure || {
+            fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: ''
+          }],
+          procedureDetails: [restoredReport.rectalCancer?.procedureDetails || {
+            surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', additionalNotes: '', postOperativeManagement: ''
+          }],
+          procedureFindings: [restoredReport.rectalCancer?.procedureFindings || {
+            findings: '', additionalNotes: ''
+          }]
+        });
+        setRectalCancerHistoryIndex({
+          patientInfo: 0,
+          operationType: 0,
+          surgicalApproach: 0,
+          mobilizationAndResection: 0,
+          reconstruction: 0,
+          operativeEvents: 0,
+          closure: 0,
+          procedureDetails: 0,
+          procedureFindings: 0
+        });
+        setSmallBowelHistory({
+          patientInfo: [restoredReport.smallBowel?.patientInfo || createInitialSmallBowelSurgeryState().patientInfo],
+          preoperative: [restoredReport.smallBowel?.preoperative || createInitialSmallBowelSurgeryState().preoperative],
+          operativeFindings: [restoredReport.smallBowel?.operativeFindings || createInitialSmallBowelSurgeryState().operativeFindings],
+          procedure: [restoredReport.smallBowel?.procedure || createInitialSmallBowelSurgeryState().procedure],
+          reconstruction: [restoredReport.smallBowel?.reconstruction || createInitialSmallBowelSurgeryState().reconstruction],
+          operativeEvents: [restoredReport.smallBowel?.operativeEvents || createInitialSmallBowelSurgeryState().operativeEvents],
+          closure: [restoredReport.smallBowel?.closure || createInitialSmallBowelSurgeryState().closure],
+          additionalInfo: [restoredReport.smallBowel?.additionalInfo || createInitialSmallBowelSurgeryState().additionalInfo],
+          procedureFindings: [restoredReport.smallBowel?.procedureFindings || createInitialSmallBowelSurgeryState().procedureFindings]
+        });
+        setSmallBowelHistoryIndex({
+          patientInfo: 0,
+          preoperative: 0,
+          operativeFindings: 0,
+          procedure: 0,
+          reconstruction: 0,
+          operativeEvents: 0,
+          closure: 0,
+          additionalInfo: 0,
+          procedureFindings: 0
+        });
+        setCholecystectomyHistory({
+          patientInfo: [restoredReport.cholecystectomy?.patientInfo || createInitialCholecystectomyState().patientInfo],
+          preoperative: [restoredReport.cholecystectomy?.preoperative || createInitialCholecystectomyState().preoperative],
+          intraoperative: [restoredReport.cholecystectomy?.intraoperative || createInitialCholecystectomyState().intraoperative],
+          procedure: [restoredReport.cholecystectomy?.procedure || createInitialCholecystectomyState().procedure],
+          closure: [restoredReport.cholecystectomy?.closure || createInitialCholecystectomyState().closure],
+          additionalInfo: [restoredReport.cholecystectomy?.additionalInfo || createInitialCholecystectomyState().additionalInfo],
+          procedureFindings: [restoredReport.cholecystectomy?.procedureFindings || createInitialCholecystectomyState().procedureFindings]
+        });
+        setCholecystectomyHistoryIndex({
+          patientInfo: 0,
+          preoperative: 0,
+          intraoperative: 0,
+          procedure: 0,
+          closure: 0,
+          additionalInfo: 0,
+          procedureFindings: 0
+        });
+        setPeriAnalHistory({
+          patientInfo: [restoredReport.periAnal?.patientInfo || createInitialPeriAnalState().patientInfo],
+          preoperative: [restoredReport.periAnal?.preoperative || createInitialPeriAnalState().preoperative],
+          findings: [restoredReport.periAnal?.findings || createInitialPeriAnalState().findings],
+          woundManagement: [restoredReport.periAnal?.woundManagement || createInitialPeriAnalState().woundManagement],
+          complications: [restoredReport.periAnal?.complications || createInitialPeriAnalState().complications],
+          postOperativePlan: [restoredReport.periAnal?.postOperativePlan || createInitialPeriAnalState().postOperativePlan],
+          specimen: [restoredReport.periAnal?.specimen || createInitialPeriAnalState().specimen],
+          additionalInfo: [restoredReport.periAnal?.additionalInfo || createInitialPeriAnalState().additionalInfo],
+          procedureFindings: [restoredReport.periAnal?.procedureFindings || createInitialPeriAnalState().procedureFindings]
+        });
+        setPeriAnalHistoryIndex({
+          patientInfo: 0,
+          preoperative: 0,
+          findings: 0,
+          woundManagement: 0,
+          complications: 0,
+          postOperativePlan: 0,
+          specimen: 0,
+          additionalInfo: 0,
+          procedureFindings: 0
+        });
         console.log('Restored previous session data for all templates');
       }
     }
@@ -1064,20 +1410,22 @@ const Index = () => {
     const appendectomy = data.appendectomy || {};
     const smallBowel = data.smallBowel || {};
     const cholecystectomy = data.cholecystectomy || {};
+    const periAnal = data.periAnal || {};
     const gastroscopyFindings = data.gastroscopyFindings || {};
     const colonoscopyFindings = data.colonoscopyFindings || {};
     
     // Check various fields that indicate user input (be very inclusive)
-    const hasPatientData = patientInfo.name || patientInfo.patientId || patientInfo.dateOfBirth || patientInfo.age || patientInfo.sex;
-    const hasRectalData = rectalCancer.patientInfo?.name || rectalCancer.surgicalTeam?.surgeons?.some(s => s.trim()) || rectalCancer.operationType?.type?.length > 0;
-    const hasVentralData = ventralHernia.patientInfo?.name || ventralHernia.preoperative?.surgeons?.some(s => s.trim()) || ventralHernia.operative?.herniaType?.length > 0;
-    const hasAppendectomyData = appendectomy.patientInfo?.name || appendectomy.preoperative?.surgeons?.some(s => s.trim()) || appendectomy.procedure?.approach?.length > 0;
-    const hasSmallBowelData = smallBowel.patientInfo?.name || smallBowel.preoperative?.surgeons?.some((s: string) => s.trim()) || smallBowel.procedure?.approach?.length > 0;
-    const hasCholeData = cholecystectomy.patientInfo?.name || cholecystectomy.preoperative?.surgeons?.some((s: string) => s.trim()) || cholecystectomy.procedure?.approach?.length > 0;
+    const hasPatientData = hasMeaningfulPatientInfoData(patientInfo);
+    const hasRectalData = hasMeaningfulPatientInfoData(rectalCancer.patientInfo) || rectalCancer.surgicalTeam?.surgeons?.some(s => s.trim()) || rectalCancer.operationType?.type?.length > 0;
+    const hasVentralData = hasMeaningfulPatientInfoData(ventralHernia.patientInfo) || ventralHernia.preoperative?.surgeons?.some(s => s.trim()) || ventralHernia.operative?.herniaType?.length > 0;
+    const hasAppendectomyData = hasMeaningfulPatientInfoData(appendectomy.patientInfo) || appendectomy.preoperative?.surgeons?.some(s => s.trim()) || appendectomy.procedure?.approach?.length > 0;
+    const hasSmallBowelData = hasMeaningfulPatientInfoData(smallBowel.patientInfo) || smallBowel.preoperative?.surgeons?.some((s: string) => s.trim()) || smallBowel.procedure?.approach?.length > 0;
+    const hasCholeData = hasMeaningfulPatientInfoData(cholecystectomy.patientInfo) || cholecystectomy.preoperative?.surgeons?.some((s: string) => s.trim()) || cholecystectomy.procedure?.approach?.length > 0;
+    const hasPeriAnalData = hasMeaningfulPatientInfoData(periAnal.patientInfo) || periAnal.preoperative?.surgeons?.some((s: string) => s.trim()) || periAnal.findings?.selectedFindings?.length > 0;
     const hasEndoscopyData = gastroscopyFindings.findings?.length > 0 || colonoscopyFindings.findings?.length > 0 || data.selectedProcedures?.length > 0;
     const hasNotes = data.notes?.trim() || data.conclusion?.trim();
     
-    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasSmallBowelData || hasCholeData || hasEndoscopyData || hasNotes;
+    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasSmallBowelData || hasCholeData || hasPeriAnalData || hasEndoscopyData || hasNotes;
   };
 
   // Appendectomy data is now handled by the main data loading above
@@ -1274,6 +1622,11 @@ const Index = () => {
                 ? { ...prev[section], ...data }
                 : data
         } as typeof prev;
+
+        if (section === 'patientInfo') {
+          next.patientInfo = createInitialPatientInfoState(next.patientInfo);
+        }
+
         setTimeout(() => {
           addToHistory(next);
           
@@ -1474,19 +1827,7 @@ const Index = () => {
 
   const clearAppendectomy = (section: keyof typeof appendectomyHistory) => {
     const initialState = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -1607,19 +1948,7 @@ const Index = () => {
 
   const clearVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
     const initialState = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -1770,19 +2099,7 @@ const Index = () => {
 
   const clearRectalCancer = (section: keyof typeof rectalCancerHistory) => {
     const initialState = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       operationType: {
         type: [],
         typeOther: '',
@@ -1887,19 +2204,7 @@ const Index = () => {
 
   const clearAllRectalCancerData = () => {
     const initialRectalCancer = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       operationType: {
         type: [],
         typeOther: '',
@@ -2223,21 +2528,116 @@ const Index = () => {
     toast.success("All cholecystectomy data cleared successfully!");
   };
 
+  const undoPeriAnal = (section: keyof typeof periAnalHistory) => {
+    const currentIndex = periAnalHistoryIndex[section];
+    if (currentIndex > 0) {
+      const newIndex = currentIndex - 1;
+      const previousState = periAnalHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        periAnal: {
+          ...prev.periAnal,
+          [section]: previousState
+        }
+      }));
+
+      setPeriAnalHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} undo successful`);
+    }
+  };
+
+  const redoPeriAnal = (section: keyof typeof periAnalHistory) => {
+    const currentIndex = periAnalHistoryIndex[section];
+    const maxIndex = (periAnalHistory[section] || []).length - 1;
+
+    if (currentIndex < maxIndex) {
+      const newIndex = currentIndex + 1;
+      const nextState = periAnalHistory[section][newIndex];
+
+      setCurrentReport(prev => ({
+        ...prev,
+        periAnal: {
+          ...prev.periAnal,
+          [section]: nextState
+        }
+      }));
+
+      setPeriAnalHistoryIndex(prev => ({
+        ...prev,
+        [section]: newIndex
+      }));
+
+      toast.success(`${section} redo successful`);
+    }
+  };
+
+  const clearPeriAnal = (section: keyof typeof periAnalHistory) => {
+    const initialPeriAnal = createInitialPeriAnalState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      periAnal: {
+        ...prev.periAnal,
+        [section]: initialPeriAnal[section]
+      }
+    }));
+
+    setPeriAnalHistory(prevHistory => ({
+      ...prevHistory,
+      [section]: [...(prevHistory[section] || []), initialPeriAnal[section]]
+    }));
+
+    setPeriAnalHistoryIndex(prev => ({
+      ...prev,
+      [section]: (periAnalHistory[section] || []).length
+    }));
+
+    toast.success(`${section} section cleared`);
+  };
+
+  const clearAllPeriAnalData = () => {
+    const initialPeriAnal = createInitialPeriAnalState();
+
+    setCurrentReport(prev => ({
+      ...prev,
+      periAnal: initialPeriAnal
+    }));
+
+    setPeriAnalHistory({
+      patientInfo: [initialPeriAnal.patientInfo],
+      preoperative: [initialPeriAnal.preoperative],
+      findings: [initialPeriAnal.findings],
+      woundManagement: [initialPeriAnal.woundManagement],
+      complications: [initialPeriAnal.complications],
+      postOperativePlan: [initialPeriAnal.postOperativePlan],
+      specimen: [initialPeriAnal.specimen],
+      additionalInfo: [initialPeriAnal.additionalInfo],
+      procedureFindings: [initialPeriAnal.procedureFindings]
+    });
+
+    setPeriAnalHistoryIndex({
+      patientInfo: 0,
+      preoperative: 0,
+      findings: 0,
+      woundManagement: 0,
+      complications: 0,
+      postOperativePlan: 0,
+      specimen: 0,
+      additionalInfo: 0,
+      procedureFindings: 0
+    });
+
+    toast.success("All peri-anal data cleared successfully!");
+  };
+
   const clearAllAppendectomyData = () => {
     const initialAppendectomy = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -2319,19 +2719,7 @@ const Index = () => {
 
   const clearAllVentralHerniaData = () => {
     const initialVentralHernia = {
-      patientInfo: {
-        name: '',
-        patientId: '',
-        dateOfBirth: '',
-        age: '',
-        sex: '',
-        sexOther: '',
-        weight: '',
-        height: '',
-        bmi: '',
-        asaScore: '',
-        asaNotes: ''
-      },
+      patientInfo: createInitialPatientInfoState(),
       preoperative: {
         surgeons: [''],
         assistants: [''],
@@ -2412,7 +2800,7 @@ const Index = () => {
         case 'patientInfo':
           setCurrentReport(prev => ({
             ...prev,
-            patientInfo: {}
+            patientInfo: createInitialPatientInfoState()
           }));
           toast.success('Patient information cleared');
           break;
@@ -2509,7 +2897,7 @@ const Index = () => {
       // Clear all endoscopy data
       setCurrentReport(prev => ({
         ...prev,
-        patientInfo: {},
+        patientInfo: createInitialPatientInfoState(),
         gastroscopyFindings: { findings: [] },
         colonoscopyFindings: { findings: [] },
         media: [],
@@ -2726,6 +3114,53 @@ const Index = () => {
       return {
         ...prev,
         cholecystectomy: newCholecystectomy
+      };
+    });
+  };
+
+  const updatePeriAnal = (section: string, field: string, value: any) => {
+    setCurrentReport(prev => {
+      const currentPeriAnal = prev.periAnal || createInitialPeriAnalState();
+      const newPeriAnal = {
+        ...currentPeriAnal,
+        [section]: {
+          ...currentPeriAnal?.[section],
+          [field]: value
+        }
+      };
+
+      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
+        const weight = field === 'weight' ? value : newPeriAnal.patientInfo?.weight;
+        const height = field === 'height' ? value : newPeriAnal.patientInfo?.height;
+        const bmi = calculateBMI(weight, height);
+        if (bmi) {
+          newPeriAnal.patientInfo.bmi = bmi;
+        }
+      }
+
+      if (section === 'patientInfo' && field === 'dateOfBirth') {
+        const age = calculateAge(value);
+        if (age) {
+          newPeriAnal.patientInfo.age = age;
+        }
+      }
+
+      setPeriAnalHistory(prevHistory => ({
+        ...prevHistory,
+        [section]: [
+          ...(prevHistory[section as keyof typeof prevHistory] || []),
+          newPeriAnal[section]
+        ]
+      }));
+
+      setPeriAnalHistoryIndex(prevIndex => ({
+        ...prevIndex,
+        [section]: (periAnalHistory[section as keyof typeof periAnalHistory] || []).length
+      }));
+
+      return {
+        ...prev,
+        periAnal: newPeriAnal
       };
     });
   };
@@ -2951,6 +3386,44 @@ const Index = () => {
           toast.success("Cholecystectomy report PDF generated successfully!");
         } else {
           throw new Error(result.error || "Failed to generate cholecystectomy PDF");
+        }
+        return;
+      }
+
+      if (exportSection === "periAnal") {
+        console.log("📋 Exporting peri-anal live report");
+        console.log("Peri-Anal data:", currentReport.periAnal);
+
+        const result = await generatePeriAnalPDF(
+          currentReport.periAnal?.patientInfo?.name || 'Unknown Patient',
+          currentReport.periAnal?.patientInfo?.patientId || 'N/A',
+          currentReport.periAnal,
+          currentReport.periAnal?.patientInfo
+        );
+
+        if (result.success && result.blob) {
+          const url = URL.createObjectURL(result.blob);
+          const link = document.createElement('a');
+          link.href = url;
+
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const formattedDate = `${day}_${month}_${year}`;
+
+          const cleanPatientName = (currentReport.periAnal?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanPatientId = (currentReport.periAnal?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
+
+          link.download = `${cleanPatientName}_${cleanPatientId}_Peri_Anal_Report_${formattedDate}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+
+          toast.success("Peri-Anal report PDF generated successfully!");
+        } else {
+          throw new Error(result.error || "Failed to generate peri-anal PDF");
         }
         return;
       }
@@ -3304,7 +3777,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
 	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
-	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-6 sm:overflow-visible">
+	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-7 sm:overflow-visible">
                     <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       <Microscope className="h-4 w-4" />
                       Endoscopy
@@ -3328,6 +3801,10 @@ const Index = () => {
                       <TabsTrigger value="cholecystectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         <Scissors className="h-4 w-4" />
                         Cholecystectomy
+                      </TabsTrigger>
+                      <TabsTrigger value="periAnal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        <Scissors className="h-4 w-4" />
+                        Peri-Anal
                       </TabsTrigger>
 	                  </TabsList>
                   
@@ -3370,10 +3847,12 @@ const Index = () => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-6">
-                        <PatientInfoForm 
-                          onUpdate={(data) => updateReport('patientInfo', data)}
-                          currentData={currentReport.patientInfo}
-                        />
+	                        <PatientInfoForm 
+	                          onUpdate={(data) => updateReport('patientInfo', data)}
+	                          currentData={currentReport.patientInfo}
+                            currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+	                        />
 
                         {/* Preoperative Information */}
                         <div className="space-y-4 pt-6 border-t">
@@ -4205,116 +4684,19 @@ const Index = () => {
 
                       {expanded.section1 && (
                         <CardContent className="px-6 py-4">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Patient Name:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.name}
-                                onChange={(e) => updateAppendectomy('patientInfo', 'name', e.target.value)}
-                                placeholder="Enter Patient Name"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Patient ID:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.patientId}
-                                onChange={(e) => updateAppendectomy('patientInfo', 'patientId', e.target.value)}
-                                placeholder="Enter Patient ID"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
-                              <div className="w-full">
-                                <Input 
-                                  className="w-full" 
-                                  type="date" 
-                                  lang="en-GB"
-                                  value={currentReport.appendectomy.patientInfo.dateOfBirth}
-                                  onChange={(e) => updateAppendectomy('patientInfo', 'dateOfBirth', e.target.value)}
-                                />
-                                {currentReport.appendectomy.patientInfo.dateOfBirth && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Display format: {formatDateOnly(currentReport.appendectomy.patientInfo.dateOfBirth)}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Age:</label>
-                              <Input 
-                                className="w-full bg-gray-100" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.age}
-                                placeholder="Calculated from the Date Of Birth"
-                                readOnly
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Sex:</label>
-                              <div className="space-y-2">
-                                <select 
-                                  className="w-full p-2 border border-gray-300 rounded-md"
-                                  value={currentReport.appendectomy.patientInfo.sex}
-                                  onChange={(e) => updateAppendectomy('patientInfo', 'sex', e.target.value)}
-                                >
-                                  <option value="">Select Sex</option>
-                                  <option value="male">Male</option>
-                                  <option value="female">Female</option>
-                                  <option value="other">Other</option>
-                                </select>
-                                {currentReport.appendectomy.patientInfo.sex === 'other' && (
-                                  <Input
-                                    className="w-full"
-                                    type="text"
-                                    placeholder="Please Specify"
-                                    value={currentReport.appendectomy.patientInfo.sexOther || ''}
-                                    onChange={(e) => updateAppendectomy('patientInfo', 'sexOther', e.target.value)}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Weight:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.weight}
-                                onChange={(e) => updateAppendectomy('patientInfo', 'weight', e.target.value)}
-                                placeholder="Enter Weight (Kg)"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Height:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.height}
-                                onChange={(e) => updateAppendectomy('patientInfo', 'height', e.target.value)}
-                                placeholder="Enter Height (Cm)"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">BMI:</label>
-                              <Input 
-                                className="w-full bg-gray-100" 
-                                type="text" 
-                                value={currentReport.appendectomy.patientInfo.bmi}
-                                placeholder="Calculated from Height and Weight"
-                                readOnly
-                              />
-                            </div>
-                            <ASAClassificationSection
-                              selectedASA={currentReport.appendectomy.patientInfo.asaScore}
-                              onASAChange={(value) => updateAppendectomy('patientInfo', 'asaScore', value)}
-                              notes={currentReport.appendectomy.patientInfo.asaNotes}
-                              onNotesChange={(value) => updateAppendectomy('patientInfo', 'asaNotes', value)}
-                              showNotes={true}
-                            />
-                          </div>
+	                          <PatientInfoFields
+	                            patientInfo={currentReport.appendectomy.patientInfo}
+	                            onFieldChange={(field, value) =>
+	                              updateAppendectomy("patientInfo", field, value)
+	                            }
+	                            onBulkUpdate={(updates) => {
+	                              Object.entries(updates).forEach(([field, value]) => {
+	                                updateAppendectomy("patientInfo", field, value);
+	                              });
+	                            }}
+                            currentExtractedPatientInfo={currentExtractedPatientInfo}
+                            onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          />
                         </CardContent>
                       )}
                     </Card>
@@ -5782,134 +6164,19 @@ const Index = () => {
 
                       {herniaExpanded.section1 && (
                         <CardContent className="px-6 py-4">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Patient Name:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                placeholder="Enter Patient Name"
-                                value={currentReport.ventralHernia?.patientInfo?.name || ''}
-                                onChange={(e) => updateReport('ventralHernia', {
-                                  ...currentReport.ventralHernia,
-                                  patientInfo: {
-                                    ...currentReport.ventralHernia?.patientInfo,
-                                    name: e.target.value
-                                  }
-                                })}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Patient ID:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                placeholder="Enter Patient ID"
-                                value={currentReport.ventralHernia?.patientInfo?.patientId || ''}
-                                onChange={(e) => updateVentralHernia('patientInfo', 'patientId', e.target.value)}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
-                              <div className="w-full">
-                                <Input 
-                                  className="w-full" 
-                                  type="date" 
-                                  lang="en-GB"
-                                  value={currentReport.ventralHernia?.patientInfo?.dateOfBirth || ''}
-                                  onChange={(e) => updateVentralHernia('patientInfo', 'dateOfBirth', e.target.value)}
-                                />
-                                {currentReport.ventralHernia?.patientInfo?.dateOfBirth && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Display format: {formatDateOnly(currentReport.ventralHernia.patientInfo.dateOfBirth)}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Age:</label>
-                              <Input 
-                                className="w-full bg-gray-100" 
-                                type="text" 
-                                placeholder="Calculated from the Date Of Birth"
-                                value={currentReport.ventralHernia?.patientInfo?.age || ''}
-                                readOnly
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Sex:</label>
-                              <div className="w-full space-y-2">
-                                <select 
-                                  className="w-full p-2 border border-gray-300 rounded-md"
-                                  value={currentReport.ventralHernia?.patientInfo?.sex || ''}
-                                  onChange={(e) => updateReport('ventralHernia', {
-                                    ...currentReport.ventralHernia,
-                                    patientInfo: {
-                                      ...currentReport.ventralHernia?.patientInfo,
-                                      sex: e.target.value
-                                    }
-                                  })}
-                                >
-                                  <option value="">Select Sex</option>
-                                  <option value="male">Male</option>
-                                  <option value="female">Female</option>
-                                  <option value="other">Other</option>
-                                </select>
-                                {currentReport.ventralHernia?.patientInfo?.sex === 'other' && (
-                                  <Input 
-                                    className="w-full" 
-                                    type="text" 
-                                    placeholder="Please Specify"
-                                    value={currentReport.ventralHernia?.patientInfo?.sexOther || ''}
-                                    onChange={(e) => updateReport('ventralHernia', {
-                                      ...currentReport.ventralHernia,
-                                      patientInfo: {
-                                        ...currentReport.ventralHernia?.patientInfo,
-                                        sexOther: e.target.value
-                                      }
-                                    })}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Weight:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                placeholder="Enter Weight (Kg)"
-                                value={currentReport.ventralHernia?.patientInfo?.weight || ''}
-                                onChange={(e) => updateVentralHernia('patientInfo', 'weight', e.target.value)}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">Height:</label>
-                              <Input 
-                                className="w-full" 
-                                type="text" 
-                                placeholder="Enter Height (Cm)"
-                                value={currentReport.ventralHernia?.patientInfo?.height || ''}
-                                onChange={(e) => updateVentralHernia('patientInfo', 'height', e.target.value)}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 items-center">
-                              <label className="text-gray-800 font-medium">BMI:</label>
-                              <Input 
-                                className="w-full bg-gray-100" 
-                                type="text" 
-                                placeholder="Calculated from Height and Weight"
-                                value={currentReport.ventralHernia?.patientInfo?.bmi || ''}
-                                readOnly
-                              />
-                            </div>
-                            <ASAClassificationSection
-                              selectedASA={currentReport.ventralHernia?.patientInfo?.asaScore || ''}
-                              onASAChange={(value) => updateVentralHernia('patientInfo', 'asaScore', value)}
-                              notes={currentReport.ventralHernia?.patientInfo?.asaNotes || ''}
-                              onNotesChange={(value) => updateVentralHernia('patientInfo', 'asaNotes', value)}
-                              showNotes={true}
-                            />
-                          </div>
+	                          <PatientInfoFields
+	                            patientInfo={currentReport.ventralHernia?.patientInfo}
+	                            onFieldChange={(field, value) =>
+	                              updateVentralHernia("patientInfo", field, value)
+	                            }
+	                            onBulkUpdate={(updates) => {
+	                              Object.entries(updates).forEach(([field, value]) => {
+	                                updateVentralHernia("patientInfo", field, value);
+	                              });
+	                            }}
+                            currentExtractedPatientInfo={currentExtractedPatientInfo}
+                            onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          />
                         </CardContent>
                       )}
                     </Card>
@@ -8208,10 +8475,12 @@ const Index = () => {
                         </Card>
 
                         {/* Rectal Cancer Form Component */}
-                        <RectalCancerForm 
-                          currentReport={currentReport}
-                          updateRectalCancer={updateRectalCancer}
-                          onExportPDF={() => handleExportPDF('rectalCancer')}
+	                        <RectalCancerForm 
+	                          currentReport={currentReport}
+	                          updateRectalCancer={updateRectalCancer}
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          onExportPDF={() => handleExportPDF('rectalCancer')}
                           onUndo={(section) => {
                             undoRectalCancer(section as keyof typeof rectalCancerHistory);
                           }}
@@ -8310,10 +8579,12 @@ const Index = () => {
                           </CardHeader>
                         </Card>
 
-                        <SmallBowelSurgeryForm
-                          currentReport={currentReport}
-                          updateSmallBowel={updateSmallBowel}
-                          onExportPDF={() => handleExportPDF('smallBowel')}
+	                        <SmallBowelSurgeryForm
+	                          currentReport={currentReport}
+	                          updateSmallBowel={updateSmallBowel}
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          onExportPDF={() => handleExportPDF('smallBowel')}
                           onUndo={(section) => {
                             undoSmallBowel(section as keyof typeof smallBowelHistory);
                           }}
@@ -8404,10 +8675,12 @@ const Index = () => {
                           </CardHeader>
                         </Card>
 
-                        <CholecystectomyForm
-                          currentReport={currentReport}
-                          updateCholecystectomy={updateCholecystectomy}
-                          onExportPDF={() => handleExportPDF('cholecystectomy')}
+	                        <CholecystectomyForm
+	                          currentReport={currentReport}
+	                          updateCholecystectomy={updateCholecystectomy}
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          onExportPDF={() => handleExportPDF('cholecystectomy')}
                           onUndo={(section) => {
                             undoCholecystectomy(section as keyof typeof cholecystectomyHistory);
                           }}
@@ -8451,6 +8724,111 @@ const Index = () => {
                           <CardContent>
                             <div ref={reportPreviewRef}>
                               <CholecystectomyReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="periAnal" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <Card className="glass-card-light">
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex-shrink-0 p-2 bg-amber-100 rounded-md">
+                                  <Scissors className="w-6 h-6 text-amber-600" />
+                                </div>
+                                <h1 className="text-2xl font-bold text-gray-800">
+                                  Peri-Anal - Synoptic Operative Report
+                                </h1>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={() => handleExportPDF('periAnal')}
+                                  disabled={isGeneratingPDF}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="text-xs"
+                                  onClick={clearAllPeriAnalData}
+                                  title="Clear all peri-anal data"
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Clear All Data
+                                </Button>
+                              </div>
+                            </div>
+                          </CardHeader>
+                        </Card>
+
+	                        <PeriAnalForm
+	                          currentReport={currentReport}
+	                          updatePeriAnal={updatePeriAnal}
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+	                          onExportPDF={() => handleExportPDF('periAnal')}
+                          onUndo={(section) => {
+                            undoPeriAnal(section as keyof typeof periAnalHistory);
+                          }}
+                          onRedo={(section) => {
+                            redoPeriAnal(section as keyof typeof periAnalHistory);
+                          }}
+                          onClear={(section) => {
+                            clearPeriAnal(section as keyof typeof periAnalHistory);
+                          }}
+                          onClearAll={clearAllPeriAnalData}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Peri-Anal"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={() => {}}
+                              currentProcedureFindings={currentReport.periAnal?.procedureFindings}
+                              currentSurgicalDiagramState={{
+                                activeVariant: currentReport.periAnal?.procedureFindings?.activeDiagramVariant || "neutral",
+                                markingsByVariant: currentReport.periAnal?.procedureFindings?.diagramMarkingsByVariant || {
+                                  neutral: [],
+                                  female: [],
+                                },
+                              }}
+                              onSurgicalDiagramStateChange={(state) => {
+                                const activeMarkings = state.markingsByVariant?.[state.activeVariant] || [];
+                                updatePeriAnal('procedureFindings', 'activeDiagramVariant', state.activeVariant);
+                                updatePeriAnal('procedureFindings', 'diagramMarkingsByVariant', state.markingsByVariant);
+                                updatePeriAnal('procedureFindings', 'findings', JSON.stringify(activeMarkings));
+                              }}
+                              surgicalDiagramVariants={{
+                                neutral: periAnalNeutralImage,
+                                female: periAnalFemaleImage,
+                              }}
+                            />
+                          }
+                        />
+                      </div>
+
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-sm">
+                              <FileText className="h-4 w-4 text-gray-600" />
+                              Live Report
+                              <span className="text-xs text-gray-500 font-normal ml-2">
+                                Real-time preview of peri-anal findings
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <PeriAnalReportPreview report={currentReport} />
                             </div>
                           </CardContent>
                         </Card>

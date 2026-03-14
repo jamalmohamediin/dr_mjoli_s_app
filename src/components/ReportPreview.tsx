@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Edit, Trash2, Redo2, X, Save } from "lucide-react";
 import { getFullASAText } from '@/utils/asaDescriptions';
 import { formatDateDDMMYYYY } from '@/utils/dateFormatter';
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from '@/assets/appendectomy.jpg';
 
 interface ReportPreviewProps {
@@ -588,6 +589,24 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
     ).join(' ');
   };
 
+  const extraPatientEntries = getPatientInfoDisplayEntries(report.patientInfo).filter(
+    (entry) =>
+      ![
+        "Name",
+        "Patient Name",
+        "Patient ID",
+        "Date Of Birth",
+        "Age",
+        "Sex",
+        "Gender",
+        "Weight",
+        "Height",
+        "BMI",
+        "ASA Score",
+        "ASA Notes",
+      ].includes(entry.label),
+  );
+
   // Color mapping for different finding types (same as AnatomyDiagram)
   const findingTypeColors: Record<string, string> = {
     // Normal findings - green shades
@@ -1114,6 +1133,17 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                 </div>
               )}
             </div>
+            {extraPatientEntries.map((entry) => (
+              <div
+                key={entry.label}
+                className={`group ${entry.fullWidth ? '' : 'flex justify-between items-center'}`}
+              >
+                <span className="font-medium text-xs">{entry.label}:</span>
+                <span className={`text-xs text-right ${entry.fullWidth ? 'block mt-1 text-left text-gray-700 break-words' : ''}`}>
+                  {entry.value}
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* Preoperative Information */}

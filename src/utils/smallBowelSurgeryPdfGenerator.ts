@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import { formatDateDDMMYYYY, formatDateTimeWithColon } from "@/utils/dateFormatter";
-import { getFullASAText } from "@/utils/asaDescriptions";
+import { getPatientInfoPdfSections } from "@/utils/patientSticker";
 
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.filter(Boolean) as string[];
@@ -210,15 +210,26 @@ export const generateSmallBowelSurgeryPDF = async (
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
+    const patientSubsection = (title: string) => {
+      ensureSpace(7);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.text(title, margin, y);
+      y += 5;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+    };
+
     sec("PATIENT INFORMATION");
-    row3(`Name: ${txt(info?.name || patientName)}`, `Patient ID: ${txt(info?.patientId || patientId)}`, "");
-    row3(
-      `Date Of Birth: ${info?.dateOfBirth ? formatDateDDMMYYYY(info.dateOfBirth) : ""}`,
-      `Age: ${txt(info?.age)}`,
-      `Sex: ${info?.sex === "other" && info?.sexOther ? info.sexOther : txt(info?.sex)}`
-    );
-    row3(`Weight: ${txt(info?.weight)}`, `Height: ${txt(info?.height)}`, `BMI: ${txt(info?.bmi)}`);
-    row3(`ASA Score: ${info?.asaScore ? getFullASAText(info.asaScore) : ""}`, `ASA Notes: ${txt(info?.asaNotes)}`, "");
+    getPatientInfoPdfSections(info, patientName, patientId).forEach((section, sectionIndex, sections) => {
+      if (section.title) {
+        patientSubsection(section.title);
+      }
+      section.rows.forEach((row) => row3(row[0], row[1], row[2]));
+      if (sectionIndex < sections.length - 1) {
+        y += 1;
+      }
+    });
     y += 2;
 
     sec("PREOPERATIVE INFORMATION");

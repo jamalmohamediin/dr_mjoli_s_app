@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 560" role="img" aria-labelledby="title desc">
+  <title id="title">Neutral Peri-Anal Diagram</title>
+  <desc id="desc">Clean unlabeled peri-anal base diagram for interactive surgical markings.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fdf9f5"/>
+      <stop offset="100%" stop-color="#f7efe8"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f2d7c4"/>
+      <stop offset="100%" stop-color="#e7c0a8"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#ad7c63" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <rect width="720" height="560" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <path
+      d="M87 117C153 165 223 191 287 204C310 209 333 210 359 210C384 210 407 209 430 204C497 191 567 164 633 117C642 111 653 120 648 130C618 192 573 249 510 282C481 298 459 319 443 346C422 381 410 419 389 457C383 467 372 476 359 476C346 476 335 467 329 457C308 419 296 381 275 346C259 319 237 298 208 282C146 249 101 192 71 130C66 120 77 111 87 117Z"
+      fill="url(#skin)"
+    />
+    <path
+      d="M146 154C197 187 245 206 293 216"
+      fill="none"
+      stroke="#5b4337"
+      stroke-linecap="round"
+      stroke-width="7"
+    />
+    <path
+      d="M574 154C523 187 475 206 427 216"
+      fill="none"
+      stroke="#5b4337"
+      stroke-linecap="round"
+      stroke-width="7"
+    />
+    <path
+      d="M163 231C208 275 246 291 296 301"
+      fill="none"
+      stroke="#6b4e41"
+      stroke-linecap="round"
+      stroke-width="6"
+    />
+    <path
+      d="M557 231C512 275 474 291 424 301"
+      fill="none"
+      stroke="#6b4e41"
+      stroke-linecap="round"
+      stroke-width="6"
+    />
+    <path
+      d="M281 282C303 309 321 338 333 366C342 387 349 409 359 436C369 409 376 387 385 366C397 338 415 309 437 282"
+      fill="none"
+      stroke="#7a5c4f"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="6"
+    />
+    <ellipse cx="360" cy="315" rx="16" ry="28" fill="#2b1f1b"/>
+    <ellipse cx="360" cy="315" rx="9" ry="18" fill="#4a3530"/>
+    <path
+      d="M334 298C343 284 352 277 360 277C368 277 377 284 386 298"
+      fill="none"
+      stroke="#856255"
+      stroke-linecap="round"
+      stroke-width="5"
+    />
+    <path
+      d="M309 406C326 423 342 436 359 444C376 436 392 423 409 406"
+      fill="none"
+      stroke="#705347"
+      stroke-linecap="round"
+      stroke-width="5"
+    />
+  </g>
+</svg>

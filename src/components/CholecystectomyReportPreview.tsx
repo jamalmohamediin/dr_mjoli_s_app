@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatDateOnly } from "@/utils/dateFormatter";
 import { getFullASAText } from "@/utils/asaDescriptions";
+import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 
 interface CholecystectomyReportPreviewProps {
@@ -104,9 +104,10 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
 
 export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPreviewProps) => {
   const cholecystectomy = report.cholecystectomy;
+  const patientEntries = getPatientInfoDisplayEntries(cholecystectomy?.patientInfo);
 
   const hasData =
-    cholecystectomy?.patientInfo?.name ||
+    patientEntries.length > 0 ||
     cholecystectomy?.preoperative?.surgeons?.some((item: string) => item?.trim()) ||
     cholecystectomy?.preoperative?.indication?.length > 0 ||
     cholecystectomy?.intraoperative?.gallbladderAppearance?.length > 0 ||
@@ -222,66 +223,11 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
       <div className="space-y-2">
         <h5 className="text-xs font-medium text-gray-600">Patient Information</h5>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-700">
-          {cholecystectomy?.patientInfo?.name && (
-            <div>
-              <span className="font-medium">Name:</span> {cholecystectomy.patientInfo.name}
+          {patientEntries.map((entry) => (
+            <div key={entry.label} className={entry.fullWidth ? "col-span-2" : ""}>
+              <span className="font-medium">{entry.label}:</span> {entry.value}
             </div>
-          )}
-          {cholecystectomy?.patientInfo?.patientId && (
-            <div>
-              <span className="font-medium">Patient ID:</span>{" "}
-              {cholecystectomy.patientInfo.patientId}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.dateOfBirth && (
-            <div>
-              <span className="font-medium">Date of Birth:</span>{" "}
-              {formatDateOnly(cholecystectomy.patientInfo.dateOfBirth)}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.age && (
-            <div>
-              <span className="font-medium">Age:</span> {cholecystectomy.patientInfo.age}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.sex && (
-            <div>
-              <span className="font-medium">Sex:</span>{" "}
-              {cholecystectomy.patientInfo.sex === "other" &&
-              cholecystectomy.patientInfo.sexOther
-                ? cholecystectomy.patientInfo.sexOther
-                : `${cholecystectomy.patientInfo.sex.charAt(0).toUpperCase()}${cholecystectomy.patientInfo.sex
-                    .slice(1)
-                    .toLowerCase()}`}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.weight && (
-            <div>
-              <span className="font-medium">Weight:</span> {cholecystectomy.patientInfo.weight} kg
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.height && (
-            <div>
-              <span className="font-medium">Height:</span> {cholecystectomy.patientInfo.height} cm
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.bmi && (
-            <div>
-              <span className="font-medium">BMI:</span> {cholecystectomy.patientInfo.bmi}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.asaScore && (
-            <div className="col-span-2">
-              <span className="font-medium">ASA Score:</span>{" "}
-              {getFullASAText(cholecystectomy.patientInfo.asaScore)}
-            </div>
-          )}
-          {cholecystectomy?.patientInfo?.asaNotes && (
-            <div className="col-span-2">
-              <span className="font-medium">Additional Notes:</span>{" "}
-              {cholecystectomy.patientInfo.asaNotes}
-            </div>
-          )}
+          ))}
         </div>
       </div>
 

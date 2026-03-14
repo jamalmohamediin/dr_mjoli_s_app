@@ -1,17 +1,7 @@
+import { createInitialPatientInfoState } from "@/utils/patientSticker";
+
 export const initialCholecystectomyState = {
-  patientInfo: {
-    name: "",
-    patientId: "",
-    dateOfBirth: "",
-    age: "",
-    sex: "",
-    sexOther: "",
-    weight: "",
-    height: "",
-    bmi: "",
-    asaScore: "",
-    asaNotes: "",
-  },
+  patientInfo: createInitialPatientInfoState(),
   preoperative: {
     surgeons: [""],
     assistants: [""],

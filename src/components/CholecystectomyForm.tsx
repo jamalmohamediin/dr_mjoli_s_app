@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { formatDateOnly, getLocalDateTimeValue } from "@/utils/dateFormatter";
 import { initialCholecystectomyState } from "@/utils/cholecystectomy";
 import {
@@ -23,6 +24,8 @@ import {
 interface CholecystectomyFormProps {
   currentReport: any;
   updateCholecystectomy: (section: string, field: string, value: any) => void;
+  currentExtractedPatientInfo?: any;
+  onCurrentPatientChange?: (patientInfo: any) => void;
   onClear?: (section: string) => void;
   onClearAll?: () => void;
   onUndo?: (section: string) => void;
@@ -178,12 +181,20 @@ const toArray = (value: unknown): string[] => {
 export const CholecystectomyForm = ({
   currentReport,
   updateCholecystectomy,
+  currentExtractedPatientInfo,
+  onCurrentPatientChange,
   onClear,
   onUndo,
   onRedo,
   diagramElement,
 }: CholecystectomyFormProps) => {
   const cholecystectomy = currentReport.cholecystectomy || initialCholecystectomyState;
+
+  const updatePatientInfoFields = (updates: Record<string, any>) => {
+    Object.entries(updates).forEach(([field, value]) => {
+      updateCholecystectomy("patientInfo", field, value);
+    });
+  };
   const [expanded, setExpanded] = useState({
     patientInfo: true,
     preoperative: true,
@@ -372,134 +383,15 @@ export const CholecystectomyForm = ({
         )}
         {expanded.patientInfo && (
           <CardContent className="px-6 py-4">
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Patient Name:</label>
-                <Input
-                  type="text"
-                  value={cholecystectomy.patientInfo?.name || ""}
-                  onChange={(e) =>
-                    updateCholecystectomy("patientInfo", "name", e.target.value)
-                  }
-                  placeholder="Enter Patient Name"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Patient ID:</label>
-                <Input
-                  type="text"
-                  value={cholecystectomy.patientInfo?.patientId || ""}
-                  onChange={(e) =>
-                    updateCholecystectomy("patientInfo", "patientId", e.target.value)
-                  }
-                  placeholder="Enter Patient ID"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
-                <div className="w-full">
-                  <Input
-                    type="date"
-                    lang="en-GB"
-                    value={cholecystectomy.patientInfo?.dateOfBirth || ""}
-                    onChange={(e) =>
-                      updateCholecystectomy("patientInfo", "dateOfBirth", e.target.value)
-                    }
-                  />
-                  {cholecystectomy.patientInfo?.dateOfBirth && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Display format: {formatDateOnly(cholecystectomy.patientInfo.dateOfBirth)}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Age:</label>
-                <Input
-                  className="bg-gray-100"
-                  type="text"
-                  value={cholecystectomy.patientInfo?.age || ""}
-                  placeholder="Calculated from the Date Of Birth"
-                  readOnly
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Sex:</label>
-                <div className="space-y-2">
-                  <select
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    value={cholecystectomy.patientInfo?.sex || ""}
-                    onChange={(e) =>
-                      updateCholecystectomy("patientInfo", "sex", e.target.value)
-                    }
-                  >
-                    <option value="">Select Sex</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                  {cholecystectomy.patientInfo?.sex === "other" && (
-                    <Input
-                      type="text"
-                      placeholder="Please Specify"
-                      value={cholecystectomy.patientInfo?.sexOther || ""}
-                      onChange={(e) =>
-                        updateCholecystectomy("patientInfo", "sexOther", e.target.value)
-                      }
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Weight:</label>
-                <Input
-                  type="text"
-                  value={cholecystectomy.patientInfo?.weight || ""}
-                  onChange={(e) =>
-                    updateCholecystectomy("patientInfo", "weight", e.target.value)
-                  }
-                  placeholder="Enter Weight (Kg)"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">Height:</label>
-                <Input
-                  type="text"
-                  value={cholecystectomy.patientInfo?.height || ""}
-                  onChange={(e) =>
-                    updateCholecystectomy("patientInfo", "height", e.target.value)
-                  }
-                  placeholder="Enter Height (Cm)"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="text-gray-800 font-medium">BMI:</label>
-                <Input
-                  className="bg-gray-100"
-                  type="text"
-                  value={cholecystectomy.patientInfo?.bmi || ""}
-                  placeholder="Calculated from Height and Weight"
-                  readOnly
-                />
-              </div>
-
-              <ASAClassificationSection
-                selectedASA={cholecystectomy.patientInfo?.asaScore || ""}
-                onASAChange={(value) => updateCholecystectomy("patientInfo", "asaScore", value)}
-                notes={cholecystectomy.patientInfo?.asaNotes || ""}
-                onNotesChange={(value) =>
-                  updateCholecystectomy("patientInfo", "asaNotes", value)
-                }
-                showNotes={true}
-              />
-            </div>
+            <PatientInfoFields
+              patientInfo={cholecystectomy.patientInfo}
+              onFieldChange={(field, value) =>
+                updateCholecystectomy("patientInfo", field, value)
+              }
+              onBulkUpdate={updatePatientInfoFields}
+              currentExtractedPatientInfo={currentExtractedPatientInfo}
+              onCurrentPatientChange={onCurrentPatientChange}
+            />
           </CardContent>
         )}
       </Card>

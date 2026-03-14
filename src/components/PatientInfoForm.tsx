@@ -1,51 +1,28 @@
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ASAClassificationSection } from "@/components/ASAClassificationSection";
-import { formatDateDDMMYYYY } from "@/utils/dateFormatter";
+import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { createInitialPatientInfoState } from "@/utils/patientSticker";
 
 interface PatientInfoFormProps {
   onUpdate: (data: any) => void;
   currentData?: any;
+  currentExtractedPatientInfo?: any;
+  onCurrentPatientChange?: (patientInfo: any) => void;
 }
 
-export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps) => {
-  const [formData, setFormData] = useState({
-    patientId: currentData?.patientId || "",
-    name: currentData?.name || "",
-    dateOfBirth: currentData?.dateOfBirth || "",
-    age: currentData?.age || "",
-    sex: currentData?.sex || currentData?.gender || "",
-    sexOther: currentData?.sexOther || "",
-    weight: currentData?.weight || "",
-    height: currentData?.height || "",
-    bmi: currentData?.bmi || "",
-    asaScore: currentData?.asaScore || "",
-    asaNotes: currentData?.asaNotes || ""
-  });
+export const PatientInfoForm = ({
+  onUpdate,
+  currentData,
+  currentExtractedPatientInfo,
+  onCurrentPatientChange,
+}: PatientInfoFormProps) => {
+  const [formData, setFormData] = useState(createInitialPatientInfoState(currentData));
 
   
 
   // Sync local state when prop changes (from live report edits)
   useEffect(() => {
     if (currentData) {
-      setFormData({
-        patientId: currentData.patientId || "",
-        name: currentData.name || "",
-        dateOfBirth: currentData.dateOfBirth || "",
-        age: currentData.age || "",
-        sex: currentData.sex || currentData.gender || "",
-        sexOther: currentData.sexOther || "",
-        weight: currentData.weight || "",
-        height: currentData.height || "",
-        bmi: currentData.bmi || "",
-        asaScore: currentData.asaScore || "",
-        asaNotes: currentData.asaNotes || ""
-      });
-      
+      setFormData(createInitialPatientInfoState(currentData));
     }
   }, [currentData]);
 
@@ -94,118 +71,31 @@ export const PatientInfoForm = ({ onUpdate, currentData }: PatientInfoFormProps)
     onUpdate(newData);
   };
 
+  const handleBulkUpdate = (updates: Record<string, any>) => {
+    let newData = { ...formData, ...updates };
+
+    if (Object.prototype.hasOwnProperty.call(updates, "dateOfBirth")) {
+      newData.age = calculateAge(newData.dateOfBirth);
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(updates, "weight") ||
+      Object.prototype.hasOwnProperty.call(updates, "height")
+    ) {
+      newData.bmi = calculateBMI(newData.weight, newData.height);
+    }
+
+    setFormData(newData);
+    onUpdate(newData);
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Patient Name:</Label>
-        <Input
-          value={formData.name}
-          onChange={(e) => handleChange('name', e.target.value)}
-          placeholder="Enter Patient Name"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Patient ID:</Label>
-        <Input
-          value={formData.patientId}
-          onChange={(e) => handleChange('patientId', e.target.value)}
-          placeholder="Enter Patient ID"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</Label>
-        <div className="w-full">
-          <Input
-            type="date"
-            lang="en-GB"
-            value={formData.dateOfBirth}
-            onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-            className="w-full"
-            placeholder="dd/mm/yyyy"
-          />
-          {formData.dateOfBirth && (
-            <p className="text-xs text-gray-500 mt-1">
-              Display format: {formatDateDDMMYYYY(formData.dateOfBirth)}
-            </p>
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Age:</Label>
-        <Input
-          value={formData.age}
-          placeholder="Calculated from the Date Of Birth"
-          readOnly
-          className="w-full bg-gray-100"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Sex:</Label>
-        <div className="space-y-2">
-          <Select value={formData.sex} onValueChange={(value) => handleChange('sex', value)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Sex" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">Male</SelectItem>
-              <SelectItem value="female">Female</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-          {formData.sex === 'other' && (
-            <Input
-              value={formData.sexOther}
-              onChange={(e) => handleChange('sexOther', e.target.value)}
-              placeholder="Please specify"
-              className="w-full"
-            />
-          )}
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Weight:</Label>
-        <Input
-          value={formData.weight}
-          onChange={(e) => handleChange('weight', e.target.value)}
-          placeholder="Enter Weight (Kg)"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">Height:</Label>
-        <Input
-          value={formData.height}
-          onChange={(e) => handleChange('height', e.target.value)}
-          placeholder="Enter Height (Cm)"
-          className="w-full"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 gap-4 items-center">
-        <Label className="text-gray-800 font-medium">BMI:</Label>
-        <Input
-          value={formData.bmi}
-          placeholder="Calculated from Height and Weight"
-          readOnly
-          className="w-full bg-gray-100"
-        />
-      </div>
-      
-      <ASAClassificationSection
-        selectedASA={formData.asaScore}
-        onASAChange={(value) => handleChange('asaScore', value)}
-        notes={formData.asaNotes}
-        onNotesChange={(value) => handleChange('asaNotes', value)}
-        showNotes={true}
-      />
-    </div>
+    <PatientInfoFields
+      patientInfo={formData}
+      onFieldChange={handleChange}
+      onBulkUpdate={handleBulkUpdate}
+      currentExtractedPatientInfo={currentExtractedPatientInfo}
+      onCurrentPatientChange={onCurrentPatientChange}
+    />
   );
 };

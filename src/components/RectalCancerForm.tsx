@@ -5,6 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/utils/dateFormatter";
@@ -12,6 +13,8 @@ import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/uti
 interface RectalCancerFormProps {
   currentReport: any;
   updateRectalCancer: (section: string, field: string, value: any) => void;
+  currentExtractedPatientInfo?: any;
+  onCurrentPatientChange?: (patientInfo: any) => void;
   onSave?: (section: string) => void;
   onClear?: (section: string) => void;
   onClearAll?: () => void;
@@ -21,7 +24,19 @@ interface RectalCancerFormProps {
   diagramElement?: React.ReactNode;
 }
 
-export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, onClear, onClearAll, onUndo, onRedo, onExportPDF, diagramElement }: RectalCancerFormProps) => {
+export const RectalCancerForm = ({
+  currentReport,
+  updateRectalCancer,
+  currentExtractedPatientInfo,
+  onCurrentPatientChange,
+  onSave,
+  onClear,
+  onClearAll,
+  onUndo,
+  onRedo,
+  onExportPDF,
+  diagramElement,
+}: RectalCancerFormProps) => {
   const [expanded, setExpanded] = useState({
     basicData: true,
     operativeFindings: true,
@@ -234,6 +249,12 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
     </>
   );
 
+  const updatePatientInfoFields = (updates: Record<string, any>) => {
+    Object.entries(updates).forEach(([field, value]) => {
+      updateRectalCancer("patientInfo", field, value);
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* SECTION I: Basic Data & Preoperative Assessment */}
@@ -289,109 +310,13 @@ export const RectalCancerForm = ({ currentReport, updateRectalCancer, onSave, on
               {/* Patient Information */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-gray-800 mb-4">Patient Information</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Patient Name:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.name || ''}
-                      onChange={(e) => updateRectalCancer('patientInfo', 'name', e.target.value)}
-                      placeholder="Enter Patient Name"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Patient ID:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.patientId || ''}
-                      onChange={(e) => updateRectalCancer('patientInfo', 'patientId', e.target.value)}
-                      placeholder="Enter Patient ID"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
-                    <div className="w-full">
-                      <Input 
-                        type="date" 
-                        lang="en-GB"
-                        value={currentReport.rectalCancer.patientInfo?.dateOfBirth || ''}
-                        onChange={(e) => updateRectalCancer('patientInfo', 'dateOfBirth', e.target.value)}
-                      />
-                      {currentReport.rectalCancer.patientInfo?.dateOfBirth && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Display format: {formatDateDDMMYYYY(currentReport.rectalCancer.patientInfo.dateOfBirth)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Age:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.age || ''}
-                      placeholder="Calculated from the Date Of Birth"
-                      readOnly
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Sex:</label>
-                    <div className="space-y-2">
-                      <select 
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        value={currentReport.rectalCancer.patientInfo?.sex || ''}
-                        onChange={(e) => {
-                          updateRectalCancer('patientInfo', 'sex', e.target.value);
-                          if (e.target.value !== 'other') {
-                            updateRectalCancer('patientInfo', 'sexOther', '');
-                          }
-                        }}
-                      >
-                        <option value="">Select Sex</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other (Please Specify)</option>
-                      </select>
-                      {currentReport.rectalCancer.patientInfo?.sex === 'other' && (
-                        <Input
-                          type="text"
-                          value={currentReport.rectalCancer.patientInfo?.sexOther || ''}
-                          onChange={(e) => updateRectalCancer('patientInfo', 'sexOther', e.target.value)}
-                          placeholder="Please specify"
-                          className="w-full"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Weight:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.weight || ''}
-                      onChange={(e) => updateRectalCancer('patientInfo', 'weight', e.target.value)}
-                      placeholder="Enter Weight (Kg)"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Height:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.height || ''}
-                      onChange={(e) => updateRectalCancer('patientInfo', 'height', e.target.value)}
-                      placeholder="Enter Height (Cm)"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">BMI:</label>
-                    <Input 
-                      type="text" 
-                      value={currentReport.rectalCancer.patientInfo?.bmi || ''}
-                      placeholder="Calculated from Height and Weight"
-                      readOnly
-                      className="bg-gray-100"
-                    />
-                  </div>
-                </div>
+                <PatientInfoFields
+                  patientInfo={currentReport.rectalCancer.patientInfo}
+                  onFieldChange={(field, value) => updateRectalCancer("patientInfo", field, value)}
+                  onBulkUpdate={updatePatientInfoFields}
+                  currentExtractedPatientInfo={currentExtractedPatientInfo}
+                  onCurrentPatientChange={onCurrentPatientChange}
+                />
               </div>
 
               {/* ASA Classification */}

@@ -23,6 +23,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { PatientInfoFields } from "@/components/PatientInfoFields";
 import {
   formatDateDDMMYYYY,
   formatDateOnly,
@@ -33,6 +34,8 @@ import { initialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 interface SmallBowelSurgeryFormProps {
   currentReport: any;
   updateSmallBowel: (section: string, field: string, value: any) => void;
+  currentExtractedPatientInfo?: any;
+  onCurrentPatientChange?: (patientInfo: any) => void;
   onClear?: (section: string) => void;
   onClearAll?: () => void;
   onUndo?: (section: string) => void;
@@ -113,6 +116,8 @@ const toArray = (value: unknown): string[] => {
 export const SmallBowelSurgeryForm = ({
   currentReport,
   updateSmallBowel,
+  currentExtractedPatientInfo,
+  onCurrentPatientChange,
   onClear,
   onClearAll,
   onUndo,
@@ -121,6 +126,12 @@ export const SmallBowelSurgeryForm = ({
   diagramElement,
 }: SmallBowelSurgeryFormProps) => {
   const smallBowel = currentReport.smallBowel || initialSmallBowelSurgeryState;
+
+  const updatePatientInfoFields = (updates: Record<string, any>) => {
+    Object.entries(updates).forEach(([field, value]) => {
+      updateSmallBowel("patientInfo", field, value);
+    });
+  };
   const [expanded, setExpanded] = useState({
     basicData: true,
     operativeFindings: true,
@@ -317,108 +328,13 @@ export const SmallBowelSurgeryForm = ({
             <CardContent className="space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-gray-800 mb-4">Patient Information</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Patient Name:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.name || ""}
-                      onChange={(e) => updateSmallBowel("patientInfo", "name", e.target.value)}
-                      placeholder="Enter Patient Name"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Patient ID:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.patientId || ""}
-                      onChange={(e) => updateSmallBowel("patientInfo", "patientId", e.target.value)}
-                      placeholder="Enter Patient ID"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Date Of Birth (dd/mm/yyyy):</label>
-                    <div className="w-full">
-                      <Input
-                        type="date"
-                        lang="en-GB"
-                        value={smallBowel.patientInfo?.dateOfBirth || ""}
-                        onChange={(e) => updateSmallBowel("patientInfo", "dateOfBirth", e.target.value)}
-                      />
-                      {smallBowel.patientInfo?.dateOfBirth && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Display format: {formatDateDDMMYYYY(smallBowel.patientInfo.dateOfBirth)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Age:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.age || ""}
-                      placeholder="Calculated from the Date Of Birth"
-                      readOnly
-                      className="bg-gray-100"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Sex:</label>
-                    <div className="space-y-2">
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded-md"
-                        value={smallBowel.patientInfo?.sex || ""}
-                        onChange={(e) => {
-                          updateSmallBowel("patientInfo", "sex", e.target.value);
-                          if (e.target.value !== "other") {
-                            updateSmallBowel("patientInfo", "sexOther", "");
-                          }
-                        }}
-                      >
-                        <option value="">Select Sex</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other (Please Specify)</option>
-                      </select>
-                      {smallBowel.patientInfo?.sex === "other" && (
-                        <Input
-                          type="text"
-                          value={smallBowel.patientInfo?.sexOther || ""}
-                          onChange={(e) => updateSmallBowel("patientInfo", "sexOther", e.target.value)}
-                          placeholder="Please specify"
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Weight:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.weight || ""}
-                      onChange={(e) => updateSmallBowel("patientInfo", "weight", e.target.value)}
-                      placeholder="Enter Weight (Kg)"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Height:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.height || ""}
-                      onChange={(e) => updateSmallBowel("patientInfo", "height", e.target.value)}
-                      placeholder="Enter Height (Cm)"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">BMI:</label>
-                    <Input
-                      type="text"
-                      value={smallBowel.patientInfo?.bmi || ""}
-                      placeholder="Calculated from Height and Weight"
-                      readOnly
-                      className="bg-gray-100"
-                    />
-                  </div>
-                </div>
+                <PatientInfoFields
+                  patientInfo={smallBowel.patientInfo}
+                  onFieldChange={(field, value) => updateSmallBowel("patientInfo", field, value)}
+                  onBulkUpdate={updatePatientInfoFields}
+                  currentExtractedPatientInfo={currentExtractedPatientInfo}
+                  onCurrentPatientChange={onCurrentPatientChange}
+                />
               </div>
 
               <div className="bg-gray-50 p-4 rounded-lg">
