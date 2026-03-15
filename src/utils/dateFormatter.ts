@@ -114,6 +114,41 @@ export const formatDateDDMMYYYY = (date: Date | string | null | undefined): stri
   return `${day}/${month}/${year}`;
 };
 
+export const formatDateDDMMYYYYWithDashes = (
+  date: Date | string | null | undefined,
+): string => {
+  if (!date) return '';
+
+  const d = typeof date === 'string' ? new Date(date) : date;
+
+  if (Number.isNaN(d.getTime())) {
+    return '';
+  }
+
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+
+  return `${day}-${month}-${year}`;
+};
+
+export const formatDateTimeDDMMYYYYWithDashes = (
+  date: Date | string | null | undefined,
+): string => {
+  if (!date) return '';
+
+  const d = typeof date === 'string' ? new Date(date) : date;
+
+  if (Number.isNaN(d.getTime())) {
+    return '';
+  }
+
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+
+  return `${formatDateDDMMYYYYWithDashes(d)} ${hours}:${minutes}`;
+};
+
 // Format date for filename (replace invalid filename characters)
 export const formatDOBForFilename = (date: Date | string | null | undefined): string => {
   if (!date) return '';

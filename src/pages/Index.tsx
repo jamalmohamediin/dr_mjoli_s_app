@@ -23,6 +23,7 @@ import { CholecystectomyForm } from "@/components/CholecystectomyForm";
 import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
 import { PeriAnalForm } from "@/components/PeriAnalForm";
 import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
+import { DateTime24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
@@ -45,6 +46,7 @@ import {
 } from "@/utils/patientSticker";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
+import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
 import periAnalNeutralImage from "@/assets/peri-anal-neutral.svg";
 import periAnalFemaleImage from "@/assets/peri-anal-female.svg";
 
@@ -61,6 +63,117 @@ const hasMeaningfulPatientInfoData = (patientInfo: any): boolean =>
     return Boolean(value);
   });
 
+const cloneStringArray = (value: any, fallback: string[] = []) =>
+  Array.isArray(value) && value.length > 0 ? [...value] : [...fallback];
+
+const createInitialVentralHerniaPreoperativeState = (source: any = {}) => ({
+  surgeons: cloneStringArray(source.surgeons, [""]),
+  assistants: cloneStringArray(source.assistants, [""]),
+  anaesthetists: cloneStringArray(source.anaesthetists, [""]),
+  anaesthetist: source.anaesthetist || "",
+  duration: source.duration || "",
+  startTime: source.startTime || "",
+  endTime: source.endTime || "",
+  indication: cloneStringArray(source.indication),
+  indicationOther: source.indicationOther || "",
+  imaging: cloneStringArray(source.imaging),
+  imagingOther: source.imagingOther || "",
+  procedureUrgency: cloneStringArray(source.procedureUrgency),
+});
+
+const createInitialVentralHerniaOperativeState = (source: any = {}) => ({
+  herniaType: cloneStringArray(source.herniaType),
+  herniaTypeOther: source.herniaTypeOther || "",
+  herniaSite: cloneStringArray(source.herniaSite),
+  herniaSiteOther: source.herniaSiteOther || "",
+  herniaDefects: source.herniaDefects || "",
+  herniaDefectLength: source.herniaDefectLength || "",
+  herniaDefectWidth: source.herniaDefectWidth || "",
+  numberOfDefects: source.numberOfDefects || "",
+  contents: cloneStringArray(source.contents),
+  contentsOther: source.contentsOther || "",
+  strangulation: source.strangulation || "",
+  meshInSitu: source.meshInSitu || "",
+  meshDetails: source.meshDetails || "",
+  approach: cloneStringArray(source.approach),
+  approachOther: source.approachOther || "",
+  conversionReason: cloneStringArray(source.conversionReason),
+  conversionReasonOther: source.conversionReasonOther || "",
+  trocarNumber: source.trocarNumber || "",
+  operationDescription: source.operationDescription || "",
+});
+
+const createInitialVentralHerniaProcedureState = (source: any = {}) => ({
+  dissection: source.dissection || "",
+  sacExcised: source.sacExcised || "",
+  fatDissected: source.fatDissected || "",
+  defectClosed: source.defectClosed || "",
+  closureTechnique: cloneStringArray(source.closureTechnique),
+  closureTechniqueOther: source.closureTechniqueOther || "",
+  closureMaterial: cloneStringArray(source.closureMaterial),
+  closureMaterialOther: source.closureMaterialOther || "",
+  repairType: source.repairType || "",
+  meshType: cloneStringArray(source.meshType),
+  meshPlacementOther: source.meshPlacementOther || "",
+  meshMaterial: cloneStringArray(source.meshMaterial),
+  meshMaterialOther: source.meshMaterialOther || "",
+  meshLength: source.meshLength || "",
+  meshWidth: source.meshWidth || "",
+  fixation: cloneStringArray(source.fixation),
+  fixationOther: source.fixationOther || "",
+  intraOperativeDifficulty: cloneStringArray(source.intraOperativeDifficulty),
+  intraOperativeDifficultyOther: source.intraOperativeDifficultyOther || "",
+  primaryRepair: cloneStringArray(source.primaryRepair),
+  primaryRepairOther: source.primaryRepairOther || "",
+  complications: cloneStringArray(source.complications),
+  complicationOther: source.complicationOther || "",
+  haemostasis: source.haemostasis || "",
+  drain: source.drain || "",
+  drainDetails: source.drainDetails || "",
+  drainType: cloneStringArray(source.drainType),
+  drainTypeOther: source.drainTypeOther || "",
+  intraPeritonealPlacement: cloneStringArray(source.intraPeritonealPlacement),
+  intraPeritonealPlacementOther: source.intraPeritonealPlacementOther || "",
+  drainExitSite: cloneStringArray(source.drainExitSite),
+  drainExitSiteOther: source.drainExitSiteOther || "",
+  fascialClosure: cloneStringArray(source.fascialClosure),
+  fascialClosureOther: source.fascialClosureOther || "",
+  fascialClosureMaterial: cloneStringArray(source.fascialClosureMaterial),
+  fascialClosureMaterialOther: source.fascialClosureMaterialOther || "",
+  skinClosure: cloneStringArray(source.skinClosure),
+  skinClosureOther: source.skinClosureOther || "",
+  skinClosureMaterial: cloneStringArray(source.skinClosureMaterial),
+  skinClosureMaterialOther: source.skinClosureMaterialOther || "",
+  specimenSent: cloneStringArray(source.specimenSent),
+  specimenOther: source.specimenOther || "",
+  laboratoryName: source.laboratoryName || "",
+  otherSpecimens: source.otherSpecimens || "",
+  additionalNotes: source.additionalNotes || "",
+  postOperativeManagement: source.postOperativeManagement || "",
+});
+
+const createInitialVentralHerniaClosureState = (source: any = {}) => ({
+  surgeonSignature: source.surgeonSignature || "",
+  surgeonSignatureText: source.surgeonSignatureText || "",
+  dateTime: source.dateTime || "",
+});
+
+const createInitialVentralHerniaProcedureFindingsState = (source: any = {}) => ({
+  findings: source.findings || "",
+  additionalNotes: source.additionalNotes || "",
+});
+
+const createInitialVentralHerniaState = (source: any = {}) => ({
+  patientInfo: createInitialPatientInfoState(source.patientInfo),
+  preoperative: createInitialVentralHerniaPreoperativeState(source.preoperative),
+  operative: createInitialVentralHerniaOperativeState(source.operative),
+  procedure: createInitialVentralHerniaProcedureState(source.procedure),
+  closure: createInitialVentralHerniaClosureState(source.closure),
+  procedureFindings: createInitialVentralHerniaProcedureFindingsState(
+    source.procedureFindings,
+  ),
+});
+
 const normalizeReportPatientInfos = (report: any) => ({
   ...report,
   patientInfo: createInitialPatientInfoState(report?.patientInfo),
@@ -71,10 +184,7 @@ const normalizeReportPatientInfos = (report: any) => ({
       }
     : report?.appendectomy,
   ventralHernia: report?.ventralHernia
-    ? {
-        ...report.ventralHernia,
-        patientInfo: createInitialPatientInfoState(report.ventralHernia?.patientInfo),
-      }
+    ? createInitialVentralHerniaState(report.ventralHernia)
     : report?.ventralHernia,
   rectalCancer: report?.rectalCancer
     ? {
@@ -205,82 +315,7 @@ const Index = () => {
         additionalNotes: ''
       }
     },
-    ventralHernia: {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      operative: {
-        herniaType: [],
-        herniaTypeOther: '',
-        herniaSite: [],
-        herniaSiteOther: '',
-        herniaDefects: '',
-        numberOfDefects: '',
-        contents: [],
-        contentsOther: '',
-        strangulation: '',
-        meshInSitu: '',
-        approach: [],
-        approachOther: '',
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: '',
-        operationDescription: ''
-      },
-      procedure: {
-        dissection: '',
-        sacExcised: '',
-        fatDissected: '',
-        defectClosed: '',
-        closureTechnique: [],
-        closureTechniqueOther: '',
-        closureMaterial: [],
-        closureMaterialOther: '',
-        repairType: '',
-        meshType: [],
-        meshPlacementOther: '',
-        meshMaterial: [],
-        meshMaterialOther: '',
-        meshLength: '',
-        meshWidth: '',
-        fixation: [],
-        fixationOther: '',
-        intraOperativeDifficulty: [],
-        intraOperativeDifficultyOther: '',
-        primaryRepair: [],
-        primaryRepairOther: '',
-        complications: [],
-        complicationOther: '',
-        haemostasis: '',
-        drain: '',
-        drainDetails: '',
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: '',
-        specimenSent: [],
-        specimenOther: '',
-        laboratoryName: '',
-        additionalNotes: '',
-        postOperativeManagement: '',
-        surgeonSignature: '',
-        dateTime: ''
-      }
-    },
+    ventralHernia: createInitialVentralHerniaState(),
 	    rectalCancer: {
       patientInfo: createInitialPatientInfoState(),
       surgicalTeam: {
@@ -528,20 +563,13 @@ const Index = () => {
   });
 
   // Ventral Hernia history management for undo/redo
+  const initialVentralHerniaState = createInitialVentralHerniaState(currentReport.ventralHernia);
   const [ventralHerniaHistory, setVentralHerniaHistory] = useState({
-    patientInfo: [createInitialPatientInfoState(currentReport.ventralHernia?.patientInfo)],
-    preoperative: [currentReport.ventralHernia?.preoperative || {
-      surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
-    }],
-    operative: [currentReport.ventralHernia?.operative || {
-      herniaType: [], herniaTypeOther: '', herniaSite: [], herniaSiteOther: '', herniaDefects: '', numberOfDefects: '', contents: [], contentsOther: '', strangulation: '', meshInSitu: '', approach: [], approachOther: '', conversionReason: [], conversionReasonOther: '', trocarNumber: '', operationDescription: ''
-    }],
-    procedure: [currentReport.ventralHernia?.procedure || {
-      dissection: '', sacExcised: '', fatDissected: '', defectClosed: '', closureTechnique: [], closureTechniqueOther: '', closureMaterial: [], closureMaterialOther: '', repairType: '', meshType: [], meshPlacementOther: '', meshMaterial: [], meshMaterialOther: '', meshLength: '', meshWidth: '', fixation: [], fixationOther: '', intraOperativeDifficulty: [], intraOperativeDifficultyOther: '', primaryRepair: [], primaryRepairOther: '', complications: [], complicationOther: '', haemostasis: '', drain: '', drainDetails: '', fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: '', specimenSent: [], specimenOther: '', laboratoryName: '', additionalNotes: '', postOperativeManagement: ''
-    }],
-    procedureFindings: [currentReport.ventralHernia?.procedureFindings || {
-      findings: '', additionalNotes: ''
-    }]
+    patientInfo: [initialVentralHerniaState.patientInfo],
+    preoperative: [initialVentralHerniaState.preoperative],
+    operative: [initialVentralHerniaState.operative],
+    procedure: [initialVentralHerniaState.procedure],
+    procedureFindings: [initialVentralHerniaState.procedureFindings]
   });
   const [ventralHerniaHistoryIndex, setVentralHerniaHistoryIndex] = useState({
     patientInfo: 0,
@@ -1200,6 +1228,8 @@ const Index = () => {
           },
         });
 
+        const restoredVentralHernia = createInitialVentralHerniaState(restoredReport.ventralHernia);
+
         setCurrentReport(restoredReport);
         setHistory([JSON.parse(JSON.stringify(restoredReport))]);
         setHistoryIndex(0);
@@ -1230,19 +1260,11 @@ const Index = () => {
           procedureFindings: 0
         });
         setVentralHerniaHistory({
-          patientInfo: [restoredReport.ventralHernia?.patientInfo || createInitialPatientInfoState()],
-          preoperative: [restoredReport.ventralHernia?.preoperative || {
-            surgeons: [''], assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
-          }],
-          operative: [restoredReport.ventralHernia?.operative || {
-            herniaType: [], herniaTypeOther: '', herniaSite: [], herniaSiteOther: '', herniaDefects: '', numberOfDefects: '', contents: [], contentsOther: '', strangulation: '', meshInSitu: '', approach: [], approachOther: '', conversionReason: [], conversionReasonOther: '', trocarNumber: '', operationDescription: ''
-          }],
-          procedure: [restoredReport.ventralHernia?.procedure || {
-            dissection: '', sacExcised: '', fatDissected: '', defectClosed: '', closureTechnique: [], closureTechniqueOther: '', closureMaterial: [], closureMaterialOther: '', repairType: '', meshType: [], meshPlacementOther: '', meshMaterial: [], meshMaterialOther: '', meshLength: '', meshWidth: '', fixation: [], fixationOther: '', intraOperativeDifficulty: [], intraOperativeDifficultyOther: '', primaryRepair: [], primaryRepairOther: '', complications: [], complicationOther: '', haemostasis: '', drain: '', drainDetails: '', fascialClosure: [], fascialClosureOther: '', fascialClosureMaterial: [], fascialClosureMaterialOther: '', skinClosure: [], skinClosureOther: '', skinClosureMaterial: [], skinClosureMaterialOther: '', specimenSent: [], specimenOther: '', laboratoryName: '', additionalNotes: '', postOperativeManagement: ''
-          }],
-          procedureFindings: [restoredReport.ventralHernia?.procedureFindings || {
-            findings: '', additionalNotes: ''
-          }]
+          patientInfo: [restoredVentralHernia.patientInfo],
+          preoperative: [restoredVentralHernia.preoperative],
+          operative: [restoredVentralHernia.operative],
+          procedure: [restoredVentralHernia.procedure],
+          procedureFindings: [restoredVentralHernia.procedureFindings]
         });
         setVentralHerniaHistoryIndex({
           patientInfo: 0,
@@ -1948,84 +1970,7 @@ const Index = () => {
   };
 
   const clearVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
-    const initialState = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      operative: {
-        herniaType: [],
-        herniaTypeOther: '',
-        herniaSite: [],
-        herniaSiteOther: '',
-        herniaDefects: '',
-        numberOfDefects: '',
-        contents: [],
-        contentsOther: '',
-        strangulation: '',
-        meshInSitu: '',
-        approach: [],
-        approachOther: '',
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: '',
-        operationDescription: ''
-      },
-      procedure: {
-        dissection: '',
-        sacExcised: '',
-        fatDissected: '',
-        defectClosed: '',
-        closureTechnique: [],
-        closureTechniqueOther: '',
-        closureMaterial: [],
-        closureMaterialOther: '',
-        repairType: '',
-        meshType: [],
-        meshPlacementOther: '',
-        meshMaterial: [],
-        meshMaterialOther: '',
-        meshLength: '',
-        meshWidth: '',
-        fixation: [],
-        fixationOther: '',
-        intraOperativeDifficulty: [],
-        intraOperativeDifficultyOther: '',
-        primaryRepair: [],
-        primaryRepairOther: '',
-        complications: [],
-        complicationOther: '',
-        haemostasis: '',
-        drain: '',
-        drainDetails: '',
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: '',
-        specimenSent: [],
-        specimenOther: '',
-        laboratoryName: '',
-        additionalNotes: '',
-        postOperativeManagement: ''
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
+    const initialState = createInitialVentralHerniaState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -2719,54 +2664,7 @@ const Index = () => {
   };
 
   const clearAllVentralHerniaData = () => {
-    const initialVentralHernia = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      operative: {
-        approach: [],
-        reasonForConversion: '',
-        trocarNumber: '',
-        herniaType: [],
-        herniaTypeOther: '',
-        defectLocation: [],
-        defectLocationOther: '',
-        defectSize: {
-          length: '',
-          width: '',
-          area: ''
-        },
-        contentsOfHernia: [],
-        contentsOfHerniaOther: '',
-        complications: [],
-        complicationsOther: ''
-      },
-      procedure: {
-        meshUsed: '',
-        meshType: '',
-        meshSize: '',
-        meshPosition: [],
-        meshPositionOther: '',
-        fixationMethod: [],
-        fixationMethodOther: '',
-        adhesiolysis: '',
-        adhesiolysisNotes: ''
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
+    const initialVentralHernia = createInitialVentralHerniaState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -4907,6 +4805,7 @@ const Index = () => {
 	                            onBulkUpdate={updateAppendectomyPatientInfoBulk}
 	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                            onCurrentPatientChange={updateCurrentExtractedPatient}
+                              use24HourTimeInputs
 	                          />
                         </CardContent>
                       )}
@@ -5197,41 +5096,39 @@ const Index = () => {
                             {/* Duration of Operation with Start and End Times - moved here after Preoperative Imaging */}
                             <div className="space-y-4">
                               <div className="grid grid-cols-3 gap-4 items-center">
-                                <label className="text-gray-800 font-medium">Start Time:</label>
-                                <Input 
-                                  className="w-full" 
-                                  type="time" 
-                                  placeholder="HH:MM" 
-                                  value={currentReport.appendectomy.preoperative.startTime}
-                                  onChange={(e) => {
-                                    updateAppendectomy('preoperative', 'startTime', e.target.value);
-                                    // Auto-calculate duration when both times are available
-                                    if (e.target.value && currentReport.appendectomy.preoperative.endTime) {
-                                      const duration = calculateDuration(e.target.value, currentReport.appendectomy.preoperative.endTime);
+                                <label className="text-gray-800 font-medium">Start Time (24-hour):</label>
+                                <Time24HourInput
+                                  className="w-full"
+                                  hourAriaLabel="Start time hour"
+                                  minuteAriaLabel="Start time minute"
+                                  onChange={(value) => {
+                                    updateAppendectomy('preoperative', 'startTime', value);
+                                    if (value && currentReport.appendectomy.preoperative.endTime) {
+                                      const duration = calculateDuration(value, currentReport.appendectomy.preoperative.endTime);
                                       updateAppendectomy('preoperative', 'duration', duration);
                                     }
                                   }}
+                                  value={currentReport.appendectomy.preoperative.startTime}
                                 />
-                                <div className="text-sm text-gray-600">24-hour format</div>
+                                <div className="text-sm text-gray-600">HH:MM</div>
                               </div>
                               
                               <div className="grid grid-cols-3 gap-4 items-center">
-                                <label className="text-gray-800 font-medium">End Time:</label>
-                                <Input 
-                                  className="w-full" 
-                                  type="time" 
-                                  placeholder="HH:MM" 
-                                  value={currentReport.appendectomy.preoperative.endTime}
-                                  onChange={(e) => {
-                                    updateAppendectomy('preoperative', 'endTime', e.target.value);
-                                    // Auto-calculate duration when both times are available
-                                    if (currentReport.appendectomy.preoperative.startTime && e.target.value) {
-                                      const duration = calculateDuration(currentReport.appendectomy.preoperative.startTime, e.target.value);
+                                <label className="text-gray-800 font-medium">End Time (24-hour):</label>
+                                <Time24HourInput
+                                  className="w-full"
+                                  hourAriaLabel="End time hour"
+                                  minuteAriaLabel="End time minute"
+                                  onChange={(value) => {
+                                    updateAppendectomy('preoperative', 'endTime', value);
+                                    if (currentReport.appendectomy.preoperative.startTime && value) {
+                                      const duration = calculateDuration(currentReport.appendectomy.preoperative.startTime, value);
                                       updateAppendectomy('preoperative', 'duration', duration);
                                     }
                                   }}
+                                  value={currentReport.appendectomy.preoperative.endTime}
                                 />
-                                <div className="text-sm text-gray-600">24-hour format</div>
+                                <div className="text-sm text-gray-600">HH:MM</div>
                               </div>
                               
                               <div className="grid grid-cols-3 gap-4 items-center">
@@ -5463,7 +5360,7 @@ const Index = () => {
                                     updateAppendectomy('procedureFindings', 'findings', data.findings);
                                     updateAppendectomy('procedureFindings', 'additionalNotes', data.additionalNotes || '');
                                   }}
-                                  currentProcedureFindings={{ findings: '', additionalNotes: '' }}
+                                  currentProcedureFindings={currentReport.appendectomy?.procedureFindings || { findings: '', additionalNotes: '' }}
                                   customImage={appendectomyImage}
                                 />
                               </div>
@@ -6218,12 +6115,12 @@ const Index = () => {
                               <div>
                                 <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
                                 <div className="space-y-2">
-                                  <Input 
-                                    type="datetime-local" 
+                                  <DateTime24HourInput
                                     className="w-full"
+                                    onChange={(value) => updateAppendectomy('closure', 'dateTime', value)}
                                     value={currentReport.appendectomy?.closure?.dateTime || getLocalDateTimeValue()}
-                                    onChange={(e) => updateAppendectomy('closure', 'dateTime', e.target.value)}
                                   />
+                                  <p className="text-xs text-gray-500">Display format: DD-MM-YYYY HH:MM</p>
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -6383,6 +6280,7 @@ const Index = () => {
 	                            onBulkUpdate={updateVentralHerniaPatientInfoBulk}
 	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                            onCurrentPatientChange={updateCurrentExtractedPatient}
+                              use24HourTimeInputs
 	                          />
                         </CardContent>
                       )}
@@ -6824,11 +6722,12 @@ const Index = () => {
                               <div className="grid grid-cols-3 gap-2">
                                 <div>
                                   <label className="text-xs text-gray-600">Start Time</label>
-                                  <Input
-                                    type="time"
+                                  <Time24HourInput
+                                    className="w-full"
+                                    hourAriaLabel="Ventral hernia start hour"
+                                    minuteAriaLabel="Ventral hernia start minute"
                                     value={currentReport.ventralHernia?.preoperative?.startTime || ''}
-                                    onChange={(e) => {
-                                      const startTime = e.target.value;
+                                    onChange={(startTime) => {
                                       const endTime = currentReport.ventralHernia?.preoperative?.endTime || '';
                                       let duration = currentReport.ventralHernia?.preoperative?.duration || '';
                                       
@@ -6850,16 +6749,16 @@ const Index = () => {
                                         }
                                       });
                                     }}
-                                    placeholder="Start Time"
                                   />
                                 </div>
                                 <div>
                                   <label className="text-xs text-gray-600">End Time</label>
-                                  <Input
-                                    type="time"
+                                  <Time24HourInput
+                                    className="w-full"
+                                    hourAriaLabel="Ventral hernia end hour"
+                                    minuteAriaLabel="Ventral hernia end minute"
                                     value={currentReport.ventralHernia?.preoperative?.endTime || ''}
-                                    onChange={(e) => {
-                                      const endTime = e.target.value;
+                                    onChange={(endTime) => {
                                       const startTime = currentReport.ventralHernia?.preoperative?.startTime || '';
                                       let duration = currentReport.ventralHernia?.preoperative?.duration || '';
                                       
@@ -6881,7 +6780,6 @@ const Index = () => {
                                         }
                                       });
                                     }}
-                                    placeholder="End Time"
                                   />
                                 </div>
                                 <div>
@@ -7468,7 +7366,7 @@ const Index = () => {
                                     updateVentralHernia('procedureFindings', 'findings', data.findings);
                                     updateVentralHernia('procedureFindings', 'additionalNotes', data.additionalNotes || '');
                                   }}
-                                  currentProcedureFindings={{ findings: '', additionalNotes: '' }}
+                                  currentProcedureFindings={currentReport.ventralHernia?.procedureFindings || { findings: '', additionalNotes: '' }}
                                   customImage={appendectomyImage}
                                 />
                               </div>
@@ -8159,6 +8057,12 @@ const Index = () => {
                                           if (checked) {
                                             updateVentralHernia('procedure', 'drain', 'None');
                                             updateVentralHernia('procedure', 'drainDetails', '');
+                                            updateVentralHernia('procedure', 'drainType', []);
+                                            updateVentralHernia('procedure', 'drainTypeOther', '');
+                                            updateVentralHernia('procedure', 'intraPeritonealPlacement', []);
+                                            updateVentralHernia('procedure', 'intraPeritonealPlacementOther', '');
+                                            updateVentralHernia('procedure', 'drainExitSite', []);
+                                            updateVentralHernia('procedure', 'drainExitSiteOther', '');
                                           }
                                         }}
                                       />
@@ -8175,17 +8079,146 @@ const Index = () => {
                                         }}
                                       />
                                       <label htmlFor="hernia-drain-yes" className="ml-2 text-sm text-gray-700">Yes →</label>
-                                      <span className="text-sm text-gray-700">Details:</span>
-                                      <Input 
-                                        type="text" 
-                                        className="w-48" 
-                                        placeholder="Site and Type"
-                                        value={currentReport.ventralHernia?.procedure?.drainDetails || ''}
-                                        onChange={(e) => updateVentralHernia('procedure', 'drainDetails', e.target.value)}
-                                        disabled={currentReport.ventralHernia?.procedure?.drain !== 'Yes'}
-                                      />
                                     </div>
                                   </div>
+                                  {currentReport.ventralHernia?.procedure?.drain === 'Yes' && (
+                                    <div className="ml-6 mt-4 space-y-4 rounded-md border-l-2 border-gray-300 bg-gray-50 p-4">
+                                      <h4 className="font-medium text-gray-800">Drain Details</h4>
+
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Type of Drain:</p>
+                                        <div className="grid grid-cols-1 gap-2 ml-4">
+                                          {['Open', 'Closed Suction Drain', 'Closed Passive Drain', 'Other'].map((type) => (
+                                            <div className="flex items-center" key={`ventral-drain-type-${type}`}>
+                                              <Checkbox
+                                                id={`ventral-drain-type-${type}`}
+                                                checked={currentReport.ventralHernia?.procedure?.drainType?.includes(type) || false}
+                                                onCheckedChange={(checked) => {
+                                                  const currentDrainTypes = currentReport.ventralHernia?.procedure?.drainType || [];
+                                                  const updated = checked
+                                                    ? [...currentDrainTypes, type]
+                                                    : currentDrainTypes.filter((item) => item !== type);
+                                                  updateVentralHernia('procedure', 'drainType', updated);
+                                                  if (!checked && type === 'Other') {
+                                                    updateVentralHernia('procedure', 'drainTypeOther', '');
+                                                  }
+                                                }}
+                                              />
+                                              <label htmlFor={`ventral-drain-type-${type}`} className="ml-2 text-sm text-gray-700">{type}</label>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {currentReport.ventralHernia?.procedure?.drainType?.includes('Other') && (
+                                          <div className="mt-3 ml-4">
+                                            <Input
+                                              type="text"
+                                              placeholder="Specify other drain type"
+                                              value={currentReport.ventralHernia?.procedure?.drainTypeOther || ''}
+                                              onChange={(e) => updateVentralHernia('procedure', 'drainTypeOther', e.target.value)}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Intra-Peritoneal Placement:</p>
+                                        <div className="grid grid-cols-1 gap-2 ml-4 md:grid-cols-2">
+                                          {[
+                                            'Right Subphrenic Space',
+                                            'Right Subhepatic',
+                                            'Right Paracolic',
+                                            'Left Subphrenic',
+                                            'Left Subhepatic',
+                                            'Left Paracolic',
+                                            'Pelvis',
+                                            'Adjacent to Anastomosis',
+                                            'Other',
+                                          ].map((placement) => (
+                                            <div className="flex items-center" key={`ventral-drain-placement-${placement}`}>
+                                              <Checkbox
+                                                id={`ventral-drain-placement-${placement}`}
+                                                checked={currentReport.ventralHernia?.procedure?.intraPeritonealPlacement?.includes(placement) || false}
+                                                onCheckedChange={(checked) => {
+                                                  const currentPlacement = currentReport.ventralHernia?.procedure?.intraPeritonealPlacement || [];
+                                                  const updated = checked
+                                                    ? [...currentPlacement, placement]
+                                                    : currentPlacement.filter((item) => item !== placement);
+                                                  updateVentralHernia('procedure', 'intraPeritonealPlacement', updated);
+                                                  if (!checked && placement === 'Other') {
+                                                    updateVentralHernia('procedure', 'intraPeritonealPlacementOther', '');
+                                                  }
+                                                }}
+                                              />
+                                              <label htmlFor={`ventral-drain-placement-${placement}`} className="ml-2 text-sm text-gray-700">{placement}</label>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {currentReport.ventralHernia?.procedure?.intraPeritonealPlacement?.includes('Other') && (
+                                          <div className="mt-3 ml-4">
+                                            <Input
+                                              type="text"
+                                              placeholder="Specify other placement"
+                                              value={currentReport.ventralHernia?.procedure?.intraPeritonealPlacementOther || ''}
+                                              onChange={(e) => updateVentralHernia('procedure', 'intraPeritonealPlacementOther', e.target.value)}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Exit Site:</p>
+                                        <div className="grid grid-cols-1 gap-2 ml-4 md:grid-cols-2">
+                                          {[
+                                            'Right Upper Quadrant',
+                                            'Right Lower Quadrant',
+                                            'Left Upper Quadrant',
+                                            'Left Lower Quadrant',
+                                            'Perineum',
+                                            'Other',
+                                          ].map((site) => (
+                                            <div className="flex items-center" key={`ventral-drain-exit-${site}`}>
+                                              <Checkbox
+                                                id={`ventral-drain-exit-${site}`}
+                                                checked={currentReport.ventralHernia?.procedure?.drainExitSite?.includes(site) || false}
+                                                onCheckedChange={(checked) => {
+                                                  const currentSites = currentReport.ventralHernia?.procedure?.drainExitSite || [];
+                                                  const updated = checked
+                                                    ? [...currentSites, site]
+                                                    : currentSites.filter((item) => item !== site);
+                                                  updateVentralHernia('procedure', 'drainExitSite', updated);
+                                                  if (!checked && site === 'Other') {
+                                                    updateVentralHernia('procedure', 'drainExitSiteOther', '');
+                                                  }
+                                                }}
+                                              />
+                                              <label htmlFor={`ventral-drain-exit-${site}`} className="ml-2 text-sm text-gray-700">{site}</label>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {currentReport.ventralHernia?.procedure?.drainExitSite?.includes('Other') && (
+                                          <div className="mt-3 ml-4">
+                                            <Input
+                                              type="text"
+                                              placeholder="Specify other exit site"
+                                              value={currentReport.ventralHernia?.procedure?.drainExitSiteOther || ''}
+                                              onChange={(e) => updateVentralHernia('procedure', 'drainExitSiteOther', e.target.value)}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Additional Drain Details:</p>
+                                        <Input 
+                                          type="text" 
+                                          className="ml-4 w-full max-w-md" 
+                                          placeholder="Site and type notes"
+                                          value={currentReport.ventralHernia?.procedure?.drainDetails || ''}
+                                          onChange={(e) => updateVentralHernia('procedure', 'drainDetails', e.target.value)}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -8555,18 +8588,18 @@ const Index = () => {
                                 <div>
                                   <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
                                   <div className="space-y-2">
-                                    <Input 
-                                      type="datetime-local" 
+                                    <DateTime24HourInput
                                       className="w-full"
                                       value={currentReport.ventralHernia?.closure?.dateTime || getLocalDateTimeValue()}
-                                      onChange={(e) => updateReport('ventralHernia', {
+                                      onChange={(value) => updateReport('ventralHernia', {
                                         ...currentReport.ventralHernia,
                                         closure: {
                                           ...currentReport.ventralHernia?.closure,
-                                          dateTime: e.target.value
+                                          dateTime: value
                                         }
                                       })}
                                     />
+                                    <p className="text-xs text-gray-500">Display format: DD-MM-YYYY HH:MM</p>
                                     <Button 
                                       variant="outline" 
                                       size="sm" 
@@ -8709,6 +8742,7 @@ const Index = () => {
                                 updateRectalCancer('procedureFindings', 'findings', data.findings);
                                 updateRectalCancer('procedureFindings', 'additionalNotes', data.additionalNotes || '');
                               }}
+                              currentProcedureFindings={currentReport.rectalCancer?.procedureFindings || { findings: '', additionalNotes: '' }}
                               customImage={appendectomyImage}
                             />
                           }
@@ -8817,7 +8851,13 @@ const Index = () => {
                                   data.additionalNotes || ''
                                 );
                               }}
-                              customImage={appendectomyImage}
+                              currentProcedureFindings={
+                                currentReport.smallBowel?.procedureFindings || {
+                                  findings: "",
+                                  additionalNotes: "",
+                                }
+                              }
+                              customImage={smallBowelDiagramImage}
                             />
                           }
                         />
@@ -8891,6 +8931,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('cholecystectomy')}
+                                  isGeneratingPDF={isGeneratingPDF}
                           onUndo={(section) => {
                             undoCholecystectomy(section as keyof typeof cholecystectomyHistory);
                           }}
@@ -8914,6 +8955,12 @@ const Index = () => {
                                   data.additionalNotes || ''
                                 );
                               }}
+                              currentProcedureFindings={
+                                currentReport.cholecystectomy?.procedureFindings || {
+                                  findings: '',
+                                  additionalNotes: '',
+                                }
+                              }
                               customImage={appendectomyImage}
                             />
                           }
@@ -8988,6 +9035,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('periAnal')}
+                                  isGeneratingPDF={isGeneratingPDF}
                           onUndo={(section) => {
                             undoPeriAnal(section as keyof typeof periAnalHistory);
                           }}

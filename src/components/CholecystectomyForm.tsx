@@ -6,12 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
-import { formatDateOnly, getLocalDateTimeValue } from "@/utils/dateFormatter";
+import {
+  DateTimeDDMMYYYY24HourInput,
+  Time24HourInput,
+} from "@/components/Time24HourInput";
+import {
+  formatDateTimeDDMMYYYYWithDashes,
+  getLocalDateTimeValue,
+} from "@/utils/dateFormatter";
 import { initialCholecystectomyState } from "@/utils/cholecystectomy";
 import {
   Activity,
   ChevronDown,
   ClipboardList,
+  Download,
   FileText,
   Redo2,
   RotateCcw,
@@ -32,6 +40,7 @@ interface CholecystectomyFormProps {
   onUndo?: (section: string) => void;
   onRedo?: (section: string) => void;
   onExportPDF?: () => void;
+  isGeneratingPDF?: boolean;
   diagramElement?: React.ReactNode;
 }
 
@@ -188,6 +197,8 @@ export const CholecystectomyForm = ({
   onClear,
   onUndo,
   onRedo,
+  onExportPDF,
+  isGeneratingPDF,
   diagramElement,
 }: CholecystectomyFormProps) => {
   const cholecystectomy = currentReport.cholecystectomy || initialCholecystectomyState;
@@ -393,6 +404,8 @@ export const CholecystectomyForm = ({
               onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
               currentExtractedPatientInfo={currentExtractedPatientInfo}
               onCurrentPatientChange={onCurrentPatientChange}
+              use24HourTimeInputs
+              useDashDateInputs
             />
           </CardContent>
         )}
@@ -412,64 +425,6 @@ export const CholecystectomyForm = ({
                 {renderTeamField("Surgeon:", "surgeons", "Enter Surgeon Name")}
                 {renderTeamField("Assistant:", "assistants", "Enter Assistant Name")}
                 {renderTeamField("Anaesthetist:", "anaesthetists", "Enter Anaesthetist Name")}
-
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
-                    {indicationOptions.map((option) => (
-                      <div className="flex items-center" key={`chole-indication-${option}`}>
-                        <Checkbox
-                          id={`chole-indication-${option}`}
-                          checked={toArray(cholecystectomy.preoperative?.indication).includes(
-                            option
-                          )}
-                          onCheckedChange={() =>
-                            toggleArrayValue(
-                              "preoperative",
-                              "indication",
-                              option,
-                              cholecystectomy.preoperative?.indication
-                            )
-                          }
-                        />
-                        <label
-                          htmlFor={`chole-indication-${option}`}
-                          className="ml-2 block text-sm text-gray-700"
-                        >
-                          {option}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  {toArray(cholecystectomy.preoperative?.indication).includes("Other") && (
-                    <div className="mt-3 ml-4">
-                      <Input
-                        type="text"
-                        placeholder="Specify other indication"
-                        value={cholecystectomy.preoperative?.indicationOther || ""}
-                        onChange={(e) =>
-                          updateCholecystectomy("preoperative", "indicationOther", e.target.value)
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 items-start">
-                  <label className="text-gray-800 font-medium">Operation Description:</label>
-                  <Textarea
-                    rows={3}
-                    placeholder="Enter operation description"
-                    value={cholecystectomy.preoperative?.operationDescription || ""}
-                    onChange={(e) =>
-                      updateCholecystectomy(
-                        "preoperative",
-                        "operationDescription",
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
 
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
@@ -537,28 +492,28 @@ export const CholecystectomyForm = ({
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4 items-center">
+                  <div className="grid grid-cols-2 gap-4 items-center">
                     <label className="text-gray-800 font-medium">Start Time:</label>
-                    <Input
-                      type="time"
+                    <Time24HourInput
+                      hourAriaLabel="Start hour"
+                      minuteAriaLabel="Start minute"
                       value={cholecystectomy.preoperative?.startTime || ""}
-                      onChange={(e) => handleTimeChange("startTime", e.target.value)}
+                      onChange={(value) => handleTimeChange("startTime", value)}
                     />
-                    <div className="text-sm text-gray-600">24-hour format</div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 items-center">
+                  <div className="grid grid-cols-2 gap-4 items-center">
                     <label className="text-gray-800 font-medium">End Time:</label>
-                    <Input
-                      type="time"
+                    <Time24HourInput
+                      hourAriaLabel="End hour"
+                      minuteAriaLabel="End minute"
                       value={cholecystectomy.preoperative?.endTime || ""}
-                      onChange={(e) => handleTimeChange("endTime", e.target.value)}
+                      onChange={(value) => handleTimeChange("endTime", value)}
                     />
-                    <div className="text-sm text-gray-600">24-hour format</div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Total Duration (Mins):</label>
+                    <label className="text-gray-800 font-medium">Duration of Operation:</label>
                     <Input
                       type="text"
                       value={cholecystectomy.preoperative?.duration || ""}
@@ -572,6 +527,66 @@ export const CholecystectomyForm = ({
                       cholecystectomy.preoperative?.endTime
                         ? "Auto-calculated"
                         : "Manual entry"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                      {indicationOptions.map((option) => (
+                        <div className="flex items-center" key={`chole-indication-${option}`}>
+                          <Checkbox
+                            id={`chole-indication-${option}`}
+                            checked={toArray(cholecystectomy.preoperative?.indication).includes(
+                              option
+                            )}
+                            onCheckedChange={() =>
+                              toggleArrayValue(
+                                "preoperative",
+                                "indication",
+                                option,
+                                cholecystectomy.preoperative?.indication
+                              )
+                            }
+                          />
+                          <label
+                            htmlFor={`chole-indication-${option}`}
+                            className="ml-2 block text-sm text-gray-700"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {toArray(cholecystectomy.preoperative?.indication).includes("Other") && (
+                      <div className="mt-3 ml-4">
+                        <Input
+                          type="text"
+                          placeholder="Specify other indication"
+                          value={cholecystectomy.preoperative?.indicationOther || ""}
+                          onChange={(e) =>
+                            updateCholecystectomy("preoperative", "indicationOther", e.target.value)
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                    <div className="ml-4">
+                      <Textarea
+                        rows={3}
+                        placeholder="Enter operation description"
+                        value={cholecystectomy.preoperative?.operationDescription || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "preoperative",
+                            "operationDescription",
+                            e.target.value
+                          )
+                        }
+                      />
                     </div>
                   </div>
                 </div>
@@ -906,7 +921,7 @@ export const CholecystectomyForm = ({
               <div className="space-y-4">
                 <h3 className="text-md font-medium text-gray-800">Critical View of Safety</h3>
                 {[
-                  ["Calot’s triangle dissected:", "calotsTriangleDissected"],
+                  ["Calot's Triangle Dissected:", "calotsTriangleDissected"],
                   ["Cystic Duct Identified:", "cysticDuctIdentified"],
                   ["Cystic Artery Identified:", "cysticArteryIdentified"],
                   [
@@ -1382,6 +1397,22 @@ export const CholecystectomyForm = ({
                           </div>
                         ))}
                       </div>
+                      {toArray(cholecystectomy.procedure?.intraPeritonealPlacement).includes('Other') && (
+                        <div className="mt-3 ml-4">
+                          <Input
+                            type="text"
+                            placeholder="Specify Intra-Peritoneal Placement"
+                            value={cholecystectomy.procedure?.intraPeritonealPlacementOther || ''}
+                            onChange={(e) =>
+                              updateCholecystectomy(
+                                'procedure',
+                                'intraPeritonealPlacementOther',
+                                e.target.value
+                              )
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-700 mb-2">Exit Site:</p>
@@ -1393,6 +1424,18 @@ export const CholecystectomyForm = ({
                           </div>
                         ))}
                       </div>
+                      {toArray(cholecystectomy.procedure?.drainExitSite).includes('Other') && (
+                        <div className="mt-3 ml-4">
+                          <Input
+                            type="text"
+                            placeholder="Specify Exit Site"
+                            value={cholecystectomy.procedure?.drainExitSiteOther || ''}
+                            onChange={(e) =>
+                              updateCholecystectomy('procedure', 'drainExitSiteOther', e.target.value)
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1768,11 +1811,10 @@ export const CholecystectomyForm = ({
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
               <div className="space-y-2">
-                <Input
-                  type="datetime-local"
+                <DateTimeDDMMYYYY24HourInput
                   value={cholecystectomy.additionalInfo?.dateTime || getLocalDateTimeValue()}
-                  onChange={(e) =>
-                    updateCholecystectomy("additionalInfo", "dateTime", e.target.value)
+                  onChange={(value) =>
+                    updateCholecystectomy("additionalInfo", "dateTime", value)
                   }
                 />
                 <Button
@@ -1787,11 +1829,25 @@ export const CholecystectomyForm = ({
                 </Button>
                 {cholecystectomy.additionalInfo?.dateTime && (
                   <p className="text-xs text-gray-500">
-                    Display format: {formatDateOnly(cholecystectomy.additionalInfo.dateTime)}
+                    Display format:{" "}
+                    {formatDateTimeDDMMYYYYWithDashes(cholecystectomy.additionalInfo.dateTime)}
                   </p>
                 )}
               </div>
             </div>
+          </div>
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass-button text-xs"
+              disabled={isGeneratingPDF}
+              onClick={onExportPDF}
+              type="button"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+            </Button>
           </div>
         </CardContent>
       </Card>

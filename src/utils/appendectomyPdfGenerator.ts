@@ -1,7 +1,8 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
-import { formatDateWithSuffix, formatReportDate, formatDateOnly, formatDateDDMMYYYY, formatDateTimeWithColon } from './dateFormatter';
-import { getPatientInfoPdfSections } from './patientSticker';
+import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
+import { getFullASAText } from './asaDescriptions';
+import { formatPatientGender, formatPatientStickerDate } from './patientSticker';
 
 // Function to calculate signature dimensions while maintaining aspect ratio
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
@@ -140,7 +141,8 @@ export const generateAppendectomyPDF = async (
     
     // Helper function to check page break
     const checkPageBreak = (neededSpace: number) => {
-      if (y + neededSpace > pageHeight - 60) { // Leave more space for footer
+      const footerReserve = currentPage === 1 ? 12 : 60;
+      if (y + neededSpace > pageHeight - footerReserve) {
         currentPage++;
         pdf.addPage();
         y = margin;
@@ -180,6 +182,87 @@ export const generateAppendectomyPDF = async (
       pdf.text(value, x + labelWidth, currentY);
       
       return currentY + 4;
+    };
+
+    const getTextValue = (value: any) => {
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+          .join(', ');
+      }
+
+      return String(value || '').trim();
+    };
+
+    const hasPrintableValue = (value: any) => {
+      const text = getTextValue(value);
+      return text.length > 0 && text !== 'Not specified' && text !== 'None';
+    };
+
+    const formatSelectionList = (values: any, otherValue?: string) => {
+      const items = Array.isArray(values)
+        ? values.map((item) => String(item || '').trim()).filter(Boolean)
+        : hasPrintableValue(values)
+          ? [String(values).trim()]
+          : [];
+
+      return items
+        .map((item) => (item === 'Other' && otherValue ? `Other: ${otherValue}` : item))
+        .join(', ');
+    };
+
+    const drawSectionDivider = (spacingAfter: number = 6) => {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.1);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += spacingAfter;
+    };
+
+    const drawWrappedColumns = (
+      columns: Array<{ text: string; x: number; width: number }>,
+      lineHeight: number = 4,
+      rowGap: number = 1.5,
+    ) => {
+      const visibleColumns = columns.filter((column) => hasPrintableValue(column.text));
+      if (visibleColumns.length === 0) return;
+
+      const lineGroups = columns.map((column) =>
+        hasPrintableValue(column.text) ? pdf.splitTextToSize(column.text, column.width) : [],
+      );
+      const lineCount = Math.max(1, ...lineGroups.map((lines) => lines.length));
+
+      checkPageBreak(lineCount * lineHeight + rowGap + 1);
+
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+        columns.forEach((column, columnIndex) => {
+          const line = lineGroups[columnIndex][lineIndex];
+          if (line) {
+            pdf.text(line, column.x, y);
+          }
+        });
+        y += lineHeight;
+      }
+
+      y += rowGap;
+    };
+
+    const drawWrappedTextBlock = (
+      text: string,
+      x: number,
+      width: number,
+      lineHeight: number = 4,
+      bottomGap: number = 1.5,
+    ) => {
+      if (!hasPrintableValue(text)) return;
+
+      const lines = pdf.splitTextToSize(text, width);
+      checkPageBreak(lines.length * lineHeight + bottomGap + 1);
+      lines.forEach((line: string) => {
+        pdf.text(line, x, y);
+        y += lineHeight;
+      });
+      y += bottomGap;
     };
     
     // HEADER - Three column layout
@@ -242,120 +325,175 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.text('PATIENT INFORMATION', margin, y);
-    y += 8;
+    y += 6;
     
     const patientInfo = appendectomyData?.patientInfo || {};
-    pdf.setFontSize(9);
-    
-    // Set up 3-column grid system
+    const bodyFontSize = 8.5;
     const col1X = margin;
     const col2X = margin + 62;
     const col3X = margin + 124;
-    const writePatientRow = (row: string[]) => {
-      const rowLines = [
-        pdf.splitTextToSize(row[0] || '', 58),
-        pdf.splitTextToSize(row[1] || '', 58),
-        pdf.splitTextToSize(row[2] || '', 58),
-      ];
-      const lineCount = Math.max(rowLines[0].length, rowLines[1].length, rowLines[2].length, 1);
-      checkPageBreak(lineCount * 4.5 + 2);
+    const threeColumnWidth = 56;
+    const fullWidth = pageWidth - margin * 2;
 
-      for (let index = 0; index < lineCount; index++) {
-        if (rowLines[0][index]) pdf.text(rowLines[0][index], col1X, y);
-        if (rowLines[1][index]) pdf.text(rowLines[1][index], col2X, y);
-        if (rowLines[2][index]) pdf.text(rowLines[2][index], col3X, y);
-        y += 4.5;
-      }
-      y += 1.5;
+    const patientNameValue = getTextValue(patientInfo?.name || patientName);
+    const patientIdValue = getTextValue(patientInfo?.patientId || patientId);
+    const patientGender = formatPatientGender(patientInfo);
+    const patientAge = getTextValue(patientInfo?.age);
+    const patientDob = formatPatientStickerDate(patientInfo?.dateOfBirth);
+    const patientAddress = getTextValue(patientInfo?.address);
+    const medicalAidName = getTextValue(patientInfo?.medicalAidName);
+    const medicalAidNumber = getTextValue(patientInfo?.medicalAidNumber);
+    const mainMember = getTextValue(patientInfo?.mainMember);
+    const mainMemberId = getTextValue(patientInfo?.mainMemberId);
+    const authorization = getTextValue(patientInfo?.authorization);
+    const workNumber = getTextValue(patientInfo?.workNumber);
+    const homeNumber = getTextValue(patientInfo?.homeNumber);
+    const dependCode = getTextValue(patientInfo?.dependCode);
+    const hospitalName = getTextValue(patientInfo?.hospitalName);
+    const hospitalVisitNumber = getTextValue(patientInfo?.hospitalVisitNumber);
+    const doctorName = getTextValue(patientInfo?.doctorName);
+    const doctorPracticeNumber = getTextValue(patientInfo?.doctorPracticeNumber);
+    const visitDate = formatPatientStickerDate(patientInfo?.visitDate);
+    const visitTime = getTextValue(patientInfo?.visitTime);
+    const patientWeight = getTextValue(patientInfo?.weight);
+    const patientHeight = getTextValue(patientInfo?.height);
+    const patientBmi = getTextValue(patientInfo?.bmi);
+    const asaClassification = Array.isArray(patientInfo?.asaScore)
+      ? patientInfo.asaScore.filter(Boolean).map((item: string) => getFullASAText(item)).join(', ')
+      : hasPrintableValue(patientInfo?.asaScore)
+        ? getFullASAText(patientInfo.asaScore)
+        : '';
+
+    const drawPatientSubsectionTitle = (title: string) => {
+      checkPageBreak(6);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.text(title, margin, y);
+      y += 4.5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(bodyFontSize);
     };
 
-    const patientSections = getPatientInfoPdfSections(patientInfo, patientName, patientId);
-
     pdf.setFont('helvetica', 'normal');
-    patientSections.forEach((section, sectionIndex) => {
-      if (section.title) {
-        checkPageBreak(7);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(9);
-        pdf.text(section.title, margin, y);
-        y += 5;
-      }
+    pdf.setFontSize(bodyFontSize);
 
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      section.rows.forEach((row) => writePatientRow(row));
+    if (
+      hasPrintableValue(patientNameValue) ||
+      hasPrintableValue(patientGender) ||
+      hasPrintableValue(patientAge) ||
+      hasPrintableValue(patientIdValue) ||
+      hasPrintableValue(patientDob) ||
+      hasPrintableValue(patientAddress)
+    ) {
+      drawPatientSubsectionTitle('Patient Details');
+      drawWrappedColumns([
+        { text: `Patient Name: ${patientNameValue}`, x: col1X, width: threeColumnWidth },
+        { text: `Gender: ${patientGender}`, x: col2X, width: threeColumnWidth },
+        { text: `Age: ${patientAge}`, x: col3X, width: threeColumnWidth },
+      ]);
+      drawWrappedColumns([
+        { text: `Patient ID: ${patientIdValue}`, x: col1X, width: threeColumnWidth },
+        { text: `Date Of Birth: ${patientDob}`, x: col2X, width: threeColumnWidth },
+        { text: `Address: ${patientAddress}`, x: col3X, width: threeColumnWidth },
+      ]);
+    }
 
-      if (sectionIndex < patientSections.length - 1) {
-        y += 1;
-      }
-    });
+    if (
+      hasPrintableValue(medicalAidName) ||
+      hasPrintableValue(medicalAidNumber) ||
+      hasPrintableValue(mainMember) ||
+      hasPrintableValue(mainMemberId) ||
+      hasPrintableValue(workNumber) ||
+      hasPrintableValue(homeNumber) ||
+      hasPrintableValue(authorization) ||
+      hasPrintableValue(dependCode)
+    ) {
+      drawPatientSubsectionTitle('Medical Aid Details');
+      drawWrappedColumns([
+        { text: `Medical Aid Name: ${medicalAidName}`, x: col1X, width: threeColumnWidth },
+        { text: `Medical Aid Number: ${medicalAidNumber}`, x: col2X, width: threeColumnWidth },
+        { text: `Main Member: ${mainMember}`, x: col3X, width: threeColumnWidth },
+      ]);
+      drawWrappedColumns([
+        { text: `Main Member ID: ${mainMemberId}`, x: col1X, width: threeColumnWidth },
+        { text: `Work Number: ${workNumber}`, x: col2X, width: threeColumnWidth },
+        { text: `Home Number: ${homeNumber}`, x: col3X, width: threeColumnWidth },
+      ]);
+      drawWrappedColumns([
+        { text: `Authorization: ${authorization}`, x: col1X, width: threeColumnWidth },
+        { text: `Depend Code: ${dependCode}`, x: col2X, width: threeColumnWidth },
+        { text: '', x: col3X, width: threeColumnWidth },
+      ]);
+    }
 
-    y += 2;
-    
-    // Add separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.1);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 8;
+    if (
+      hasPrintableValue(hospitalName) ||
+      hasPrintableValue(hospitalVisitNumber) ||
+      hasPrintableValue(doctorName) ||
+      hasPrintableValue(doctorPracticeNumber) ||
+      hasPrintableValue(asaClassification) ||
+      hasPrintableValue(patientWeight) ||
+      hasPrintableValue(patientHeight) ||
+      hasPrintableValue(patientBmi) ||
+      hasPrintableValue(visitDate) ||
+      hasPrintableValue(visitTime)
+    ) {
+      drawPatientSubsectionTitle('Hospital Details');
+      drawWrappedTextBlock(`Hospital Name: ${hospitalName}`, margin, fullWidth);
+      drawWrappedTextBlock(`Hospital Visit Number: ${hospitalVisitNumber}`, margin, fullWidth);
+      drawWrappedTextBlock(`Doctor's Name: ${doctorName}`, margin, fullWidth);
+      drawWrappedTextBlock(`Doctor's Practice Number: ${doctorPracticeNumber}`, margin, fullWidth);
+      drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
+      drawWrappedColumns([
+        { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
+        { text: `Height: ${patientHeight}`, x: col2X, width: threeColumnWidth },
+        { text: `BMI: ${patientBmi}`, x: col3X, width: threeColumnWidth },
+      ]);
+      drawWrappedColumns([
+        { text: `Date: ${visitDate}`, x: col1X, width: threeColumnWidth },
+        { text: `Time: ${visitTime}`, x: col2X, width: threeColumnWidth },
+        { text: '', x: col3X, width: threeColumnWidth },
+      ]);
+    }
+
+    drawSectionDivider();
     
     // PREOPERATIVE INFORMATION section
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.text('PREOPERATIVE INFORMATION', margin, y);
-    y += 8;
+    y += 6;
     
     const preop = appendectomyData?.preoperative || {};
-    pdf.setFontSize(9);
-    
-    // Row 1: Surgeon, Assistant, Anaesthetist
-    const preRow1Y = y;
-    const surgeon = preop.surgeons?.filter(s => s.trim()).join(', ') || '';
-    const assistant = preop.assistants?.filter(a => a.trim()).join(', ') || preop.assistant1 || preop.assistant2 || '';
-    const anaesthetist = preop.anaesthetists?.filter(a => a.trim()).join(', ') || preop.anaesthetist || '';
-    
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Surgeon: ${surgeon}`, col1X, preRow1Y);
-    pdf.text(`Assistant: ${assistant}`, col2X, preRow1Y);
-    pdf.text(`Anaesthetist: ${anaesthetist}`, col3X, preRow1Y);
-    y += 6;
-    
-    // Row 2: Start Time, End Time, Total Duration
-    const preRow2Y = y;
-    const startTime = preop.startTime || '';
-    const endTime = preop.endTime || '';
-    const totalDuration = preop.duration ? `${preop.duration} minutes` : '';
-    
-    pdf.text(`Start Time: ${startTime}`, col1X, preRow2Y);
-    pdf.text(`End Time: ${endTime}`, col2X, preRow2Y);
-    pdf.text(`Total Duration: ${totalDuration}`, col3X, preRow2Y);
-    y += 6;
-    
-    // Row 3: Indication for Surgery
-    const preRow3Y = y;
-    const indication = preop.indication?.join(', ') || '';
-    
-    pdf.text(`Indication for Surgery: ${indication}`, col1X, preRow3Y);
-    y += 6;
-    
-    // Row 4: Preoperative Imaging (moved under Indications)
-    const preRow4Y = y;
-    const imaging = preop.imaging?.join(', ') || '';
-    
-    pdf.text(`Preoperative Imaging: ${imaging}`, col1X, preRow4Y);
-    y += 6;
+    const surgeon = getTextValue(preop.surgeons?.filter((item: string) => item.trim()));
+    const assistant = getTextValue(preop.assistants?.filter((item: string) => item.trim())) || preop.assistant1 || preop.assistant2 || '';
+    const anaesthetist = getTextValue(preop.anaesthetists?.filter((item: string) => item.trim())) || preop.anaesthetist || '';
+    const startTime = getTextValue(preop.startTime);
+    const endTime = getTextValue(preop.endTime);
+    const totalDuration = hasPrintableValue(preop.duration) ? `${preop.duration} minutes` : '';
+    const procedureUrgency = formatSelectionList(preop.procedureUrgency);
+    const imaging = formatSelectionList(preop.imaging, preop.imagingOther);
+    const indication = formatSelectionList(preop.indication, preop.indicationOther);
 
-    const procedureUrgency = preop.procedureUrgency?.join(', ') || '';
-    if (procedureUrgency && procedureUrgency.trim()) {
-      pdf.text(`Procedure Urgency: ${procedureUrgency}`, col1X, y);
-      y += 6;
-    }
-    y += 2;
-    
-    // Add separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.1);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(bodyFontSize);
+    drawWrappedColumns([
+      { text: `Surgeon: ${surgeon}`, x: col1X, width: threeColumnWidth },
+      { text: `Assistant: ${assistant}`, x: col2X, width: threeColumnWidth },
+      { text: `Anaesthetist: ${anaesthetist}`, x: col3X, width: threeColumnWidth },
+    ]);
+    drawWrappedColumns([
+      { text: `Start Time: ${startTime}`, x: col1X, width: threeColumnWidth },
+      { text: `End Time: ${endTime}`, x: col2X, width: threeColumnWidth },
+      { text: `Total Duration: ${totalDuration}`, x: col3X, width: threeColumnWidth },
+    ]);
+    drawWrappedColumns([
+      { text: `Procedure Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
+      { text: `Preoperative Imaging: ${imaging}`, x: col2X, width: pageWidth - margin - col2X },
+    ]);
+    drawWrappedTextBlock(`Indication for Surgery: ${indication}`, margin, fullWidth);
+
+    drawSectionDivider();
     
     const procedure = appendectomyData?.procedure || {};
     const intraop = appendectomyData?.intraoperative || {};
@@ -364,65 +502,40 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.text('OPERATIVE FINDINGS', margin, y);
-    y += 8;
+    y += 6;
     
-    pdf.setFontSize(9);
+    pdf.setFontSize(bodyFontSize);
     pdf.setFont('helvetica', 'normal');
     
     // Set up two-column layout for operative findings
     const opFindingsCol1X = margin;
-    const opFindingsCol2X = margin + 100;
-    
-    // Operation Description row (on top of appendix appearance row)
-    const operationDescriptionFinding = procedure.operationDescription || '';
-    if (operationDescriptionFinding && operationDescriptionFinding.trim() && operationDescriptionFinding !== 'Not specified' && operationDescriptionFinding !== 'None') {
-      const opDescLines = pdf.splitTextToSize(`Operation Description: ${operationDescriptionFinding}`, 180);
-      opDescLines.forEach((line: string) => {
-        pdf.text(line, opFindingsCol1X, y);
-        y += 4;
-      });
-      y += 2;
-    }
+    const opFindingsCol2X = margin + 96;
 
     // Row 1: Appendix Appearance and Presence of Abscess
-    const appendixAppearance = intraop.appendixAppearance?.join(', ') || '';
-    const abscess = intraop.abscess || '';
-
-    let opRow1Y = y;
-    if (appendixAppearance && appendixAppearance.trim() && appendixAppearance !== 'Not specified' && appendixAppearance !== 'None') {
-      pdf.text(`Appendix Appearance: ${appendixAppearance}`, opFindingsCol1X, opRow1Y);
-    }
-    if (abscess && abscess.trim() && abscess !== 'Not specified' && abscess !== 'None') {
-      pdf.text(`Presence of Abscess: ${abscess}`, opFindingsCol2X, opRow1Y);
-    }
-    y += 6;
+    const appendixAppearance = formatSelectionList(intraop.appendixAppearance);
+    const abscess = getTextValue(intraop.abscess);
+    drawWrappedColumns([
+      { text: `Appendix Appearance: ${appendixAppearance}`, x: opFindingsCol1X, width: 88 },
+      { text: `Presence of Abscess: ${abscess}`, x: opFindingsCol2X, width: 88 },
+    ]);
 
     // Row 2: Presence of Peritonitis and Other Intra-abdominal Findings
-    const otherFindings = intraop.otherFindings || '';
-    const peritonitis = intraop.peritonitis?.join(', ') || '';
-
-    let opRow2Y = y;
-    if (peritonitis && peritonitis.trim() && peritonitis !== 'Not specified' && peritonitis !== 'None') {
-      pdf.text(`Presence of Peritonitis: ${peritonitis}`, opFindingsCol2X, opRow2Y);
-    }
-    if (otherFindings && otherFindings.trim() && otherFindings !== 'Not specified' && otherFindings !== 'None') {
-      pdf.text(`Other Intra-abdominal Findings: ${otherFindings}`, opFindingsCol1X, opRow2Y);
-    }
-    y += 10;
+    const otherFindings = getTextValue(intraop.otherFindings);
+    const peritonitis = formatSelectionList(intraop.peritonitis);
+    drawWrappedColumns([
+      { text: `Other Intra-abdominal Findings: ${otherFindings}`, x: opFindingsCol1X, width: 88 },
+      { text: `Presence of Peritonitis: ${peritonitis}`, x: opFindingsCol2X, width: 88 },
+    ]);
     
-    // Add separator line after operative findings
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.1);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    drawSectionDivider(7);
     
     // Two-column layout: PROCEDURE DETAILS | PORTS AND INCISIONS
     const sectionStartY = y;
-    const procedureColumnWidth = col2X + 20 - col1X; // Give more space to procedure column
-    const diagramColumnWidth = pageWidth - margin - (col2X + 25); // Move diagram more to the right
-    
-    const procedureX = col1X;
-    const diagramX = col2X + 25; // Move diagram further right
+    const pageCenter = pageWidth / 2;
+    const procedureX = margin;
+    const diagramX = pageCenter + 2;
+    const procedureColumnWidth = pageCenter - margin - 8;
+    const diagramColumnWidth = pageWidth - margin - diagramX;
     
     // PROCEDURE DETAILS Section
     pdf.setFontSize(11);
@@ -432,23 +545,23 @@ export const generateAppendectomyPDF = async (
     // PORTS AND INCISIONS Section  
     pdf.text('PORTS AND INCISIONS', diagramX, sectionStartY);
     
-    let procedureY = sectionStartY + 8;
-    let diagramY = sectionStartY + 8;
+    let procedureY = sectionStartY + 6.5;
+    let diagramY = sectionStartY + 6.5;
     
     // PROCEDURE DETAILS Content (Left Column)
-    pdf.setFontSize(9);
+    pdf.setFontSize(bodyFontSize);
     pdf.setFont('helvetica', 'normal');
     
     // Helper function to add content only if it exists and advance Y position with text wrapping
-    const addContentLine = (text: string, spacing: number = 6) => {
-      if (text && text.trim() && text !== 'Not specified' && text !== 'None') {
-        const maxWidth = procedureColumnWidth - 5; // Leave margin for column boundary
+    const addContentLine = (text: string, spacing: number = 4.75) => {
+      if (hasPrintableValue(text)) {
+        const maxWidth = procedureColumnWidth - 2;
         const lines = pdf.splitTextToSize(text, maxWidth);
-        lines.forEach((line: string, index: number) => {
+        lines.forEach((line: string) => {
           pdf.text(line, procedureX, procedureY);
-          procedureY += 4;
+          procedureY += 3.7;
         });
-        procedureY += (spacing - 4); // Adjust for line spacing
+        procedureY += Math.max(0.8, spacing - 3.7);
         return true;
       }
       return false;
@@ -457,21 +570,11 @@ export const generateAppendectomyPDF = async (
     // PROCEDURE DETAILS Content
     
     // Operation Description
-    const operationDescription = procedure.operationDescription || '';
-    addContentLine(`Operation Description: ${operationDescription}`, 6);
+    const operationDescription = getTextValue(procedure.operationDescription);
+    addContentLine(`Operation Description: ${operationDescription}`);
     
-    // Surgical Approach - limit width to prevent overflow
-    const surgicalApproach = procedure.approach?.join(', ') || '';
-    const maxApproachWidth = procedureColumnWidth - 5; // Leave some margin
-    const approachLines = pdf.splitTextToSize(`Surgical Approach: ${surgicalApproach}`, maxApproachWidth);
-    
-    if (surgicalApproach && surgicalApproach.trim() && surgicalApproach !== 'Not specified' && surgicalApproach !== 'None') {
-      approachLines.forEach((line: string, index: number) => {
-        pdf.text(line, procedureX, procedureY);
-        procedureY += 4;
-      });
-      procedureY += 2; // Extra spacing after surgical approach
-    }
+    const surgicalApproach = formatSelectionList(procedure.approach);
+    addContentLine(`Surgical Approach: ${surgicalApproach}`);
     
     // Conditional fields based on surgical approach - only render if they have content
     const isLaparoscopic = surgicalApproach.toLowerCase().includes('laparoscopic');
@@ -480,97 +583,60 @@ export const generateAppendectomyPDF = async (
     
     // Show Reason for Conversion only when "Converted from Laparoscopic to Open" is selected
     if (isConverted) {
-      // Handle reasonForConversion as array of strings
-      let conversionReasons = [];
-      const reasonForConversion = procedure.reasonForConversion || procedure.conversionReason;
-      
-      if (Array.isArray(reasonForConversion)) {
-        conversionReasons = [...reasonForConversion];
-      } else if (reasonForConversion) {
-        conversionReasons = [reasonForConversion];
-      }
-      
-      // Add custom "Other" reason if provided
-      if (conversionReasons.includes('Other') && procedure.reasonForConversionOther) {
-        // Replace "Other" with the custom text
-        const otherIndex = conversionReasons.indexOf('Other');
-        conversionReasons[otherIndex] = `Other: ${procedure.reasonForConversionOther}`;
-      }
-      
-      const conversionReasonText = conversionReasons.join(', ');
-      addContentLine(`Reason for Conversion: ${conversionReasonText}`, 6);
-      
-      // Show Trocar Number after Reason for Conversion when converted
-      const trocarPlacement = procedure.trocarPlacement || '';
-      addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
+      const conversionReasonText = formatSelectionList(
+        procedure.reasonForConversion || procedure.conversionReason,
+        procedure.reasonForConversionOther,
+      );
+      addContentLine(`Reason for Conversion: ${conversionReasonText}`);
+      addContentLine(`Trocar Number: ${getTextValue(procedure.trocarPlacement)}`);
     }
     
     if (isOpen && !isConverted) {
-      // Show Incision Type for pure open approach
-      const incisionType = procedure.incisionType?.join(', ') || '';
-      addContentLine(`Incision Type: ${incisionType}`, 6);
+      const incisionType = formatSelectionList(procedure.incisionType, procedure.incisionOther);
+      addContentLine(`Incision Type: ${incisionType}`);
     }
     
     if (isLaparoscopic && !isConverted) {
-      // Show Trocar Number for pure laparoscopic
-      const trocarPlacement = procedure.trocarPlacement || '';
-      addContentLine(`Trocar Number: ${trocarPlacement}`, 6);
+      addContentLine(`Trocar Number: ${getTextValue(procedure.trocarPlacement)}`);
     }
     
-    // Direction of Dissection
-    let directionText = procedure.directionOfDissection?.join(', ') || '';
-    if (directionText.includes('Other') && procedure.directionOfDissectionOther) {
-      directionText = directionText.replace('Other', `Other: ${procedure.directionOfDissectionOther}`);
-    }
-    addContentLine(`Direction of Dissection: ${directionText}`, 6);
+    const directionText = formatSelectionList(
+      procedure.directionOfDissection,
+      procedure.directionOfDissectionOther,
+    );
+    addContentLine(`Direction of Dissection: ${directionText}`);
 
-    // Meso-Appendix Excision
-    const mesoExcision = procedure.mesoAppendixExcision?.join(', ') || '';
-    addContentLine(`Meso-Appendix Excision: ${mesoExcision}`, 6);
+    const mesoExcision = formatSelectionList(procedure.mesoAppendixExcision);
+    addContentLine(`Meso-Appendix Excision: ${mesoExcision}`);
 
-    // Method of Appendiceal Ligation
-    let ligationMethod = procedure.divisionMethod?.join(', ') || '';
-    if (ligationMethod.includes('Other') && procedure.divisionOther) {
-      ligationMethod = ligationMethod.replace('Other', `Other: ${procedure.divisionOther}`);
-    }
-    addContentLine(`Method of Appendiceal Ligation: ${ligationMethod}`, 6);
+    const ligationMethod = formatSelectionList(procedure.divisionMethod, procedure.divisionOther);
+    addContentLine(`Method of Appendiceal Ligation: ${ligationMethod}`);
 
-    // Method of Appendiceal Vessel Ligation
-    let vesselLigation = procedure.mesenteryControl?.join(', ') || '';
-    if (vesselLigation.includes('Other') && procedure.mesenteryOther) {
-      vesselLigation = vesselLigation.replace('Other', `Other: ${procedure.mesenteryOther}`);
-    }
-    addContentLine(`Method of Appendiceal Vessel Ligation: ${vesselLigation}`, 6);
+    const vesselLigation = formatSelectionList(procedure.mesenteryControl, procedure.mesenteryOther);
+    addContentLine(`Method of Appendiceal Vessel Ligation: ${vesselLigation}`);
 
-    // Removal of Appendix
-    let removalText = procedure.removalOfAppendix?.join(', ') || '';
-    if (removalText.includes('Other') && procedure.removalOfAppendixOther) {
-      removalText = removalText.replace('Other', `Other: ${procedure.removalOfAppendixOther}`);
-    }
-    addContentLine(`Removal of Appendix: ${removalText}`, 6);
+    const removalText = formatSelectionList(
+      procedure.removalOfAppendix,
+      procedure.removalOfAppendixOther,
+    );
+    addContentLine(`Removal of Appendix: ${removalText}`);
 
-    // Peritoneal Lavage
-    const lavage = procedure.lavage || '';
-    addContentLine(`Peritoneal Lavage: ${lavage}`, 6);
+    addContentLine(`Peritoneal Lavage: ${getTextValue(procedure.lavage)}`);
 
-    // Drain Placement
-    const drainPlacement = procedure.drainPlacement || '';
-    const drainText = drainPlacement + (procedure.drainLocation ? ` (${procedure.drainLocation})` : '');
-    addContentLine(`Drain Placement: ${drainText}`, 8);
-    
-    // Move y position to after both columns - Page 1 ends here
-    y = Math.max(procedureY, diagramY) + 8;
+    const drainPlacement = getTextValue(procedure.drainPlacement);
+    const drainText = drainPlacement + (hasPrintableValue(procedure.drainLocation) ? ` (${procedure.drainLocation})` : '');
+    addContentLine(`Drain Placement: ${drainText}`, 5.5);
     
     // PORTS AND INCISIONS Content (Right Column)
     // Legend with visual indicators in two rows - smaller and neater icons
-    pdf.setFontSize(8);
+    pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'normal');
     pdf.text('Legend:', diagramX, diagramY);
-    diagramY += 5;
+    diagramY += 4;
     
     // Row 1: Ports and Ileostomy
     const legendCol1X = diagramX;
-    const legendCol2X = diagramX + 45;
+    const legendCol2X = diagramX + 40;
     
     // Ports legend with smaller visual indicator
     pdf.text('Ports (with size label)', legendCol1X + 6, diagramY);
@@ -579,7 +645,7 @@ export const generateAppendectomyPDF = async (
     pdf.line(legendCol1X, diagramY - 1, legendCol1X + 4, diagramY - 1);
     pdf.setFontSize(4);
     pdf.text('5mm', legendCol1X + 0.5, diagramY - 2);
-    pdf.setFontSize(8);
+    pdf.setFontSize(7.5);
     
     // Ileostomy legend with smaller visual indicator
     pdf.text('Ileostomy (dashed yellow circle)', legendCol2X + 6, diagramY);
@@ -589,7 +655,7 @@ export const generateAppendectomyPDF = async (
     pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
     pdf.setLineDash([]);
     
-    diagramY += 5;
+    diagramY += 4.5;
     
     // Row 2: Incisions and Colostomy
     // Incisions legend with smaller visual indicator
@@ -606,16 +672,13 @@ export const generateAppendectomyPDF = async (
     pdf.setLineWidth(1.2);
     pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
     
-    diagramY += 6;
+    diagramY += 5;
     
     // Reset draw color
     pdf.setDrawColor(0, 0, 0);
-    
-    // Space before diagram
-    diagramY += 2;
-    
-    // Draw diagram box - maintain proper aspect ratio for better quality
-    const diagramBoxHeight = 55; // Increased slightly for better proportions
+
+    const availableDiagramHeight = pageHeight - margin - diagramY - 2;
+    const diagramBoxHeight = Math.min(46, Math.max(18, availableDiagramHeight));
     pdf.setLineWidth(0.5);
     pdf.rect(diagramX, diagramY, diagramColumnWidth, diagramBoxHeight);
     
@@ -624,35 +687,29 @@ export const generateAppendectomyPDF = async (
       const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
       if (diagramImageData) {
         try {
-          // Maintain aspect ratio to prevent vertical squishing
           const diagramPadding = 2;
           const availableWidth = diagramColumnWidth - (diagramPadding * 2);
           const availableHeight = diagramBoxHeight - (diagramPadding * 2);
           
-          // Use square aspect ratio for appendectomy diagram to prevent distortion
           const diagramSize = Math.min(availableWidth, availableHeight);
           const centerX = diagramX + (diagramColumnWidth - diagramSize) / 2;
           const centerY = diagramY + (diagramBoxHeight - diagramSize) / 2;
           
           pdf.addImage(diagramImageData, 'PNG', centerX, centerY, diagramSize, diagramSize);
         } catch (error) {
-          pdf.setFontSize(9);
-          pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 - 5, { align: 'center' });
-          pdf.text('(LEAVE CURRENT Diagram Size', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
-          pdf.text('AS IT IS)', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 + 5, { align: 'center' });
+          pdf.setFontSize(8);
+          pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
         }
       }
     } else {
-      pdf.setFontSize(9);
-      pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 - 5, { align: 'center' });
-      pdf.text('(LEAVE CURRENT Diagram Size', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
-      pdf.text('AS IT IS)', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2 + 5, { align: 'center' });
+      pdf.setFontSize(8);
+      pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
     }
     
-    diagramY += diagramBoxHeight + 8;
+    diagramY += diagramBoxHeight + 5;
     
     // Page 1 ends here
-    y = Math.max(procedureY, diagramY) + 8;
+    y = Math.max(procedureY, diagramY) + 5;
     
     // Start Page 2 for remaining sections
     pdf.addPage();
@@ -864,9 +921,9 @@ export const generateAppendectomyPDF = async (
     
     // Add date/time if available - positioned after "Date & Time:" label
     if (appendectomyData?.closure?.dateTime) {
-      pdf.text(formatDateTimeWithColon(appendectomyData.closure.dateTime), signatureCol2X + 25, signatureY);
+      pdf.text(formatDateTimeDDMMYYYYWithDashes(appendectomyData.closure.dateTime), signatureCol2X + 25, signatureY);
     } else {
-      pdf.text(formatDateTimeWithColon(new Date()), signatureCol2X + 25, signatureY);
+      pdf.text(formatDateTimeDDMMYYYYWithDashes(new Date()), signatureCol2X + 25, signatureY);
     }
     
     // Update y position to after signature section
@@ -875,15 +932,7 @@ export const generateAppendectomyPDF = async (
     // Calculate total pages and add footer to each page properly
     const totalPages = pdf.internal.getNumberOfPages();
     
-    const currentDate = new Date();
-    const day = currentDate.getDate();
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'];
-    const month = monthNames[currentDate.getMonth()];
-    const year = currentDate.getFullYear();
-    const dateWithSuffix = `${day}${day === 1 || day === 21 || day === 31 ? 'st' : 
-                            day === 2 || day === 22 ? 'nd' : 
-                            day === 3 || day === 23 ? 'rd' : 'th'} ${month} ${year}`;
+    const reportDate = formatDateDDMMYYYYWithDashes(new Date());
     
     // Add footer to each page
     for (let i = 1; i <= totalPages; i++) {
@@ -899,7 +948,7 @@ export const generateAppendectomyPDF = async (
         // Page 2 and subsequent pages - full footer
         pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
         pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 4, { align: 'center' });
-        pdf.text(`Report Date: ${dateWithSuffix} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 8, { align: 'center' });
+        pdf.text(`Report Date: ${reportDate} | Page ${i} of ${totalPages}`, pageWidth / 2, footerY + 8, { align: 'center' });
       }
     }
     

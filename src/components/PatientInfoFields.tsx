@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { DateDDMMYYYYInput, Time24HourInput } from "@/components/Time24HourInput";
 import {
   createEmptyPatientStickerPatch,
   formatPatientStickerDate,
@@ -23,6 +24,9 @@ interface PatientInfoFieldsProps {
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
   useDisplayText?: boolean;
+  use24HourTimeInputs?: boolean;
+  useDashDateInputs?: boolean;
+  stackFieldRows?: boolean;
 }
 
 const createThumbnailDataUrl = (file: File) =>
@@ -59,13 +63,18 @@ export const PatientInfoFields = ({
   onBulkUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
+  use24HourTimeInputs = false,
+  useDashDateInputs = false,
+  stackFieldRows = false,
 }: PatientInfoFieldsProps) => {
   const normalizedInfo = normalizePatientInfo(patientInfo);
   const normalizedCurrentExtractedPatient = normalizePatientInfo(currentExtractedPatientInfo);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const lastSelectedFileRef = useRef<File | null>(null);
-  const webhookUrl = import.meta.env.VITE_N8N_PATIENT_STICKER_WEBHOOK_URL;
+  const webhookUrl =
+    import.meta.env.VITE_N8N_PATIENT_STICKER_WEBHOOK_URL?.trim() ||
+    (import.meta.env.DEV ? "/api/patient-sticker-extract" : "");
   const stickerMode = hasPatientStickerMode(normalizedInfo);
   const isExtracting = normalizedInfo.stickerExtractionStatus === "extracting";
   const canAutofillExtractedPatient = hasExtractedPatientStickerData(
@@ -100,12 +109,12 @@ export const PatientInfoFields = ({
 
   const extractSticker = async (file: File) => {
     if (!webhookUrl) {
-      toast.error("Patient sticker webhook URL is not configured.");
+      toast.error("Patient sticker extraction endpoint is not configured.");
       applyUpdates({
         stickerMode: true,
         stickerImageName: file.name,
         stickerExtractionStatus: "error",
-        stickerExtractionError: "Missing VITE_N8N_PATIENT_STICKER_WEBHOOK_URL",
+        stickerExtractionError: "Missing patient sticker extraction endpoint configuration",
       });
       return;
     }
@@ -249,7 +258,14 @@ export const PatientInfoFields = ({
   };
 
   const renderFieldRow = (label: string, field: string, input: React.ReactNode) => (
-    <div className="grid grid-cols-2 gap-4 items-center" key={field}>
+    <div
+      className={
+        stackFieldRows
+          ? "space-y-2"
+          : "grid grid-cols-2 gap-4 items-center"
+      }
+      key={field}
+    >
       <Label className="text-gray-800 font-medium">{label}</Label>
       {input}
     </div>
@@ -319,12 +335,20 @@ export const PatientInfoFields = ({
           "Date Of Birth:",
           "dateOfBirth",
           <div className="w-full">
-            <Input
-              type="date"
-              lang="en-GB"
-              value={normalizedInfo.dateOfBirth}
-              onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
-            />
+            {useDashDateInputs ? (
+              <DateDDMMYYYYInput
+                ariaLabel="Date of birth"
+                onChange={(value) => handleBaseChange("dateOfBirth", value)}
+                value={normalizedInfo.dateOfBirth}
+              />
+            ) : (
+              <Input
+                type="date"
+                lang="en-GB"
+                value={normalizedInfo.dateOfBirth}
+                onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
+              />
+            )}
             {normalizedInfo.dateOfBirth && (
               <p className="text-xs text-gray-500 mt-1">
                 Display format: {formatPatientStickerDate(normalizedInfo.dateOfBirth)}
@@ -462,12 +486,20 @@ export const PatientInfoFields = ({
           "Date:",
           "visitDate",
           <div className="w-full">
-            <Input
-              type="date"
-              lang="en-GB"
-              value={normalizedInfo.visitDate}
-              onChange={(event) => handleBaseChange("visitDate", event.target.value)}
-            />
+            {useDashDateInputs ? (
+              <DateDDMMYYYYInput
+                ariaLabel="Visit date"
+                onChange={(value) => handleBaseChange("visitDate", value)}
+                value={normalizedInfo.visitDate}
+              />
+            ) : (
+              <Input
+                type="date"
+                lang="en-GB"
+                value={normalizedInfo.visitDate}
+                onChange={(event) => handleBaseChange("visitDate", event.target.value)}
+              />
+            )}
             {normalizedInfo.visitDate && (
               <p className="text-xs text-gray-500 mt-1">
                 Display format: {formatPatientStickerDate(normalizedInfo.visitDate)}
@@ -478,11 +510,20 @@ export const PatientInfoFields = ({
         {renderFieldRow(
           "Time:",
           "visitTime",
-          <Input
-            type="time"
-            value={normalizedInfo.visitTime}
-            onChange={(event) => handleBaseChange("visitTime", event.target.value)}
-          />,
+          use24HourTimeInputs ? (
+            <Time24HourInput
+              hourAriaLabel="Visit hour"
+              minuteAriaLabel="Visit minute"
+              onChange={(value) => handleBaseChange("visitTime", value)}
+              value={normalizedInfo.visitTime}
+            />
+          ) : (
+            <Input
+              type="time"
+              value={normalizedInfo.visitTime}
+              onChange={(event) => handleBaseChange("visitTime", event.target.value)}
+            />
+          ),
         )}
       </div>
     </>
@@ -628,15 +669,23 @@ export const PatientInfoFields = ({
             />,
           )}
           {renderFieldRow(
-            "Date Of Birth (dd/mm/yyyy):",
+            `Date Of Birth (${useDashDateInputs ? "dd-mm-yyyy" : "dd/mm/yyyy"}):`,
             "dateOfBirth",
             <div className="w-full">
-              <Input
-                type="date"
-                lang="en-GB"
-                value={normalizedInfo.dateOfBirth}
-                onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
-              />
+              {useDashDateInputs ? (
+                <DateDDMMYYYYInput
+                  ariaLabel="Date of birth"
+                  onChange={(value) => handleBaseChange("dateOfBirth", value)}
+                  value={normalizedInfo.dateOfBirth}
+                />
+              ) : (
+                <Input
+                  type="date"
+                  lang="en-GB"
+                  value={normalizedInfo.dateOfBirth}
+                  onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
+                />
+              )}
               {normalizedInfo.dateOfBirth && (
                 <p className="text-xs text-gray-500 mt-1">
                   Display format: {formatPatientStickerDate(normalizedInfo.dateOfBirth)}

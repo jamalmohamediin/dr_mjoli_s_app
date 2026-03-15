@@ -6,9 +6,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
-import { formatDateOnly, formatDateDDMMYYYY, getLocalDateTimeValue } from "@/utils/dateFormatter";
+import { formatDateTimeDDMMYYYYWithDashes, getLocalDateTimeValue } from "@/utils/dateFormatter";
 
 interface RectalCancerFormProps {
   currentReport: any;
@@ -318,6 +319,8 @@ export const RectalCancerForm = ({
                   onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
                   currentExtractedPatientInfo={currentExtractedPatientInfo}
                   onCurrentPatientChange={onCurrentPatientChange}
+                  use24HourTimeInputs
+                  useDashDateInputs
                 />
               </div>
 
@@ -590,20 +593,22 @@ export const RectalCancerForm = ({
                     <div className="grid grid-cols-3 gap-4 items-center">
                       <div>
                         <label className="text-gray-700 text-sm mb-1 block">Start Time:</label>
-                        <Input 
-                          type="time" 
-                          placeholder="__:__" 
+                        <Time24HourInput
+                          className="w-full"
+                          hourAriaLabel="Start hour"
+                          minuteAriaLabel="Start minute"
                           value={currentReport.rectalCancer?.procedureDetails?.startTime || ''}
-                          onChange={(e) => handleTimeChange('startTime', e.target.value)}
+                          onChange={(value) => handleTimeChange('startTime', value)}
                         />
                       </div>
                       <div>
                         <label className="text-gray-700 text-sm mb-1 block">End Time:</label>
-                        <Input 
-                          type="time" 
-                          placeholder="__:__" 
+                        <Time24HourInput
+                          className="w-full"
+                          hourAriaLabel="End hour"
+                          minuteAriaLabel="End minute"
                           value={currentReport.rectalCancer?.procedureDetails?.endTime || ''}
-                          onChange={(e) => handleTimeChange('endTime', e.target.value)}
+                          onChange={(value) => handleTimeChange('endTime', value)}
                         />
                       </div>
                       <div>
@@ -2517,11 +2522,10 @@ export const RectalCancerForm = ({
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
                 <div className="space-y-2">
-                  <Input 
-                    type="datetime-local" 
+                  <DateTimeDDMMYYYY24HourInput
                     className="w-full"
                     value={currentReport.rectalCancer?.additionalInfo?.dateTime || getLocalDateTimeValue()}
-                    onChange={(e) => updateRectalCancer('additionalInfo', 'dateTime', e.target.value)}
+                    onChange={(value) => updateRectalCancer('additionalInfo', 'dateTime', value)}
                   />
                   <Button 
                     variant="outline" 
@@ -2533,7 +2537,7 @@ export const RectalCancerForm = ({
                   </Button>
                   {currentReport.rectalCancer?.additionalInfo?.dateTime && (
                     <p className="text-xs text-gray-500">
-                      Display format: {formatDateOnly(currentReport.rectalCancer.additionalInfo.dateTime)}
+                      Display format: {formatDateTimeDDMMYYYYWithDashes(currentReport.rectalCancer.additionalInfo.dateTime)}
                     </p>
                   )}
                 </div>

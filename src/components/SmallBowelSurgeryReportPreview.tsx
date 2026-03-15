@@ -1,8 +1,8 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getFullASAText } from "@/utils/asaDescriptions";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 
 interface SmallBowelSurgeryReportPreviewProps {
   report: any;
@@ -37,7 +37,9 @@ export const SmallBowelSurgeryReportPreview = ({
     smallBowel?.procedure?.approach?.length > 0 ||
     smallBowel?.reconstruction?.reconstructionType?.length > 0 ||
     smallBowel?.operativeEvents?.specimen?.length > 0 ||
-    smallBowel?.additionalInfo?.additionalInformation;
+    smallBowel?.additionalInfo?.additionalInformation ||
+    smallBowel?.additionalInfo?.postOperativeManagement ||
+    smallBowel?.additionalInfo?.dateTime;
 
   if (!hasData) {
     return (
@@ -109,6 +111,7 @@ export const SmallBowelSurgeryReportPreview = ({
     toArray(smallBowel?.preoperative?.imaging),
     smallBowel?.preoperative?.imagingOther
   );
+  const showStomaFields = toArray(smallBowel?.reconstruction?.reconstructionType).includes("Stoma");
 
   return (
     <div className="space-y-4">
@@ -243,28 +246,16 @@ export const SmallBowelSurgeryReportPreview = ({
                   {smallBowel.operativeFindings.distanceFromDjFlexure} cm
                 </div>
               )}
-              {smallBowel?.operativeFindings?.distanceFromIleocecalValve && (
-                <div>
-                  <span className="font-medium">Distance from Ileocecal Valve:</span>{" "}
-                  {smallBowel.operativeFindings.distanceFromIleocecalValve} cm
-                </div>
-              )}
-              {smallBowel?.operativeFindings?.diseasedSegmentLength && (
-                <div>
-                  <span className="font-medium">Length of Diseased Segment:</span>{" "}
-                  {smallBowel.operativeFindings.diseasedSegmentLength} cm
-                </div>
-              )}
-              {smallBowel?.operativeFindings?.bowelViability && (
-                <div>
-                  <span className="font-medium">Bowel Viability:</span>{" "}
-                  {smallBowel.operativeFindings.bowelViability}
-                </div>
-              )}
               {smallBowel?.operativeFindings?.mesentericInvolvement && (
                 <div>
                   <span className="font-medium">Mesenteric Involvement:</span>{" "}
                   {smallBowel.operativeFindings.mesentericInvolvement}
+                </div>
+              )}
+              {smallBowel?.operativeFindings?.distanceFromIleocecalValve && (
+                <div>
+                  <span className="font-medium">Distance from Ileocecal Valve:</span>{" "}
+                  {smallBowel.operativeFindings.distanceFromIleocecalValve} cm
                 </div>
               )}
               {smallBowel?.operativeFindings?.lymphNodes && (
@@ -273,10 +264,22 @@ export const SmallBowelSurgeryReportPreview = ({
                   {smallBowel.operativeFindings.lymphNodes}
                 </div>
               )}
+              {smallBowel?.operativeFindings?.diseasedSegmentLength && (
+                <div>
+                  <span className="font-medium">Length of Diseased Segment:</span>{" "}
+                  {smallBowel.operativeFindings.diseasedSegmentLength} cm
+                </div>
+              )}
               {smallBowel?.operativeFindings?.contamination && (
                 <div>
-                  <span className="font-medium">Contamination:</span>{" "}
+                  <span className="font-medium">Degree of Contamination:</span>{" "}
                   {smallBowel.operativeFindings.contamination}
+                </div>
+              )}
+              {smallBowel?.operativeFindings?.bowelViability && (
+                <div>
+                  <span className="font-medium">Bowel Viability:</span>{" "}
+                  {smallBowel.operativeFindings.bowelViability}
                 </div>
               )}
               {smallBowel?.operativeFindings?.adhesions && (
@@ -288,7 +291,7 @@ export const SmallBowelSurgeryReportPreview = ({
             </div>
             {smallBowel?.operativeFindings?.description && (
               <div>
-                <span className="font-medium">Description of Findings:</span>{" "}
+                <span className="font-medium">Description of Operation Findings:</span>{" "}
                 {smallBowel.operativeFindings.description}
               </div>
             )}
@@ -388,7 +391,7 @@ export const SmallBowelSurgeryReportPreview = ({
 
       {(reconstructionType.length > 0 ||
         smallBowel?.reconstruction?.anastomosisDetails?.site ||
-        smallBowel?.reconstruction?.stomaDetails?.ileostomyType) && (
+        (showStomaFields && smallBowel?.reconstruction?.stomaDetails?.ileostomyType)) && (
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-gray-600">Reconstruction</h5>
           <div className="space-y-1 text-xs text-gray-700">
@@ -448,16 +451,16 @@ export const SmallBowelSurgeryReportPreview = ({
                 ).join(", ")}
               </div>
             )}
-            {smallBowel?.reconstruction?.stomaDetails?.ileostomyType && (
+            {showStomaFields && smallBowel?.reconstruction?.stomaDetails?.ileostomyType && (
               <div>
-                <span className="font-medium">Type of Ileostomy:</span>{" "}
+                <span className="font-medium">Ileostomy Type:</span>{" "}
                 {smallBowel.reconstruction.stomaDetails.ileostomyType === "Other" &&
                 smallBowel.reconstruction.stomaDetails.ileostomyTypeOther
                   ? `Other: ${smallBowel.reconstruction.stomaDetails.ileostomyTypeOther}`
                   : smallBowel.reconstruction.stomaDetails.ileostomyType}
               </div>
             )}
-            {smallBowel?.reconstruction?.stomaDetails?.location && (
+            {showStomaFields && smallBowel?.reconstruction?.stomaDetails?.location && (
               <div>
                 <span className="font-medium">Stoma Location:</span>{" "}
                 {smallBowel.reconstruction.stomaDetails.location === "Other" &&
@@ -466,21 +469,22 @@ export const SmallBowelSurgeryReportPreview = ({
                   : smallBowel.reconstruction.stomaDetails.location}
               </div>
             )}
-            {smallBowel?.reconstruction?.stomaDetails?.eversion && (
+            {showStomaFields && smallBowel?.reconstruction?.stomaDetails?.eversion && (
               <div>
                 <span className="font-medium">Stoma Eversion:</span>{" "}
                 {smallBowel.reconstruction.stomaDetails.eversion}
               </div>
             )}
-            {smallBowel?.reconstruction?.stomaDetails?.maturationSite && (
+            {showStomaFields && smallBowel?.reconstruction?.stomaDetails?.maturationSite && (
               <div>
                 <span className="font-medium">Site of Maturation:</span>{" "}
                 {smallBowel.reconstruction.stomaDetails.maturationSite}
               </div>
             )}
-            {toArray(smallBowel?.reconstruction?.stomaDetails?.materialUsed).length > 0 && (
+            {showStomaFields &&
+              toArray(smallBowel?.reconstruction?.stomaDetails?.materialUsed).length > 0 && (
               <div>
-                <span className="font-medium">Stoma Material:</span>{" "}
+                <span className="font-medium">Material Used:</span>{" "}
                 {renderSelection(
                   toArray(smallBowel.reconstruction.stomaDetails.materialUsed),
                   smallBowel.reconstruction.stomaDetails.materialUsedOther
@@ -500,28 +504,6 @@ export const SmallBowelSurgeryReportPreview = ({
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-gray-600">Operative Events & Closure</h5>
           <div className="space-y-1 text-xs text-gray-700">
-            {specimen.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                <span className="font-medium mr-1">Specimen:</span>
-                {specimen.map((item) => (
-                  <Badge key={item} variant="secondary" className="text-xs">
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            {pointsOfDifficulty.length > 0 && (
-              <div>
-                <span className="font-medium">Points of Difficulty:</span>{" "}
-                {pointsOfDifficulty.join(", ")}
-              </div>
-            )}
-            {complications.length > 0 && (
-              <div>
-                <span className="font-medium">Intraoperative Events / Complications:</span>{" "}
-                {complications.join(", ")}
-              </div>
-            )}
             {smallBowel?.operativeEvents?.woundProtector && (
               <div>
                 <span className="font-medium">Wound Protector Used:</span>{" "}
@@ -541,7 +523,8 @@ export const SmallBowelSurgeryReportPreview = ({
             )}
             {drainPlacement.length > 0 && (
               <div>
-                <span className="font-medium">Drain Placement:</span> {drainPlacement.join(", ")}
+                <span className="font-medium">Intra-Peritoneal Placement:</span>{" "}
+                {drainPlacement.join(", ")}
               </div>
             )}
             {drainExit.length > 0 && (
@@ -557,7 +540,7 @@ export const SmallBowelSurgeryReportPreview = ({
             )}
             {fascialMaterial.length > 0 && (
               <div>
-                <span className="font-medium">Fascial Suture Material:</span>{" "}
+                <span className="font-medium">Fascial Material Used:</span>{" "}
                 {fascialMaterial.join(", ")}
               </div>
             )}
@@ -568,8 +551,42 @@ export const SmallBowelSurgeryReportPreview = ({
             )}
             {skinMaterial.length > 0 && (
               <div>
-                <span className="font-medium">Skin Closure Material:</span>{" "}
+                <span className="font-medium">Skin Material Used:</span>{" "}
                 {skinMaterial.join(", ")}
+              </div>
+            )}
+            {pointsOfDifficulty.length > 0 && (
+              <div>
+                <span className="font-medium">Points of Difficulty:</span>{" "}
+                {pointsOfDifficulty.join(", ")}
+              </div>
+            )}
+            {complications.length > 0 && (
+              <div>
+                <span className="font-medium">Intraoperative Events / Complications:</span>{" "}
+                {complications.join(", ")}
+              </div>
+            )}
+            {specimen.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <span className="font-medium mr-1">Specimen:</span>
+                {specimen.map((item) => (
+                  <Badge key={item} variant="secondary" className="text-xs">
+                    {item}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {specimen.length > 0 && smallBowel?.operativeEvents?.specimenSentToLaboratory && (
+              <div>
+                <span className="font-medium">Specimen Sent to Laboratory:</span>{" "}
+                {smallBowel.operativeEvents.specimenSentToLaboratory}
+              </div>
+            )}
+            {specimen.length > 0 && smallBowel?.operativeEvents?.specifyLaboratorySentTo && (
+              <div>
+                <span className="font-medium">Specify Laboratory Sent to:</span>{" "}
+                {smallBowel.operativeEvents.specifyLaboratorySentTo}
               </div>
             )}
           </div>
@@ -585,7 +602,7 @@ export const SmallBowelSurgeryReportPreview = ({
           <div className="space-y-2 text-xs text-gray-700">
             {smallBowel?.additionalInfo?.additionalInformation && (
               <div>
-                <span className="font-medium">Additional Information:</span>{" "}
+                <span className="font-medium">Additional Notes:</span>{" "}
                 {smallBowel.additionalInfo.additionalInformation}
               </div>
             )}
@@ -604,7 +621,7 @@ export const SmallBowelSurgeryReportPreview = ({
             {smallBowel?.additionalInfo?.dateTime && (
               <div>
                 <span className="font-medium">Date/Time:</span>{" "}
-                {formatDateOnly(smallBowel.additionalInfo.dateTime)}
+                {formatDateTimeDDMMYYYYWithDashes(smallBowel.additionalInfo.dateTime)}
               </div>
             )}
           </div>

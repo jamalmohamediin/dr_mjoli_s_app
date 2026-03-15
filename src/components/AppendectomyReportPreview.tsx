@@ -2,8 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatDateWithSuffix, formatReportDate, formatDateOnly } from "@/utils/dateFormatter";
-import { getFullASAText } from '@/utils/asaDescriptions';
+import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from '@/assets/appendectomy.jpg';
 
@@ -262,7 +261,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
             <div className="text-center space-y-2">
               <h4 className="text-base font-bold underline">APPENDICECTOMY REPORT</h4>
               <p className="text-xs">
-                Generated: {formatDateWithSuffix(new Date())}
+                Generated: {formatDateDDMMYYYYWithDashes(new Date())}
               </p>
             </div>
             
@@ -744,7 +743,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
               <div>
                 <span className="font-medium">Date/Time:</span>
                 {appendectomy.closure.dateTime && (
-                  <p className="text-gray-700 mt-1">{formatDateOnly(appendectomy.closure.dateTime)}</p>
+                  <p className="text-gray-700 mt-1">{formatDateTimeDDMMYYYYWithDashes(appendectomy.closure.dateTime)}</p>
                 )}
               </div>
             </div>
@@ -755,7 +754,7 @@ export const AppendectomyReportPreview = ({ report }: AppendectomyReportPreviewP
         <div className="border-t pt-4 mt-6 text-center text-xs space-y-1">
           <p>Dr. Monde Mjoli - Specialist Surgeon</p>
           <p>Practice Number: 0560812</p>
-          <p>Report Date: {formatReportDate(new Date())} | Page 1 of 1</p>
+          <p>Report Date: {formatDateDDMMYYYYWithDashes(new Date())} | Page 1 of 1</p>
         </div>
       </div>
       </div>

@@ -1,7 +1,12 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { formatDateOnly, formatDateWithSuffix, formatReportDate } from "@/utils/dateFormatter";
+import {
+  formatDateDDMMYYYYWithDashes,
+  formatDateTimeDDMMYYYYWithDashes,
+  formatDateWithSuffix,
+  formatReportDate,
+} from "@/utils/dateFormatter";
 import { getFullASAText } from '@/utils/asaDescriptions';
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 
@@ -282,7 +287,7 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
     
     // Date and location
     if (rectalCancer?.caseIdentification?.date) {
-      summary.push(`On ${formatDateOnly(rectalCancer.caseIdentification.date)}`);
+      summary.push(`On ${formatDateDDMMYYYYWithDashes(rectalCancer.caseIdentification.date)}`);
     }
     
     // Surgical team
@@ -1419,7 +1424,8 @@ export const RectalCancerReportPreview = ({ report }: RectalCancerReportPreviewP
             )}
             {rectalCancer.additionalInfo.dateTime && (
               <p className="text-xs text-gray-700">
-                <span className="font-medium">Date & Time:</span> {formatDateOnly(rectalCancer.additionalInfo.dateTime)}
+                <span className="font-medium">Date & Time:</span>{" "}
+                {formatDateTimeDDMMYYYYWithDashes(rectalCancer.additionalInfo.dateTime)}
               </p>
             )}
           </div>

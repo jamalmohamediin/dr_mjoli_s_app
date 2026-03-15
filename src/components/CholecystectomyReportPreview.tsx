@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getFullASAText } from "@/utils/asaDescriptions";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 
 interface CholecystectomyReportPreviewProps {
@@ -180,6 +181,18 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
     toArray(cholecystectomy?.procedure?.gallbladderRetrieval),
     cholecystectomy?.procedure?.gallbladderRetrievalOther
   );
+  const drainType = renderSelection(
+    toArray(cholecystectomy?.procedure?.drainType),
+    cholecystectomy?.procedure?.drainTypeOther
+  );
+  const drainPlacement = renderSelection(
+    toArray(cholecystectomy?.procedure?.intraPeritonealPlacement),
+    cholecystectomy?.procedure?.intraPeritonealPlacementOther
+  );
+  const drainExitSite = renderSelection(
+    toArray(cholecystectomy?.procedure?.drainExitSite),
+    cholecystectomy?.procedure?.drainExitSiteOther
+  );
   const skinClosure = renderSelection(
     toArray(cholecystectomy?.closure?.skinClosureMethod),
     cholecystectomy?.closure?.skinClosureOther
@@ -263,29 +276,6 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
                 .join(", ")}
             </div>
           )}
-          {indications.length > 0 && (
-            <div className="col-span-2">
-              <span className="font-medium">Indication for Surgery:</span>{" "}
-              {indications.join(", ")}
-            </div>
-          )}
-          {cholecystectomy?.preoperative?.operationDescription && (
-            <div className="col-span-2">
-              <span className="font-medium">Operation Description:</span>{" "}
-              {cholecystectomy.preoperative.operationDescription}
-            </div>
-          )}
-          {cholecystectomy?.preoperative?.procedureUrgency && (
-            <div>
-              <span className="font-medium">Procedure Urgency:</span>{" "}
-              {cholecystectomy.preoperative.procedureUrgency}
-            </div>
-          )}
-          {imaging.length > 0 && (
-            <div className="col-span-2">
-              <span className="font-medium">Preoperative Imaging:</span> {imaging.join(", ")}
-            </div>
-          )}
           {cholecystectomy?.preoperative?.startTime && (
             <div>
               <span className="font-medium">Start Time:</span>{" "}
@@ -302,6 +292,29 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
             <div className="col-span-2">
               <span className="font-medium">Total Duration:</span>{" "}
               {cholecystectomy.preoperative.duration} minutes
+            </div>
+          )}
+          {cholecystectomy?.preoperative?.procedureUrgency && (
+            <div>
+              <span className="font-medium">Procedure Urgency:</span>{" "}
+              {cholecystectomy.preoperative.procedureUrgency}
+            </div>
+          )}
+          {imaging.length > 0 && (
+            <div className="col-span-2">
+              <span className="font-medium">Preoperative Imaging:</span> {imaging.join(", ")}
+            </div>
+          )}
+          {indications.length > 0 && (
+            <div className="col-span-2">
+              <span className="font-medium">Indication for Surgery:</span>{" "}
+              {indications.join(", ")}
+            </div>
+          )}
+          {cholecystectomy?.preoperative?.operationDescription && (
+            <div className="col-span-2">
+              <span className="font-medium">Operation Description:</span>{" "}
+              {cholecystectomy.preoperative.operationDescription}
             </div>
           )}
         </div>
@@ -377,7 +390,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             {cholecystectomy?.procedure?.calotsTriangleDissected && (
               <div>
-                <span className="font-medium">Calot&apos;s triangle dissected:</span>{" "}
+                <span className="font-medium">Calot&apos;s Triangle Dissected:</span>{" "}
                 {cholecystectomy.procedure.calotsTriangleDissected}
               </div>
             )}
@@ -467,9 +480,9 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               <span className="font-medium">Drain Insertion:</span> {cholecystectomy.procedure.drainInsertion}
               {cholecystectomy.procedure.drainInsertion === 'Yes' && (
                 <>
-                  {toArray(cholecystectomy?.procedure?.drainType).length > 0 ? ` | Type: ${toArray(cholecystectomy.procedure.drainType).join(', ')}` : ''}
-                  {toArray(cholecystectomy?.procedure?.intraPeritonealPlacement).length > 0 ? ` | Placement: ${toArray(cholecystectomy.procedure.intraPeritonealPlacement).join(', ')}` : ''}
-                  {toArray(cholecystectomy?.procedure?.drainExitSite).length > 0 ? ` | Exit Site: ${toArray(cholecystectomy.procedure.drainExitSite).join(', ')}` : ''}
+                  {drainType.length > 0 ? ` | Type: ${drainType.join(", ")}` : ""}
+                  {drainPlacement.length > 0 ? ` | Placement: ${drainPlacement.join(", ")}` : ""}
+                  {drainExitSite.length > 0 ? ` | Exit Site: ${drainExitSite.join(", ")}` : ""}
                 </>
               )}
             </div>
@@ -557,7 +570,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
             {cholecystectomy?.additionalInfo?.dateTime && (
               <div>
                 <span className="font-medium">Date/Time:</span>{" "}
-                {formatDateOnly(cholecystectomy.additionalInfo.dateTime)}
+                {formatDateTimeDDMMYYYYWithDashes(cholecystectomy.additionalInfo.dateTime)}
               </div>
             )}
           </div>

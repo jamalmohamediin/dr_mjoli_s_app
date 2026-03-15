@@ -1,7 +1,11 @@
 import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
-import { formatDateDDMMYYYY, formatDateTimeWithColon } from "@/utils/dateFormatter";
-import { getPatientInfoPdfSections } from "@/utils/patientSticker";
+import {
+  formatDateDDMMYYYYWithDashes,
+  formatDateTimeDDMMYYYYWithDashes,
+} from "@/utils/dateFormatter";
+import { getFullASAText } from "@/utils/asaDescriptions";
+import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
 
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.filter(Boolean) as string[];
@@ -107,13 +111,15 @@ export const generateCholecystectomyPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = patientInfo || cholecystectomyData?.patientInfo || {};
+    const info = normalizePatientInfo(patientInfo || cholecystectomyData?.patientInfo || {});
     const preop = cholecystectomyData?.preoperative || {};
     const intra = cholecystectomyData?.intraoperative || {};
     const proc = cholecystectomyData?.procedure || {};
     const closure = cholecystectomyData?.closure || {};
     const addInfo = cholecystectomyData?.additionalInfo || {};
     const diagramCanvas = await createSurgicalDiagramCanvas(diagrams);
+    const gender = formatPatientGender(info);
+    const asaClassification = info.asaScore ? getFullASAText(info.asaScore) : "";
 
     const col1X = margin;
     const col2X = margin + 63;
@@ -150,6 +156,15 @@ export const generateCholecystectomyPDF = async (
     };
 
     const txt = (v: any) => (v === undefined || v === null ? "" : String(v));
+
+    const rowFull = (text: string) => {
+      const lines = pdf.splitTextToSize(text || "", pageWidth - margin * 2);
+      ensureSpace(lines.length * lineHeight + 1);
+      lines.forEach((line: string) => {
+        pdf.text(line, col1X, y);
+        y += lineHeight;
+      });
+    };
 
     const row3 = (a: string, b: string, c: string) => {
       const l1 = pdf.splitTextToSize(a || "", 58);
@@ -218,16 +233,68 @@ export const generateCholecystectomyPDF = async (
       pdf.setFontSize(9);
     };
 
+    const additionalProceduresText = [
+      joinSelections(toArray(proc?.additionalProcedures), proc?.additionalProceduresOther),
+      txt(proc?.additionalProcedureDrainSite)
+        ? `Drain site: ${txt(proc?.additionalProcedureDrainSite)}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    const cholangiogramText = [
+      joinSelections(toArray(proc?.cholangiogramFindings), proc?.cholangiogramOther),
+      txt(proc?.cholangiogramStrictureSite)
+        ? `Stricture site: ${txt(proc?.cholangiogramStrictureSite)}`
+        : "",
+      txt(proc?.cholangiogramDilatation)
+        ? `Dilatation: ${txt(proc?.cholangiogramDilatation)}`
+        : "",
+      txt(proc?.cholangiogramLeakSite) ? `Leak site: ${txt(proc?.cholangiogramLeakSite)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
     sec("PATIENT INFORMATION");
-    getPatientInfoPdfSections(info, patientName, patientId).forEach((section, sectionIndex, sections) => {
-      if (section.title) {
-        patientSubsection(section.title);
-      }
-      section.rows.forEach((row) => row3(row[0], row[1], row[2]));
-      if (sectionIndex < sections.length - 1) {
-        y += 1;
-      }
-    });
+    patientSubsection("Patient Details");
+    row3(
+      `Patient Name: ${txt(info.name || patientName)}`,
+      `Gender: ${gender}`,
+      `Age: ${txt(info.age)}`
+    );
+    row3(
+      `Patient ID: ${txt(info.patientId || patientId)}`,
+      `Date Of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
+      `Address: ${txt(info.address)}`
+    );
+    y += 1;
+    patientSubsection("Medical Aid Details");
+    row3(
+      `Medical Aid Name: ${txt(info.medicalAidName)}`,
+      `Medical Aid Number: ${txt(info.medicalAidNumber)}`,
+      `Main Member: ${txt(info.mainMember)}`
+    );
+    row3(
+      `Main Member ID: ${txt(info.mainMemberId)}`,
+      `Work Number: ${txt(info.workNumber)}`,
+      `Home Number: ${txt(info.homeNumber)}`
+    );
+    row2(`Authorization: ${txt(info.authorization)}`, `Depend Code: ${txt(info.dependCode)}`);
+    y += 1;
+    patientSubsection("Hospital Details");
+    rowFull(`Hospital Name: ${txt(info.hospitalName)}`);
+    rowFull(`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`);
+    rowFull(`Doctor's Name: ${txt(info.doctorName)}`);
+    rowFull(`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`);
+    rowFull(`ASA Physical Status Classification: ${asaClassification}`);
+    if (txt(info.asaNotes)) {
+      rowFull(`ASA Notes: ${txt(info.asaNotes)}`);
+    }
+    row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
+    row2(
+      `Date: ${formatDateDDMMYYYYWithDashes(info.visitDate)}`,
+      `Time: ${txt(info.visitTime)}`
+    );
     y += 2;
 
     sec("PREOPERATIVE INFORMATION");
@@ -239,10 +306,11 @@ export const generateCholecystectomyPDF = async (
     row3(`Start Time: ${txt(preop?.startTime)}`, `End Time: ${txt(preop?.endTime)}`, `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`);
     row3(
       `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`,
-      `Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`
+      "",
+      `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`
     );
-    row3(`Operation Description: ${txt(preop?.operationDescription)}`, "", "");
+    rowFull(`Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`);
+    rowFull(`Operation Description: ${txt(preop?.operationDescription)}`);
     y += 2;
 
     sec("INTRAOPERATIVE FINDINGS");
@@ -261,9 +329,7 @@ export const generateCholecystectomyPDF = async (
     let lyCh = blockTopCh;
 
     const addLeftCh = (label: string, value: string) => {
-      if (!value || !value.trim()) return;
       const lines = pdf.splitTextToSize(`${label}: ${value}`, leftWCh);
-      ensureSpace(lines.length * lineHeight + 1);
       lines.forEach((line: string) => {
         pdf.text(line, leftXCh, lyCh);
         lyCh += lineHeight;
@@ -273,111 +339,160 @@ export const generateCholecystectomyPDF = async (
     addLeftCh("Surgical Approach", toArray(proc?.approach).join(", "));
     addLeftCh("Reason for Conversion", joinSelections(toArray(proc?.reasonForConversion), proc?.reasonForConversionOther));
     addLeftCh("Subtotal Cholecystectomy", txt(proc?.subtotalCholecystectomy));
-    addLeftCh("Subtotal Reason", joinSelections(toArray(proc?.subtotalReason), proc?.subtotalReasonOther));
+    addLeftCh("Reason for Subtotal Cholecystectomy", joinSelections(toArray(proc?.subtotalReason), proc?.subtotalReasonOther));
     addLeftCh("Gall Bladder Decompression Required", txt(proc?.gallbladderDecompressionRequired));
-    addLeftCh("Critical View if Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
-    addLeftCh("Critical View if Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
-    addLeftCh("Critical View if Safety - Two Structures Entering Gall Bladder Confirmed", txt(proc?.twoStructuresConfirmed));
+    addLeftCh("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
+    addLeftCh("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
+    addLeftCh("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
+    addLeftCh("Critical View of Safety - Two Structures Entering Gall Bladder Confirmed", txt(proc?.twoStructuresConfirmed));
     addLeftCh("Gall Bladder Dissected from Liver Bed", joinSelections(toArray(proc?.gallbladderDissectedFromLiverBed), proc?.gallbladderDissectedFromLiverBedOther));
     addLeftCh("Cystic Duct Control", joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther));
     addLeftCh("Cystic Artery Control", joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther));
     addLeftCh("Bile Spillage", txt(proc?.bileSpillage));
     addLeftCh("Stones Spillage", txt(proc?.stonesSpillage));
-    addLeftCh("Additional Procedures", joinSelections(toArray(proc?.additionalProcedures), proc?.additionalProceduresOther));
-    addLeftCh("Cholangiogram", joinSelections(toArray(proc?.cholangiogramFindings), proc?.cholangiogramOther));
-    addLeftCh("Gall Bladder Retrieval", joinSelections(toArray(proc?.gallbladderRetrieval), proc?.gallbladderRetrievalOther));
-    addLeftCh("Drain Insertion", txt(proc?.drainInsertion));
-    addLeftCh("Drain Type", joinSelections(toArray(proc?.drainType), proc?.drainTypeOther));
-    addLeftCh("Intra-Peritoneal Placement", joinSelections(toArray(proc?.intraPeritonealPlacement), proc?.intraPeritonealPlacementOther));
-    addLeftCh("Drain Exit Site", joinSelections(toArray(proc?.drainExitSite), proc?.drainExitSiteOther));
 
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
     pdf.text("PORTS AND INCISIONS", rightXCh, blockTopCh);
+    let ryCh = blockTopCh + 5;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.text("Legend:", rightXCh, ryCh);
+    pdf.setFont("helvetica", "normal");
+    ryCh += 4;
+
+    const legendCol1X = rightXCh;
+    const legendCol2X = rightXCh + 40;
+
+    pdf.text("Ports (with size label)", legendCol1X + 6, ryCh);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.8);
+    pdf.line(legendCol1X, ryCh - 1, legendCol1X + 4, ryCh - 1);
+    pdf.setFontSize(4);
+    pdf.text("5mm", legendCol1X + 0.5, ryCh - 2);
+    pdf.setFontSize(7.5);
+
+    pdf.text("Ileostomy (dashed yellow circle)", legendCol2X + 6, ryCh);
+    pdf.setDrawColor(245, 158, 11);
+    pdf.setLineWidth(0.8);
+    pdf.setLineDashPattern([1.5, 1], 0);
+    pdf.circle(legendCol2X + 2, ryCh - 1, 1.5);
+    pdf.setLineDashPattern([], 0);
+
+    ryCh += 4.5;
+
+    pdf.text("Incisions (dashed dark red line)", legendCol1X + 6, ryCh);
+    pdf.setDrawColor(139, 0, 0);
+    pdf.setLineWidth(0.8);
+    pdf.setLineDashPattern([2, 1.5], 0);
+    pdf.line(legendCol1X, ryCh - 1, legendCol1X + 4, ryCh - 1);
+    pdf.setLineDashPattern([], 0);
+
+    pdf.text("Colostomy (solid green circle)", legendCol2X + 6, ryCh);
+    pdf.setDrawColor(22, 163, 74);
+    pdf.setLineWidth(1.2);
+    pdf.circle(legendCol2X + 2, ryCh - 1, 1.5);
+
+    ryCh += 5;
+    pdf.setDrawColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    let ryCh = blockTopCh + 5;
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Legend:", rightXCh, ryCh);
-    pdf.setFont("helvetica", "normal");
-    ryCh += 5;
-
-    // Port symbol
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.6);
-    pdf.line(rightXCh, ryCh - 1, rightXCh + 8, ryCh - 1);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text("Ports (with size)", rightXCh + 11, ryCh);
-    ryCh += 5;
-
-    // Ileostomy symbol (dashed yellow circle)
-    pdf.setDrawColor(245, 158, 11);
-    pdf.setLineWidth(0.7);
-    pdf.setLineDashPattern([1.2, 1.2], 0);
-    pdf.circle(rightXCh + 4, ryCh - 1.5, 2.2);
-    pdf.setLineDashPattern([], 0);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text("Ileostomy (dashed yellow circle)", rightXCh + 11, ryCh);
-    ryCh += 5;
-
-    // Colostomy symbol (solid green circle)
-    pdf.setDrawColor(22, 163, 74);
-    pdf.setLineWidth(0.8);
-    pdf.circle(rightXCh + 4, ryCh - 1.5, 2.2);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text("Colostomy (solid green circle)", rightXCh + 11, ryCh);
-    ryCh += 5;
-
-    // Incision symbol (dashed dark red)
-    pdf.setDrawColor(127, 29, 29);
-    pdf.setLineWidth(0.7);
-    pdf.setLineDashPattern([1.5, 1.5], 0);
-    pdf.line(rightXCh, ryCh - 1, rightXCh + 8, ryCh - 1);
-    pdf.setLineDashPattern([], 0);
-    pdf.setTextColor(0, 0, 0);
-    pdf.text("Incisions (dashed dark red line)", rightXCh + 11, ryCh);
-    ryCh += 4;
-
+    const availableDiagramHeight = pageHeight - margin - ryCh - 2;
     const boxXCh = rightXCh;
-    const boxYCh = ryCh + 1;
+    const boxYCh = ryCh;
     const boxWCh = rightWCh;
-    const boxHCh = 70;
-    ensureSpace(boxHCh + 6);
+    const boxHCh = Math.min(46, Math.max(18, availableDiagramHeight));
+    pdf.setLineWidth(0.5);
     pdf.rect(boxXCh, boxYCh, boxWCh, boxHCh);
 
     if (diagramCanvas) {
       const props = pdf.getImageProperties(diagramCanvas);
       const ar = props.width / props.height;
-      let w = boxWCh - 4;
+      const diagramPadding = 2;
+      const availableWidth = boxWCh - diagramPadding * 2;
+      const availableHeight = boxHCh - diagramPadding * 2;
+      let w = availableWidth;
       let h = w / ar;
-      if (h > boxHCh - 4) {
-        h = boxHCh - 4;
+      if (h > availableHeight) {
+        h = availableHeight;
         w = h * ar;
       }
-      pdf.addImage(diagramCanvas, "PNG", boxXCh + (boxWCh - w) / 2, boxYCh + (boxHCh - h) / 2, w, h);
+      pdf.addImage(
+        diagramCanvas,
+        "PNG",
+        boxXCh + (boxWCh - w) / 2,
+        boxYCh + (boxHCh - h) / 2,
+        w,
+        h
+      );
     } else {
-      pdf.text("(No surgical markings)", boxXCh + 20, boxYCh + boxHCh / 2);
+      pdf.setFontSize(8);
+      pdf.text("CHOLECYSTECTOMY DIAGRAM", boxXCh + boxWCh / 2, boxYCh + boxHCh / 2, {
+        align: "center",
+      });
+      pdf.setFontSize(9);
     }
 
-    y = Math.max(lyCh, boxYCh + boxHCh) + 4;
+    y = Math.max(lyCh, boxYCh + boxHCh) + 5;
+
+    pdf.addPage();
+    y = margin;
+
+    sec("PROCEDURE DETAILS");
+    rowFull(`Additional Procedures: ${additionalProceduresText}`);
+    rowFull(`Cholangiogram Findings: ${cholangiogramText}`);
+    rowFull(
+      `Gall Bladder Retrieval: ${joinSelections(
+        toArray(proc?.gallbladderRetrieval),
+        proc?.gallbladderRetrievalOther
+      )}`
+    );
 
     sec("CLOSURE");
-    row2(`Fascial Closure: ${txt(closure?.fascialClosure)}`, `Skin Closure: ${txt(closure?.skinClosure)}`);
-    row2(`Fascial Closure Sites: ${joinSelections(toArray(closure?.fascialClosureSites))}`, `Fascial Suture Material: ${joinSelections(toArray(closure?.fascialSutureMaterial), closure?.fascialSutureMaterialOther)}`);
-    row2(`Skin Closure Method: ${joinSelections(toArray(closure?.skinClosureMethod), closure?.skinClosureOther)}`, "");
+    rowFull(`Drain Insertion: ${txt(proc?.drainInsertion)}`);
+    rowFull(`Type of Drain: ${joinSelections(toArray(proc?.drainType), proc?.drainTypeOther)}`);
+    rowFull(
+      `Intra-Peritoneal Placement: ${joinSelections(
+        toArray(proc?.intraPeritonealPlacement),
+        proc?.intraPeritonealPlacementOther
+      )}`
+    );
+    rowFull(`Drain Exit Site: ${joinSelections(toArray(proc?.drainExitSite), proc?.drainExitSiteOther)}`);
+    rowFull(`Fascial Closure: ${txt(closure?.fascialClosure)}`);
+    rowFull(
+      `Fascial Material Used: ${joinSelections(
+        toArray(closure?.fascialSutureMaterial),
+        closure?.fascialSutureMaterialOther
+      )}`
+    );
+    rowFull(`Skin Closure: ${txt(closure?.skinClosure)}`);
+    rowFull(`Skin Material Used: ${joinSelections(toArray(closure?.skinClosureMethod), closure?.skinClosureOther)}`);
 
     sec("COMPLICATIONS");
-    row2(`Intra-op Difficulty: ${joinSelections(toArray(closure?.intraoperativeDifficulty), closure?.intraoperativeDifficultyOther)}`, `Complications: ${joinSelections(toArray(closure?.complications), closure?.complicationsOther)}`);
+    rowFull(
+      `Points of Difficulty: ${joinSelections(
+        toArray(closure?.intraoperativeDifficulty),
+        closure?.intraoperativeDifficultyOther
+      )}`
+    );
+    rowFull(
+      `Intraoperative Events/Complications: ${joinSelections(
+        toArray(closure?.complications),
+        closure?.complicationsOther
+      )}`
+    );
 
     sec("SPECIMEN");
-    row2(`Histology: ${txt(closure?.gallbladderSentForHistology)}`, `Laboratory: ${txt(closure?.laboratoryName)}`);
+    rowFull("Specimen: Gall Bladder");
+    rowFull(`Specimen Sent to Laboratory: ${txt(closure?.gallbladderSentForHistology)}`);
+    rowFull(`Specify Laboratory Sent to: ${txt(closure?.laboratoryName)}`);
 
     sec("ADDITIONAL NOTES");
-    row2(`Additional Information: ${txt(addInfo?.additionalInformation)}`, "");
+    rowFull(`Additional Notes: ${txt(addInfo?.additionalInformation)}`);
 
     sec("POST OPERATIVE MANAGEMENT");
-    row2(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`, "");
+    rowFull(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`);
 
     sec("SURGEON'S SIGNATURE");
     if (addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image")) {
@@ -386,7 +501,10 @@ export const generateCholecystectomyPDF = async (
       pdf.addImage(addInfo.surgeonSignature, "PNG", margin, y, sig.width, sig.height);
       y += sig.height + 3;
     }
-    row2(`Typed Signature: ${txt(addInfo?.surgeonSignatureText)}`, `Date/Time: ${addInfo?.dateTime ? formatDateTimeWithColon(addInfo.dateTime) : ""}`);
+    row2(
+      `Typed Signature: ${txt(addInfo?.surgeonSignatureText)}`,
+      `Date/Time: ${addInfo?.dateTime ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime) : ""}`
+    );
 
     return { success: true, blob: pdf.output("blob") };
   } catch (error) {

@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
-import { formatDateOnly, getLocalDateTimeValue } from "@/utils/dateFormatter";
+import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
+import { formatDateTimeDDMMYYYYWithDashes, getLocalDateTimeValue } from "@/utils/dateFormatter";
 import { initialPeriAnalState } from "@/utils/periAnal";
 import {
   Activity,
   ChevronDown,
   ClipboardList,
+  Download,
   FileSearch,
   FileText,
   Redo2,
@@ -33,6 +35,7 @@ interface PeriAnalFormProps {
   onUndo?: (section: string) => void;
   onRedo?: (section: string) => void;
   onExportPDF?: () => void;
+  isGeneratingPDF?: boolean;
   diagramElement?: React.ReactNode;
 }
 
@@ -300,8 +303,8 @@ const FieldRow = ({
   children: React.ReactNode;
   multiline?: boolean;
 }) => (
-  <div className={`grid grid-cols-2 gap-4 ${multiline ? "items-start" : "items-center"}`}>
-    <label className="text-gray-800 font-medium">{label}</label>
+  <div className={`space-y-2 ${multiline ? "" : ""}`}>
+    <label className="block text-gray-800 font-medium">{label}</label>
     <div>{children}</div>
   </div>
 );
@@ -315,6 +318,8 @@ export const PeriAnalForm = ({
   onClear,
   onUndo,
   onRedo,
+  onExportPDF,
+  isGeneratingPDF = false,
   diagramElement,
 }: PeriAnalFormProps) => {
   const periAnal = currentReport.periAnal || initialPeriAnalState;
@@ -582,6 +587,9 @@ export const PeriAnalForm = ({
               onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
               currentExtractedPatientInfo={currentExtractedPatientInfo}
               onCurrentPatientChange={onCurrentPatientChange}
+              use24HourTimeInputs
+              useDashDateInputs
+              stackFieldRows
             />
           </CardContent>
         )}
@@ -596,12 +604,6 @@ export const PeriAnalForm = ({
                 {renderTeamField("Surgeon:", "surgeons", "Enter Surgeon Name")}
                 {renderTeamField("Assistant:", "assistants", "Enter Assistant Name")}
                 {renderTeamField("Anaesthetist:", "anaesthetists", "Enter Anaesthetist Name")}
-                <FieldRow label="Indication for Surgery:" multiline>
-                  <Textarea rows={3} placeholder="Enter Indication For Surgery" value={periAnal.preoperative?.indication || ""} onChange={(e) => updatePeriAnal("preoperative", "indication", e.target.value)} />
-                </FieldRow>
-                <FieldRow label="Operation Description:" multiline>
-                  <Textarea rows={3} placeholder="Enter Operation Description" value={periAnal.preoperative?.operationDescription || ""} onChange={(e) => updatePeriAnal("preoperative", "operationDescription", e.target.value)} />
-                </FieldRow>
                 {renderChoiceRow("Procedure Urgency:", periAnal.preoperative?.procedureUrgency || "", urgencyOptions, (value) => updatePeriAnal("preoperative", "procedureUrgency", value))}
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
@@ -612,24 +614,50 @@ export const PeriAnalForm = ({
                     </div>
                   )}
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FieldRow label="Start Time:">
+                    <Time24HourInput
+                      className="w-full"
+                      hourAriaLabel="Start hour"
+                      minuteAriaLabel="Start minute"
+                      onChange={(value) => handleTimeChange("startTime", value)}
+                      value={periAnal.preoperative?.startTime || ""}
+                    />
+                  </FieldRow>
+                  <FieldRow label="End Time:">
+                    <Time24HourInput
+                      className="w-full"
+                      hourAriaLabel="End hour"
+                      minuteAriaLabel="End minute"
+                      onChange={(value) => handleTimeChange("endTime", value)}
+                      value={periAnal.preoperative?.endTime || ""}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Duration of Operation (Mins):">
+                    <div className="space-y-2">
+                      <Input
+                        type="text"
+                        value={periAnal.preoperative?.duration || ""}
+                        onChange={(e) => updatePeriAnal("preoperative", "duration", e.target.value)}
+                        placeholder="Auto-Calculated Or Manual Entry"
+                      />
+                      <p className="text-sm text-gray-600">
+                        {periAnal.preoperative?.startTime && periAnal.preoperative?.endTime ? "Auto-Calculated" : "Manual Entry"}
+                      </p>
+                    </div>
+                  </FieldRow>
+                </div>
+                <FieldRow label="Indication for Surgery:" multiline>
+                  <Textarea rows={3} placeholder="Enter Indication For Surgery" value={periAnal.preoperative?.indication || ""} onChange={(e) => updatePeriAnal("preoperative", "indication", e.target.value)} />
+                </FieldRow>
+                <FieldRow label="Operation Description:" multiline>
+                  <Textarea rows={3} placeholder="Enter Operation Description" value={periAnal.preoperative?.operationDescription || ""} onChange={(e) => updatePeriAnal("preoperative", "operationDescription", e.target.value)} />
+                </FieldRow>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Start Time:</label>
-                    <Input type="time" value={periAnal.preoperative?.startTime || ""} onChange={(e) => handleTimeChange("startTime", e.target.value)} />
-                    <div className="text-sm text-gray-600">24-Hour Format</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">End Time:</label>
-                    <Input type="time" value={periAnal.preoperative?.endTime || ""} onChange={(e) => handleTimeChange("endTime", e.target.value)} />
-                    <div className="text-sm text-gray-600">24-Hour Format</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 items-center">
-                    <label className="text-gray-800 font-medium">Total Duration (Mins):</label>
-                    <Input type="text" value={periAnal.preoperative?.duration || ""} onChange={(e) => updatePeriAnal("preoperative", "duration", e.target.value)} placeholder="Auto-Calculated Or Manual Entry" />
-                    <div className="text-sm text-gray-600">{periAnal.preoperative?.startTime && periAnal.preoperative?.endTime ? "Auto-Calculated" : "Manual Entry"}</div>
+                  <div>
+                    {renderChoiceRow("Position in Theatre:", periAnal.preoperative?.positionInTheatre || "", positionInTheatreOptions, (value) => updatePeriAnal("preoperative", "positionInTheatre", value))}
                   </div>
                 </div>
-                {renderChoiceRow("Position in Theatre:", periAnal.preoperative?.positionInTheatre || "", positionInTheatreOptions, (value) => updatePeriAnal("preoperative", "positionInTheatre", value))}
                 {periAnal.preoperative?.positionInTheatre === "Other" && (
                   <div className="ml-4">
                     <Input type="text" placeholder="Specify Other Position In Theatre" value={periAnal.preoperative?.positionOther || ""} onChange={(e) => updatePeriAnal("preoperative", "positionOther", e.target.value)} />
@@ -1315,24 +1343,29 @@ export const PeriAnalForm = ({
       </Card>
 
       <Card className="glass-card-light">
-        {renderSectionHeader("Post-Operative Plan", "postOperativePlan", <ClipboardList className="h-5 w-5 text-gray-600" />, "postOperativePlan")}
-        {expanded.postOperativePlan && (
-          <CardContent className="px-6 py-4 space-y-4">
-            {renderChoiceRow("Analgesia:", periAnal.postOperativePlan?.analgesia || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "analgesia", value))}
-            {renderChoiceRow("Antibiotics (If Indicated):", periAnal.postOperativePlan?.antibiotics || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "antibiotics", value))}
-            {renderChoiceRow("Sitz Baths:", periAnal.postOperativePlan?.sitzBaths || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "sitzBaths", value))}
-            {renderChoiceRow("Packing Removal Time:", periAnal.postOperativePlan?.packingRemovalTime || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "packingRemovalTime", value))}
-            {renderChoiceRow("Plan for Further Surgery:", periAnal.postOperativePlan?.planForFurtherSurgery || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "planForFurtherSurgery", value))}
-          </CardContent>
-        )}
-      </Card>
-
-      <Card className="glass-card-light">
         {renderSectionHeader("Specimen", "specimen", <FileText className="h-5 w-5 text-gray-600" />, "specimen")}
         {expanded.specimen && (
           <CardContent className="px-6 py-4 space-y-4">
             {renderChoiceRow("Sent for Histology:", periAnal.specimen?.sentForHistology || "", ["Yes", "No"], (value) => updatePeriAnal("specimen", "sentForHistology", value))}
+            {periAnal.specimen?.sentForHistology === "Yes" && (
+              <FieldRow label="Specify Laboratory Sent To:">
+                <Input
+                  placeholder="Enter Histology Laboratory"
+                  value={periAnal.specimen?.histologyLaboratorySentTo || ""}
+                  onChange={(e) => updatePeriAnal("specimen", "histologyLaboratorySentTo", e.target.value)}
+                />
+              </FieldRow>
+            )}
             {renderChoiceRow("Sent for Microbiology:", periAnal.specimen?.sentForMicrobiology || "", ["Yes", "No"], (value) => updatePeriAnal("specimen", "sentForMicrobiology", value))}
+            {periAnal.specimen?.sentForMicrobiology === "Yes" && (
+              <FieldRow label="Specify Laboratory Sent To:">
+                <Input
+                  placeholder="Enter Microbiology Laboratory"
+                  value={periAnal.specimen?.microbiologyLaboratorySentTo || ""}
+                  onChange={(e) => updatePeriAnal("specimen", "microbiologyLaboratorySentTo", e.target.value)}
+                />
+              </FieldRow>
+            )}
           </CardContent>
         )}
       </Card>
@@ -1360,6 +1393,19 @@ export const PeriAnalForm = ({
         <CardContent>
           <Textarea rows={4} placeholder="Enter Any Additional Information" value={periAnal.additionalInfo?.additionalInformation || ""} onChange={(e) => updatePeriAnal("additionalInfo", "additionalInformation", e.target.value)} />
         </CardContent>
+      </Card>
+
+      <Card className="glass-card-light">
+        {renderSectionHeader("Post-Operative Plan", "postOperativePlan", <ClipboardList className="h-5 w-5 text-gray-600" />, "postOperativePlan")}
+        {expanded.postOperativePlan && (
+          <CardContent className="px-6 py-4 space-y-4">
+            {renderChoiceRow("Analgesia:", periAnal.postOperativePlan?.analgesia || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "analgesia", value))}
+            {renderChoiceRow("Antibiotics (If Indicated):", periAnal.postOperativePlan?.antibiotics || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "antibiotics", value))}
+            {renderChoiceRow("Sitz Baths:", periAnal.postOperativePlan?.sitzBaths || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "sitzBaths", value))}
+            {renderChoiceRow("Packing Removal Time:", periAnal.postOperativePlan?.packingRemovalTime || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "packingRemovalTime", value))}
+            {renderChoiceRow("Plan for Further Surgery:", periAnal.postOperativePlan?.planForFurtherSurgery || "", ["Yes", "No"], (value) => updatePeriAnal("postOperativePlan", "planForFurtherSurgery", value))}
+          </CardContent>
+        )}
       </Card>
 
       <Card className="glass-card-light">
@@ -1416,15 +1462,31 @@ export const PeriAnalForm = ({
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
               <div className="space-y-2">
-                <Input type="datetime-local" value={periAnal.additionalInfo?.dateTime || getLocalDateTimeValue()} onChange={(e) => updatePeriAnal("additionalInfo", "dateTime", e.target.value)} />
+                <DateTimeDDMMYYYY24HourInput
+                  value={periAnal.additionalInfo?.dateTime || getLocalDateTimeValue()}
+                  onChange={(value) => updatePeriAnal("additionalInfo", "dateTime", value)}
+                />
                 <Button variant="outline" size="sm" className="text-xs px-2 py-1" onClick={() => updatePeriAnal("additionalInfo", "dateTime", getLocalDateTimeValue())}>
                   Set Current Date/Time
                 </Button>
                 {periAnal.additionalInfo?.dateTime && (
-                  <p className="text-xs text-gray-500">Display Format: {formatDateOnly(periAnal.additionalInfo.dateTime)}</p>
+                  <p className="text-xs text-gray-500">Display Format: {formatDateTimeDDMMYYYYWithDashes(periAnal.additionalInfo.dateTime)}</p>
                 )}
               </div>
             </div>
+          </div>
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="glass-button text-xs"
+              disabled={isGeneratingPDF || !onExportPDF}
+              onClick={onExportPDF}
+              type="button"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+            </Button>
           </div>
         </CardContent>
       </Card>

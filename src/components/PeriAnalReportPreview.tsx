@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { getFullASAText } from "@/utils/asaDescriptions";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import {
   getPeriAnalAdditionalFindingSection,
   getPeriAnalFindingSections,
@@ -314,7 +314,21 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
         <EntryList
           entries={[
             { label: "Sent for Histology", value: periAnal?.specimen?.sentForHistology || "" },
+            {
+              label: "Histology Laboratory Sent To",
+              value:
+                periAnal?.specimen?.sentForHistology === "Yes"
+                  ? periAnal?.specimen?.histologyLaboratorySentTo || ""
+                  : "",
+            },
             { label: "Sent for Microbiology", value: periAnal?.specimen?.sentForMicrobiology || "" },
+            {
+              label: "Microbiology Laboratory Sent To",
+              value:
+                periAnal?.specimen?.sentForMicrobiology === "Yes"
+                  ? periAnal?.specimen?.microbiologyLaboratorySentTo || ""
+                  : "",
+            },
           ].filter((entry) => entry.value)}
         />
       </div>
@@ -334,7 +348,7 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
             <div><span className="font-medium">Surgeon&apos;s Signature:</span> {periAnal.additionalInfo.surgeonSignatureText}</div>
           )}
           {periAnal?.additionalInfo?.dateTime && (
-            <div><span className="font-medium">Date/Time:</span> {formatDateOnly(periAnal.additionalInfo.dateTime)}</div>
+            <div><span className="font-medium">Date/Time:</span> {formatDateTimeDDMMYYYYWithDashes(periAnal.additionalInfo.dateTime)}</div>
           )}
         </div>
       </div>

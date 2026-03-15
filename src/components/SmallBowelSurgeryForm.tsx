@@ -25,8 +25,11 @@ import {
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import {
-  formatDateDDMMYYYY,
-  formatDateOnly,
+  DateTimeDDMMYYYY24HourInput,
+  Time24HourInput,
+} from "@/components/Time24HourInput";
+import {
+  formatDateTimeDDMMYYYYWithDashes,
   getLocalDateTimeValue,
 } from "@/utils/dateFormatter";
 import { initialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
@@ -201,6 +204,7 @@ export const SmallBowelSurgeryForm = ({
     smallBowel.reconstruction?.anastomosisDetails?.technique === "Stapled";
 
   const isDrainInserted = () => smallBowel.operativeEvents?.drainInsertion === "Yes";
+  const hasSpecimenSelection = () => toArray(smallBowel.operativeEvents?.specimen).length > 0;
 
   const isFascialClosureSelected = () =>
     toArray(smallBowel.closure?.fascialClosure).length > 0;
@@ -336,6 +340,8 @@ export const SmallBowelSurgeryForm = ({
                   onBulkUpdate={onBulkPatientInfoUpdate || updatePatientInfoFields}
                   currentExtractedPatientInfo={currentExtractedPatientInfo}
                   onCurrentPatientChange={onCurrentPatientChange}
+                  use24HourTimeInputs
+                  useDashDateInputs
                 />
               </div>
 
@@ -360,7 +366,46 @@ export const SmallBowelSurgeryForm = ({
                   {renderTeamField("Anaesthetist:", "anaesthetists", "Enter Anaesthetist Name")}
 
                   <div>
-                    <label className="text-gray-800 font-medium mb-2 block">Indication for Surgery:</label>
+                    <h4 className="text-gray-800 font-medium mb-3">Duration of Operation:</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">Start Time:</label>
+                        <Time24HourInput
+                          className="w-full"
+                          hourAriaLabel="Start hour"
+                          minuteAriaLabel="Start minute"
+                          onChange={(value) => handleTimeChange("startTime", value)}
+                          value={smallBowel.preoperative?.startTime || ""}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">End Time:</label>
+                        <Time24HourInput
+                          className="w-full"
+                          hourAriaLabel="End hour"
+                          minuteAriaLabel="End minute"
+                          onChange={(value) => handleTimeChange("endTime", value)}
+                          value={smallBowel.preoperative?.endTime || ""}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-gray-700 text-sm mb-1 block">
+                          Total Duration (Mins):
+                        </label>
+                        <Input
+                          type="number"
+                          value={smallBowel.preoperative?.duration || ""}
+                          onChange={(e) => updateSmallBowel("preoperative", "duration", e.target.value)}
+                          placeholder="Auto-calculated or enter manually"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-800 font-medium mb-2 block">
+                      Indication for Surgery:
+                    </label>
                     <Textarea
                       placeholder="Enter indication for surgery"
                       value={smallBowel.preoperative?.indication || ""}
@@ -369,7 +414,9 @@ export const SmallBowelSurgeryForm = ({
                   </div>
 
                   <div>
-                    <label className="text-gray-800 font-medium mb-2 block">Operation Description:</label>
+                    <label className="text-gray-800 font-medium mb-2 block">
+                      Operation Description:
+                    </label>
                     <Textarea
                       placeholder="Enter operation description"
                       value={smallBowel.preoperative?.operationDescription || ""}
@@ -436,43 +483,12 @@ export const SmallBowelSurgeryForm = ({
                           type="text"
                           placeholder="Specify other imaging"
                           value={smallBowel.preoperative?.imagingOther || ""}
-                          onChange={(e) => updateSmallBowel("preoperative", "imagingOther", e.target.value)}
+                          onChange={(e) =>
+                            updateSmallBowel("preoperative", "imagingOther", e.target.value)
+                          }
                         />
                       </div>
                     )}
-                  </div>
-
-                  <div>
-                    <h4 className="text-gray-800 font-medium mb-3">Duration of Operation:</h4>
-                    <div className="grid grid-cols-3 gap-4 items-center">
-                      <div>
-                        <label className="text-gray-700 text-sm mb-1 block">Start Time:</label>
-                        <Input
-                          type="time"
-                          value={smallBowel.preoperative?.startTime || ""}
-                          onChange={(e) => handleTimeChange("startTime", e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-gray-700 text-sm mb-1 block">End Time:</label>
-                        <Input
-                          type="time"
-                          value={smallBowel.preoperative?.endTime || ""}
-                          onChange={(e) => handleTimeChange("endTime", e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-gray-700 text-sm mb-1 block">
-                          Total Duration (Mins):
-                        </label>
-                        <Input
-                          type="number"
-                          value={smallBowel.preoperative?.duration || ""}
-                          onChange={(e) => updateSmallBowel("preoperative", "duration", e.target.value)}
-                          placeholder="Auto-calculated or enter manually"
-                        />
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -644,7 +660,7 @@ export const SmallBowelSurgeryForm = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Mesenteric Involvement:</p>
                   <div className="flex gap-4 ml-4">
@@ -816,6 +832,16 @@ export const SmallBowelSurgeryForm = ({
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Operation Done:
+                </label>
+                <Textarea
+                  placeholder="Describe the procedure performed"
+                  value={smallBowel.procedure?.operationDone || ""}
+                  onChange={(e) => updateSmallBowel("procedure", "operationDone", e.target.value)}
+                />
+              </div>
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
@@ -890,17 +916,6 @@ export const SmallBowelSurgeryForm = ({
                   )}
                 </div>
               )}
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Operation Done:
-                </label>
-                <Textarea
-                  placeholder="Describe the procedure performed"
-                  value={smallBowel.procedure?.operationDone || ""}
-                  onChange={(e) => updateSmallBowel("procedure", "operationDone", e.target.value)}
-                />
-              </div>
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Procedure Performed:</p>
@@ -1762,8 +1777,9 @@ export const SmallBowelSurgeryForm = ({
             </div>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="space-y-6">
-              <div>
+            <CardContent className="flex flex-col gap-6">
+              <div className="order-5 border-t pt-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Complications</h3>
                 <p className="text-sm font-medium text-gray-700 mb-2">Points of Difficulty:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                   {pointsOfDifficultyOptions.map((option) => (
@@ -1800,7 +1816,7 @@ export const SmallBowelSurgeryForm = ({
                 )}
               </div>
 
-              <div>
+              <div className="order-6">
                 <p className="text-sm font-medium text-gray-700 mb-2">
                   Intraoperative Events / Complications:
                 </p>
@@ -1850,7 +1866,8 @@ export const SmallBowelSurgeryForm = ({
                 )}
               </div>
 
-              <div>
+              <div className="order-7 border-t pt-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Specimen</h3>
                 <p className="text-sm font-medium text-gray-700 mb-2">Specimen:</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                   {specimenOptions.map((option) => (
@@ -1885,9 +1902,71 @@ export const SmallBowelSurgeryForm = ({
                     />
                   </div>
                 )}
+                {hasSpecimenSelection() && (
+                  <div className="mt-4 space-y-4 ml-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Specimen Sent to Laboratory:
+                      </p>
+                      <div className="flex gap-4">
+                        {["Yes", "No"].map((option) => (
+                          <div className="flex items-center" key={`sb-specimen-lab-${option}`}>
+                            <Checkbox
+                              id={`sb-specimen-lab-${option}`}
+                              checked={
+                                smallBowel.operativeEvents?.specimenSentToLaboratory === option
+                              }
+                              onCheckedChange={(checked) => {
+                                updateSmallBowel(
+                                  "operativeEvents",
+                                  "specimenSentToLaboratory",
+                                  checked ? option : ""
+                                );
+
+                                if (checked && option === "No") {
+                                  updateSmallBowel(
+                                    "operativeEvents",
+                                    "specifyLaboratorySentTo",
+                                    ""
+                                  );
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`sb-specimen-lab-${option}`}
+                              className="ml-2 text-sm"
+                            >
+                              {option}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Specify Laboratory Sent to:
+                      </label>
+                      <Input
+                        className="mt-2"
+                        disabled={smallBowel.operativeEvents?.specimenSentToLaboratory === "No"}
+                        placeholder="Enter laboratory name"
+                        value={smallBowel.operativeEvents?.specifyLaboratorySentTo || ""}
+                        onChange={(e) =>
+                          updateSmallBowel(
+                            "operativeEvents",
+                            "specifyLaboratorySentTo",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
+              <div className="order-1">
+                <h3 className="font-semibold text-gray-800 mb-4">Closure</h3>
                 <p className="text-sm font-medium text-gray-700 mb-2">Wound Protector Used:</p>
                 <div className="flex gap-4 ml-4">
                   {["Yes", "No"].map((option) => (
@@ -1911,7 +1990,7 @@ export const SmallBowelSurgeryForm = ({
                 </div>
               </div>
 
-              <div>
+              <div className="order-2">
                 <p className="text-sm font-medium text-gray-700 mb-2">Peritoneal Drainage:</p>
                 <div className="flex gap-4 ml-4">
                   {["No", "Yes"].map((option) => (
@@ -1936,7 +2015,7 @@ export const SmallBowelSurgeryForm = ({
               </div>
 
               {isDrainInserted() && (
-                <div className="ml-6 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300 space-y-4">
+                <div className="order-3 ml-6 p-4 bg-gray-50 rounded-md border-l-2 border-gray-300 space-y-4">
                   <h4 className="font-medium text-gray-800">Drain Details</h4>
 
                   <div>
@@ -1989,7 +2068,7 @@ export const SmallBowelSurgeryForm = ({
 
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">
-                      Intra-Peritoneal Drain Placement:
+                      Intra-Peritoneal Placement:
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                       {[
@@ -2045,7 +2124,7 @@ export const SmallBowelSurgeryForm = ({
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Exit Site of Drain:</p>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Drain Exit Site:</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                       {[
                         "Right Upper Quadrant",
@@ -2094,8 +2173,7 @@ export const SmallBowelSurgeryForm = ({
                 </div>
               )}
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-800 mb-4">Closure Details</h3>
+              <div className="order-4 bg-gray-50 p-4 rounded-lg">
 
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">Fascial Closure:</p>
@@ -2143,7 +2221,7 @@ export const SmallBowelSurgeryForm = ({
 
                   {isFascialClosureSelected() && (
                     <div className="mt-3 ml-4">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Suture Material:</p>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Fascial Material Used:</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                         {["Nylon", "PDS", "Vicryl", "Ethibond", "Other"].map((option) => (
                           <div className="flex items-center" key={`sb-fascial-suture-${option}`}>
@@ -2238,7 +2316,7 @@ export const SmallBowelSurgeryForm = ({
 
                   {shouldShowSkinMaterial() && (
                     <div className="mt-3 ml-4">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Material / Method:</p>
+                      <p className="text-sm font-medium text-gray-700 mb-2">Skin Material Used:</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
                         {["Monocryl", "V-Loc", "Nylon", "Staples", "Other"].map((option) => (
                           <div className="flex items-center" key={`sb-skin-material-${option}`}>
@@ -2286,11 +2364,11 @@ export const SmallBowelSurgeryForm = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-gray-700">Additional Information:</label>
+              <div className="order-8 border-t pt-6">
+                <label className="text-sm font-medium text-gray-700">Additional Notes:</label>
                 <Textarea
                   className="mt-2"
-                  placeholder="Enter any additional information"
+                  placeholder="Enter any additional notes"
                   value={smallBowel.additionalInfo?.additionalInformation || ""}
                   onChange={(e) =>
                     updateSmallBowel("additionalInfo", "additionalInformation", e.target.value)
@@ -2298,7 +2376,8 @@ export const SmallBowelSurgeryForm = ({
                 />
               </div>
 
-              <div>
+              <div className="order-9 border-t pt-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Post Operative Management</h3>
                 <label className="text-sm font-medium text-gray-700">
                   Post Operative Management:
                 </label>
@@ -2371,10 +2450,9 @@ export const SmallBowelSurgeryForm = ({
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
               <div className="space-y-2">
-                <Input
-                  type="datetime-local"
+                <DateTimeDDMMYYYY24HourInput
                   value={smallBowel.additionalInfo?.dateTime || getLocalDateTimeValue()}
-                  onChange={(e) => updateSmallBowel("additionalInfo", "dateTime", e.target.value)}
+                  onChange={(value) => updateSmallBowel("additionalInfo", "dateTime", value)}
                 />
                 <Button
                   variant="outline"
@@ -2388,7 +2466,8 @@ export const SmallBowelSurgeryForm = ({
                 </Button>
                 {smallBowel.additionalInfo?.dateTime && (
                   <p className="text-xs text-gray-500">
-                    Display format: {formatDateOnly(smallBowel.additionalInfo.dateTime)}
+                    Display format:{" "}
+                    {formatDateTimeDDMMYYYYWithDashes(smallBowel.additionalInfo.dateTime)}
                   </p>
                 )}
               </div>

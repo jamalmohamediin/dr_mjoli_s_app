@@ -72,6 +72,8 @@ export const initialSmallBowelSurgeryState = {
   operativeEvents: {
     specimen: [] as string[],
     specimenOther: "",
+    specimenSentToLaboratory: "",
+    specifyLaboratorySentTo: "",
     pointsOfDifficulty: [] as string[],
     pointsOfDifficultyOther: "",
     intraoperativeEvents: [] as string[],

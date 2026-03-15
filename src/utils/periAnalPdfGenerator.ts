@@ -1,12 +1,17 @@
 import jsPDF from "jspdf";
-import { formatDateDDMMYYYY, formatDateTimeWithColon } from "@/utils/dateFormatter";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
+import { getFullASAText } from "@/utils/asaDescriptions";
 import {
   getPeriAnalAdditionalFindingSection,
   getPeriAnalFindingSections,
   joinSelections,
   parsePeriAnalDiagramState,
 } from "@/utils/periAnalHelpers";
-import { getPatientInfoPdfSections } from "@/utils/patientSticker";
+import {
+  formatPatientGender,
+  formatPatientStickerDate,
+  normalizePatientInfo,
+} from "@/utils/patientSticker";
 import neutralDiagram from "@/assets/peri-anal-neutral.svg";
 import femaleDiagram from "@/assets/peri-anal-female.svg";
 
@@ -109,7 +114,7 @@ export const generatePeriAnalPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = patientInfo || periAnalData?.patientInfo || {};
+    const info = normalizePatientInfo(patientInfo || periAnalData?.patientInfo || {});
     const preop = periAnalData?.preoperative || {};
     const woundManagement = periAnalData?.woundManagement || {};
     const complications = periAnalData?.complications || {};
@@ -145,19 +150,6 @@ export const generatePeriAnalPDF = async (
       pdf.setLineWidth(0.2);
       pdf.line(margin, y, pageWidth - margin, y);
       y += 5;
-    };
-
-    const sec = (title: string) => {
-      y += 3;
-      ensureSpace(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(11);
-      pdf.text(title, margin, y);
-      y += 6;
-      drawRule();
-      y += 1;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
     };
 
     const row3 = (a: string, b: string, c: string) => {
@@ -227,28 +219,122 @@ export const generatePeriAnalPDF = async (
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    const patientSubsection = (title: string) => {
-      ensureSpace(7);
+    const row1 = (value: string) => {
+      const lines = pdf.splitTextToSize(value || "", pageWidth - margin * 2);
+      const safeLines = lines.length > 0 ? lines : [""];
+      ensureSpace(safeLines.length * lineHeight + 1);
+      safeLines.forEach((line: string) => {
+        if (line) {
+          pdf.text(line, margin, y);
+        }
+        y += lineHeight;
+      });
+    };
+
+    const startSection = (title: string, options?: { withDivider?: boolean }) => {
+      const withDivider = options?.withDivider ?? true;
+      if (withDivider) {
+        y += 2;
+        drawRule();
+      } else {
+        y += 3;
+      }
+
+      ensureSpace(8);
       pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(9);
+      pdf.setFontSize(11);
       pdf.text(title, margin, y);
-      y += 5;
+      y += 6;
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
     };
 
-    sec("Patient Information");
-    getPatientInfoPdfSections(info, patientName, patientId).forEach((section, sectionIndex, sections) => {
-      if (section.title) {
-        patientSubsection(section.title);
-      }
-      section.rows.forEach((row) => row3(row[0], row[1], row[2]));
-      if (sectionIndex < sections.length - 1) {
-        y += 1;
-      }
-    });
+    const startTwoColumnSection = (leftTitle: string, rightTitle: string) => {
+      y += 2;
+      drawRule();
+      ensureSpace(8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text(leftTitle, margin, y);
+      pdf.text(rightTitle, twoCol2X, y);
+      y += 6;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+    };
 
-    sec("Preoperative Information");
+    const writeColumnEntries = (
+      entries: { label: string; value: string }[],
+      x: number,
+      width: number,
+      initialY: number
+    ) => {
+      let currentY = initialY;
+      entries.forEach((entry) => {
+        const lines = pdf.splitTextToSize(`${entry.label}: ${entry.value}`, width);
+        const safeLines = lines.length > 0 ? lines : [""];
+        safeLines.forEach((line: string) => {
+          if (line) {
+            pdf.text(line, x, currentY);
+          }
+          currentY += lineHeight;
+        });
+      });
+      return currentY;
+    };
+
+    const patientNameValue = txt(info.name || patientName);
+    const patientIdValue = txt(info.patientId || patientId);
+    const patientGender = formatPatientGender(info);
+    const asaClassification = info.asaScore ? getFullASAText(info.asaScore) : "";
+
+    startSection("Patient Details", { withDivider: false });
+    row3(
+      `Patient Name: ${patientNameValue}`,
+      `Gender: ${patientGender}`,
+      `Age: ${txt(info.age)}`
+    );
+    row3(
+      `Patient ID: ${patientIdValue}`,
+      `Date Of Birth: ${formatPatientStickerDate(info.dateOfBirth)}`,
+      `Address: ${txt(info.address)}`
+    );
+
+    startSection("Medical Aid Details");
+    row3(
+      `Medical Aid Name: ${txt(info.medicalAidName)}`,
+      `Medical Aid Number: ${txt(info.medicalAidNumber)}`,
+      `Main Member: ${txt(info.mainMember)}`
+    );
+    row3(
+      `Main Member ID: ${txt(info.mainMemberId)}`,
+      `Work Number: ${txt(info.workNumber)}`,
+      `Home Number: ${txt(info.homeNumber)}`
+    );
+    row2(
+      `Authorization: ${txt(info.authorization)}`,
+      `Depend Code: ${txt(info.dependCode)}`
+    );
+
+    startSection("Hospital Details");
+    row1(`Hospital Name: ${txt(info.hospitalName)}`);
+    row1(`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`);
+    row1(`Doctor's Name: ${txt(info.doctorName)}`);
+    row1(`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`);
+    row1(`ASA Physical Status Classification: ${asaClassification}`);
+    if (txt(info.asaNotes)) {
+      row1(`ASA Notes: ${txt(info.asaNotes)}`);
+    }
+    row3(
+      `Weight: ${txt(info.weight)}`,
+      `Height: ${txt(info.height)}`,
+      `BMI: ${txt(info.bmi)}`
+    );
+    row2(
+      `Date: ${formatPatientStickerDate(info.visitDate)}`,
+      `Time: ${txt(info.visitTime)}`
+    );
+
+    startSection("Preoperative Information");
     row3(
       `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
       `Assistant: ${(preop?.assistants || []).filter((x: string) => x?.trim()).join(", ")}`,
@@ -259,97 +345,108 @@ export const generatePeriAnalPDF = async (
       `End Time: ${txt(preop?.endTime)}`,
       `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`
     );
-    row3(
+    row2(
       `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Preoperative Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
-      `Position In Theatre: ${preop?.positionInTheatre === "Other" ? txt(preop?.positionOther) : txt(preop?.positionInTheatre)}`
+      `Preoperative Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`
     );
-    row2(`Indication For Surgery: ${txt(preop?.indication)}`, "");
-    row2(`Operation Description: ${txt(preop?.operationDescription)}`, "");
-
-    if (findingsSummary) {
-      sec(findingsSummary.title);
-      writeEntries(findingsSummary.entries);
+    row1(`Indication For Surgery: ${txt(preop?.indication)}`);
+    row1(`Operation Description: ${txt(preop?.operationDescription)}`);
+    if (txt(preop?.positionInTheatre) || txt(preop?.positionOther)) {
+      row1(
+        `Position In Theatre: ${
+          preop?.positionInTheatre === "Other" ? txt(preop?.positionOther) : txt(preop?.positionInTheatre)
+        }`
+      );
     }
 
+    ensureSpace(100);
+    startTwoColumnSection("Findings Summary", "Peri-Anal Diagram");
+    const summaryEntries =
+      findingsSummary?.entries?.length
+        ? findingsSummary.entries
+        : [{ label: "Summary", value: "No findings summary recorded" }];
+    const contentTop = y;
+    const leftX = margin;
+    const leftW = 82;
+    const rightX = twoCol2X;
+    const rightW = pageWidth - margin - rightX;
+    const rightBoxW = rightW;
+    const diagramViewLabel =
+      activeVariant === "female" ? "Female Perineal Anatomy" : "Neutral Peri-Anal";
+
+    const leftEndY = writeColumnEntries(summaryEntries, leftX, leftW, contentTop);
+
+    let rightY = contentTop;
+    pdf.text(`Diagram View: ${diagramViewLabel}`, rightX, rightY);
+    rightY += 6;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Legend:", rightX, rightY);
+    pdf.setFont("helvetica", "normal");
+    rightY += 5;
+
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.6);
+    pdf.line(rightX, rightY - 1, rightX + 8, rightY - 1);
+    pdf.text("Ports (With Size Label)", rightX + 11, rightY);
+    rightY += 5;
+
+    pdf.setDrawColor(245, 158, 11);
+    pdf.setLineWidth(0.7);
+    pdf.setLineDashPattern([1.2, 1.2], 0);
+    pdf.circle(rightX + 4, rightY - 1.5, 2.2);
+    pdf.setLineDashPattern([], 0);
+    pdf.text("Ileostomy (Dashed Yellow Circle)", rightX + 11, rightY);
+    rightY += 5;
+
+    pdf.setDrawColor(22, 163, 74);
+    pdf.setLineWidth(0.8);
+    pdf.circle(rightX + 4, rightY - 1.5, 2.2);
+    pdf.text("Colostomy (Solid Green Circle)", rightX + 11, rightY);
+    rightY += 5;
+
+    pdf.setDrawColor(127, 29, 29);
+    pdf.setLineWidth(0.7);
+    pdf.setLineDashPattern([1.5, 1.5], 0);
+    pdf.line(rightX, rightY - 1, rightX + 8, rightY - 1);
+    pdf.setLineDashPattern([], 0);
+    pdf.text("Incisions (Dashed Dark Red Line)", rightX + 11, rightY);
+    rightY += 4;
+
+    const boxX = rightX;
+    const boxY = rightY + 1;
+    const boxH = 70;
+    ensureSpace(boxH + 18);
+    pdf.rect(boxX, boxY, rightBoxW, boxH);
     if (diagramCanvas) {
-      sec("Peri-Anal Diagram");
-      const blockTop = y;
-      const rightX = twoCol2X;
-      const rightW = 80;
-      let legendY = blockTop;
-
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Legend:", rightX, legendY);
-      pdf.setFont("helvetica", "normal");
-      legendY += 5;
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.6);
-      pdf.line(rightX, legendY - 1, rightX + 8, legendY - 1);
-      pdf.text("Ports (With Size Label)", rightX + 11, legendY);
-      legendY += 5;
-
-      pdf.setDrawColor(245, 158, 11);
-      pdf.setLineWidth(0.7);
-      pdf.setLineDashPattern([1.2, 1.2], 0);
-      pdf.circle(rightX + 4, legendY - 1.5, 2.2);
-      pdf.setLineDashPattern([], 0);
-      pdf.text("Ileostomy (Dashed Yellow Circle)", rightX + 11, legendY);
-      legendY += 5;
-
-      pdf.setDrawColor(22, 163, 74);
-      pdf.setLineWidth(0.8);
-      pdf.circle(rightX + 4, legendY - 1.5, 2.2);
-      pdf.text("Colostomy (Solid Green Circle)", rightX + 11, legendY);
-      legendY += 5;
-
-      pdf.setDrawColor(127, 29, 29);
-      pdf.setLineWidth(0.7);
-      pdf.setLineDashPattern([1.5, 1.5], 0);
-      pdf.line(rightX, legendY - 1, rightX + 8, legendY - 1);
-      pdf.setLineDashPattern([], 0);
-      pdf.text("Incisions (Dashed Dark Red Line)", rightX + 11, legendY);
-      legendY += 4;
-
-      const boxX = rightX;
-      const boxY = legendY + 1;
-      const boxW = rightW;
-      const boxH = 70;
-      ensureSpace(boxH + 6);
-      pdf.rect(boxX, boxY, boxW, boxH);
       const props = pdf.getImageProperties(diagramCanvas);
       const ar = props.width / props.height;
-      let w = boxW - 4;
+      let w = rightBoxW - 4;
       let h = w / ar;
       if (h > boxH - 4) {
         h = boxH - 4;
         w = h * ar;
       }
-      pdf.addImage(diagramCanvas, "PNG", boxX + (boxW - w) / 2, boxY + (boxH - h) / 2, w, h);
-
-      pdf.setFont("helvetica", "normal");
-      pdf.text(
-        `Diagram View: ${activeVariant === "female" ? "Female Perineal Anatomy" : "Neutral Peri-Anal"}`,
-        margin,
-        blockTop + 4
-      );
-      y = boxY + boxH + 4;
+      pdf.addImage(diagramCanvas, "PNG", boxX + (rightBoxW - w) / 2, boxY + (boxH - h) / 2, w, h);
+    } else {
+      pdf.text("Diagram unavailable.", boxX + 4, boxY + 8);
     }
+    y = Math.max(leftEndY, boxY + boxH + 4);
 
     findingSections.forEach((section) => {
       if (section.entries.length === 0) return;
-      sec(section.title);
+      startSection(section.title);
       writeEntries(section.entries);
     });
 
-    sec("Wound Management");
+    startSection("Wound Management");
     writeEntries(
       [
         { label: "Irrigation Solution", value: joinSelections(woundManagement?.irrigationSolution, woundManagement?.irrigationSolutionOther) },
       ].filter((entry) => entry.value)
     );
 
-    sec("Closure");
+    startSection("Closure");
     writeEntries(
       [
         { label: "Wound Closure", value: txt(woundManagement?.woundClosure) },
@@ -358,7 +455,7 @@ export const generatePeriAnalPDF = async (
       ].filter((entry) => entry.value)
     );
 
-    sec("Complications");
+    startSection("Complications");
     writeEntries(
       [
         {
@@ -371,30 +468,35 @@ export const generatePeriAnalPDF = async (
       ].filter((entry) => entry.value)
     );
 
-    sec("Specimen");
+    startSection("Specimen");
     writeEntries(
       [
         { label: "Sent For Histology", value: txt(specimen?.sentForHistology) },
+        {
+          label: "Histology Laboratory Sent To",
+          value: specimen?.sentForHistology === "Yes" ? txt(specimen?.histologyLaboratorySentTo) : "",
+        },
         { label: "Sent For Microbiology", value: txt(specimen?.sentForMicrobiology) },
+        {
+          label: "Microbiology Laboratory Sent To",
+          value: specimen?.sentForMicrobiology === "Yes" ? txt(specimen?.microbiologyLaboratorySentTo) : "",
+        },
       ].filter((entry) => entry.value)
     );
 
-    sec("Additional Notes");
-    writeEntries([{ label: "Additional Notes", value: txt(addInfo?.additionalInformation) }].filter((entry) => entry.value));
+    startSection("Additional Information");
+    writeEntries([{ label: "Additional Information", value: txt(addInfo?.additionalInformation) }].filter((entry) => entry.value));
 
-    sec("Post Operative Management");
-    writeEntries(
-      [
-        { label: "Analgesia", value: txt(postOperativePlan?.analgesia) },
-        { label: "Antibiotics (If Indicated)", value: txt(postOperativePlan?.antibiotics) },
-        { label: "Sitz Baths", value: txt(postOperativePlan?.sitzBaths) },
-        { label: "Packing Removal Time", value: txt(postOperativePlan?.packingRemovalTime) },
-        { label: "Plan For Further Surgery", value: txt(postOperativePlan?.planForFurtherSurgery) },
-        { label: "Post Operative Management", value: txt(addInfo?.postOperativeManagement) },
-      ].filter((entry) => entry.value)
+    startSection("Post Operative Management");
+    row2(`Analgesia: ${txt(postOperativePlan?.analgesia)}`, `Sitz Baths: ${txt(postOperativePlan?.sitzBaths)}`);
+    row2(
+      `Antibiotics (If Indicated): ${txt(postOperativePlan?.antibiotics)}`,
+      `Packing Removal Time: ${txt(postOperativePlan?.packingRemovalTime)}`
     );
+    row1(`Plan For Further Surgery: ${txt(postOperativePlan?.planForFurtherSurgery)}`);
+    row1(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`);
 
-    sec("Surgeon's Signature");
+    startSection("Surgeon's Signature");
     if (addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image")) {
       ensureSpace(24);
       const sig = await calculateSignatureDimensions(addInfo.surgeonSignature);
@@ -403,7 +505,7 @@ export const generatePeriAnalPDF = async (
     }
     row2(
       `Typed Signature: ${txt(addInfo?.surgeonSignatureText)}`,
-      `Date/Time: ${addInfo?.dateTime ? formatDateTimeWithColon(addInfo.dateTime) : ""}`
+      `Date/Time: ${addInfo?.dateTime ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime) : ""}`
     );
 
     return {

@@ -236,7 +236,9 @@ export const initialPeriAnalState = {
   },
   specimen: {
     sentForHistology: "",
+    histologyLaboratorySentTo: "",
     sentForMicrobiology: "",
+    microbiologyLaboratorySentTo: "",
   },
   additionalInfo: {
     additionalInformation: "",
