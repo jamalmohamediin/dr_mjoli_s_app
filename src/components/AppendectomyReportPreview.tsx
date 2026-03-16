@@ -5,6 +5,9 @@ import { Separator } from "@/components/ui/separator";
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from '@/assets/appendectomy.jpg';
+import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+
+const APPENDECTOMY_PREVIEW_MARKING_SCALE = 1.5;
 
 interface AppendectomyReportPreviewProps {
   report: {
@@ -96,6 +99,7 @@ interface AppendectomyReportPreviewProps {
 const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const drawingMetrics = getSurgicalDiagramMarkingMetrics(APPENDECTOMY_PREVIEW_MARKING_SCALE);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -115,17 +119,17 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
         if (marking.type === 'port') {
           // Draw port marking: black line with size label
           ctx.save();
-          ctx.font = 'bold 10px Arial';
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
@@ -133,16 +137,16 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
           ctx.save();
           if (marking.stomaType === 'ileostomy') {
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#f59e0b'; // Gold/Yellow
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 3]); // Dashed line
+            ctx.lineWidth = drawingMetrics.ileostomyLineWidth;
+            ctx.setLineDash(drawingMetrics.ileostomyDash); // Dashed line
             ctx.stroke();
           } else { // colostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#16a34a'; // Green
-            ctx.lineWidth = 4;
+            ctx.lineWidth = drawingMetrics.colostomyLineWidth;
             ctx.setLineDash([]); // Continuous line
             ctx.stroke();
           }
@@ -154,8 +158,8 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = '#8B0000'; // Dark red
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]); // Dashed line
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash); // Dashed line
           ctx.stroke();
           ctx.restore();
         }

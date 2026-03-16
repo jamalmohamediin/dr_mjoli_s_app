@@ -48,6 +48,8 @@ export const PatientInfoForm = ({
       onBulkUpdate={handleBulkUpdate}
       currentExtractedPatientInfo={currentExtractedPatientInfo}
       onCurrentPatientChange={onCurrentPatientChange}
+      use24HourTimeInputs
+      useDashDateInputs
     />
   );
 };

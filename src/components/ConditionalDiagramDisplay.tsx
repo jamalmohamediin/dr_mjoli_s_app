@@ -5,7 +5,12 @@ import { AnatomyDiagram } from "./AnatomyDiagram";
 import { Stethoscope, Save, Trash2 } from "lucide-react";
 import { SurgicalDiagram } from "./SurgicalDiagram";
 import appendectomyImage from "@/assets/appendectomy.jpg";
-import periAnalNeutralImage from "@/assets/peri-anal-neutral.svg";
+import {
+  createInitialPeriAnalDiagramMarkings,
+  DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+  periAnalDiagramImages,
+  periAnalDiagramLabels,
+} from "@/utils/periAnalDiagramConfig";
 
 interface SurgicalDiagramState {
   activeVariant: string;
@@ -26,8 +31,11 @@ interface ConditionalDiagramDisplayProps {
   onColonoscopyMethodsReady?: (methods: any) => void;
   customImage?: string;
   surgicalDiagramVariants?: Record<string, string>;
+  surgicalDiagramVariantLabels?: Record<string, string>;
   currentSurgicalDiagramState?: SurgicalDiagramState;
   onSurgicalDiagramStateChange?: (state: SurgicalDiagramState) => void;
+  diagramMarkingScale?: number;
+  showAllSurgicalDiagramVariants?: boolean;
 }
 
 export const ConditionalDiagramDisplay = ({ 
@@ -44,8 +52,11 @@ export const ConditionalDiagramDisplay = ({
   onColonoscopyMethodsReady,
   customImage,
   surgicalDiagramVariants,
+  surgicalDiagramVariantLabels,
   currentSurgicalDiagramState,
   onSurgicalDiagramStateChange,
+  diagramMarkingScale,
+  showAllSurgicalDiagramVariants,
 }: ConditionalDiagramDisplayProps) => {
   const [findings, setFindings] = useState(currentProcedureFindings?.findings || "");
   const [activeDiagramVariant, setActiveDiagramVariant] = useState(
@@ -70,7 +81,7 @@ export const ConditionalDiagramDisplay = ({
     "Rectal Cancer Surgery": appendectomyImage,
     "Small Bowel Surgery": appendectomyImage,
     "Cholecystectomy": appendectomyImage,
-    "Peri-Anal": periAnalNeutralImage,
+    "Peri-Anal": periAnalDiagramImages[DEFAULT_PERI_ANAL_DIAGRAM_VARIANT],
   };
 
   const readLegacyMarkings = (): any[] => {
@@ -83,11 +94,19 @@ export const ConditionalDiagramDisplay = ({
   };
 
   const getSurgicalDiagramState = (variantKeys: string[]): SurgicalDiagramState => {
+    const defaultMarkings =
+      activeSurgicalProcedureName === "Peri-Anal"
+        ? createInitialPeriAnalDiagramMarkings()
+        : {};
+
     if (currentSurgicalDiagramState) {
       return {
         activeVariant:
           currentSurgicalDiagramState.activeVariant || activeDiagramVariant || variantKeys[0] || "default",
-        markingsByVariant: currentSurgicalDiagramState.markingsByVariant || {},
+        markingsByVariant: {
+          ...defaultMarkings,
+          ...(currentSurgicalDiagramState.markingsByVariant || {}),
+        },
       };
     }
 
@@ -95,6 +114,7 @@ export const ConditionalDiagramDisplay = ({
     return {
       activeVariant: defaultVariant,
       markingsByVariant: {
+        ...defaultMarkings,
         [defaultVariant]: readLegacyMarkings(),
       },
     };
@@ -170,20 +190,52 @@ export const ConditionalDiagramDisplay = ({
     const currentVariant = diagramState.activeVariant || variantKeys[0] || "default";
     const currentDiagramImage =
       diagramVariants[currentVariant] || diagramVariants[variantKeys[0]] || surgicalProceduresMap[activeSurgicalProcedureName];
+    const renderAllVariants = Boolean(showAllSurgicalDiagramVariants && variantKeys.length > 1);
+    const variantLabels =
+      surgicalDiagramVariantLabels && Object.keys(surgicalDiagramVariantLabels).length > 0
+        ? surgicalDiagramVariantLabels
+        : periAnalDiagramLabels;
 
     return (
       <Card className="glass-card-light">
         <CardHeader className="px-4 pt-4 text-center sm:px-6 sm:text-left">
           <CardTitle className="flex items-center justify-center gap-2 sm:justify-start">
             <Stethoscope className="h-5 w-5 text-gray-600" />
-            {activeSurgicalProcedureName === "Appendectomy" ? "Appendicectomy" : activeSurgicalProcedureName} Diagram
+            {activeSurgicalProcedureName === "Appendectomy" ? "Appendicectomy" : activeSurgicalProcedureName} {renderAllVariants ? "Diagrams" : "Diagram"}
           </CardTitle>
           <CardDescription className="mx-auto max-w-md sm:mx-0">
-            Mark Ports, Stomas, and Incisions on the diagram below.
+            Mark Ports, Stomas, and Incisions on the diagram{renderAllVariants ? "s" : ""} below.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 pb-4 sm:px-6">
-          {variantKeys.length > 1 && (
+          {renderAllVariants ? (
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              {variantKeys.map((variantKey) => (
+                <div key={variantKey} className="space-y-3">
+                  <div className="text-center sm:text-left">
+                    <p className="text-sm font-medium text-gray-700">
+                      {variantLabels[variantKey] || variantKey}
+                    </p>
+                  </div>
+                  <SurgicalDiagram
+                    key={`${activeSurgicalProcedureName}-${variantKey}`}
+                    diagramImage={diagramVariants[variantKey]}
+                    initialMarkings={diagramState.markingsByVariant[variantKey] || []}
+                    markingScale={diagramMarkingScale}
+                    onUpdate={(markings) => {
+                      emitSurgicalState({
+                        activeVariant: variantKey,
+                        markingsByVariant: {
+                          ...diagramState.markingsByVariant,
+                          [variantKey]: markings,
+                        },
+                      });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : variantKeys.length > 1 ? (
             <div className="mb-4 space-y-2">
               <p className="text-sm font-medium text-gray-700">Diagram View:</p>
               <div className="flex flex-wrap gap-2">
@@ -202,26 +254,29 @@ export const ConditionalDiagramDisplay = ({
                       emitSurgicalState(nextState);
                     }}
                   >
-                    {variantKey === "neutral" ? "Neutral Peri-Anal" : "Female Perineal Anatomy"}
+                    {variantLabels[variantKey] || variantKey}
                   </Button>
                 ))}
               </div>
             </div>
+          ) : null}
+          {!renderAllVariants && (
+            <SurgicalDiagram
+              key={`${activeSurgicalProcedureName}-${currentVariant}`}
+              diagramImage={currentDiagramImage}
+              initialMarkings={diagramState.markingsByVariant[currentVariant] || []}
+              markingScale={diagramMarkingScale}
+              onUpdate={(markings) => {
+                emitSurgicalState({
+                  activeVariant: currentVariant,
+                  markingsByVariant: {
+                    ...diagramState.markingsByVariant,
+                    [currentVariant]: markings,
+                  },
+                });
+              }}
+            />
           )}
-          <SurgicalDiagram
-            key={`${activeSurgicalProcedureName}-${currentVariant}`}
-            diagramImage={currentDiagramImage}
-            initialMarkings={diagramState.markingsByVariant[currentVariant] || []}
-            onUpdate={(markings) => {
-              emitSurgicalState({
-                activeVariant: currentVariant,
-                markingsByVariant: {
-                  ...diagramState.markingsByVariant,
-                  [currentVariant]: markings,
-                },
-              });
-            }}
-          />
         </CardContent>
       </Card>
     );

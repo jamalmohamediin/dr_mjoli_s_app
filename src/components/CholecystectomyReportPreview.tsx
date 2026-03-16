@@ -5,6 +5,9 @@ import { getFullASAText } from "@/utils/asaDescriptions";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import appendectomyImage from "@/assets/appendectomy.jpg";
+import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+
+const CHOLECYSTECTOMY_PREVIEW_MARKING_SCALE = 1.5;
 
 interface CholecystectomyReportPreviewProps {
   report: any;
@@ -29,6 +32,7 @@ const renderSelection = (values: string[], otherValue?: string) =>
 const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const drawingMetrics = getSurgicalDiagramMarkingMetrics(CHOLECYSTECTOMY_PREVIEW_MARKING_SCALE);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,25 +49,28 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
       markings.forEach((marking) => {
         if (marking.type === "port") {
           ctx.save();
-          ctx.font = "bold 10px Arial";
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = "black";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
-          ctx.lineWidth = marking.stomaType === "ileostomy" ? 2 : 4;
-          ctx.setLineDash(marking.stomaType === "ileostomy" ? [5, 3] : []);
+          ctx.lineWidth =
+            marking.stomaType === "ileostomy"
+              ? drawingMetrics.ileostomyLineWidth
+              : drawingMetrics.colostomyLineWidth;
+          ctx.setLineDash(marking.stomaType === "ileostomy" ? drawingMetrics.ileostomyDash : []);
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "incision") {
@@ -72,8 +79,8 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = "#8B0000";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]);
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
         }

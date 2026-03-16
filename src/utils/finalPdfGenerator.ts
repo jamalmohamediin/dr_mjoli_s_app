@@ -1,5 +1,8 @@
 import jsPDF from 'jspdf';
-import { formatDateWithSuffix, formatDateOnly, formatDateDDMMYYYY } from './dateFormatter';
+import {
+  formatDateDDMMYYYYWithDashes,
+  formatDateTimeDDMMYYYYWithDashes,
+} from './dateFormatter';
 import { getPatientInfoPdfSections } from './patientSticker';
 
 export interface FinalDiagramCapture {
@@ -7,19 +10,6 @@ export interface FinalDiagramCapture {
   findings: any[];
   type: 'gastroscopy' | 'colonoscopy';
 }
-
-// Helper function for ordinal suffix
-const getOrdinalSuffix = (day: number): string => {
-  if (day >= 11 && day <= 13) {
-    return 'th';
-  }
-  switch (day % 10) {
-    case 1: return 'st';
-    case 2: return 'nd';
-    case 3: return 'rd';
-    default: return 'th';
-  }
-};
 
 export const generateFinalPDF = async (
   patientName: string,
@@ -62,7 +52,12 @@ export const generateFinalPDF = async (
       
       pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, footerY, { align: 'center' });
       pdf.text('Practice Number: 0560812', pageWidth / 2, footerY + 4, { align: 'center' });
-      pdf.text(`Report Date: ${formatDateOnly(new Date())} | Page ${pageNum} of {{totalPages}}`, pageWidth / 2, footerY + 8, { align: 'center' });
+      pdf.text(
+        `Report Date: ${formatDateDDMMYYYYWithDashes(new Date())} | Page ${pageNum} of {{totalPages}}`,
+        pageWidth / 2,
+        footerY + 8,
+        { align: 'center' },
+      );
     };
     
     // Add footer to first page
@@ -279,8 +274,10 @@ export const generateFinalPDF = async (
       pdf.text(`Total Duration: ${totalDuration}`, col3X, y);
       y += 4;
       
-      // Row 3: Clinical Indication and Preoperative Imaging (2 columns aligned)
+      // Row 3: Procedure Urgency and Preoperative Imaging
+      const procedureUrgency = reportData.patientInfo.procedureUrgency || '';
       const indication = reportData.patientInfo.indication || '';
+      const operationDescription = reportData.patientInfo.operationDescription || '';
       const preoperativeImagingRaw = reportData.patientInfo.preoperativeImaging || '';
       
       // Format preoperative imaging to exact display names
@@ -305,9 +302,26 @@ export const generateFinalPDF = async (
           preoperativeImaging = preoperativeImagingRaw;
       }
       
-      pdf.text(`Clinical Indication: ${indication}`, col1X, y);
-      pdf.text(`Preoperative Imaging: ${preoperativeImaging}`, col2X, y);
-      y += 8;
+      pdf.text(`Procedure Urgency: ${procedureUrgency}`, col1X, y);
+      pdf.text(`Preoperative Imaging: ${preoperativeImaging}`, col3X, y);
+      y += 4;
+
+      const indicationLines = pdf.splitTextToSize(
+        `Indication for Surgery: ${indication}`,
+        pageWidth - 2 * margin,
+      );
+      const operationDescriptionLines = pdf.splitTextToSize(
+        `Operation Description: ${operationDescription}`,
+        pageWidth - 2 * margin,
+      );
+
+      checkPageBreak((indicationLines.length + operationDescriptionLines.length + 5) * 4);
+
+      pdf.text(indicationLines, margin, y);
+      y += indicationLines.length * 4;
+
+      pdf.text(operationDescriptionLines, margin, y);
+      y += operationDescriptionLines.length * 4 + 4;
       
       // Separator line
       pdf.setDrawColor(0, 0, 0);
@@ -339,22 +353,38 @@ export const generateFinalPDF = async (
       const bowelPrep = bowelPrepRaw ? bowelPrepRaw.charAt(0).toUpperCase() + bowelPrepRaw.slice(1).toLowerCase() : '';
       const anesthesiaType = capitalizeAnesthesia(reportData.patientInfo.sedation || '');
       
-      // Single column layout as specified
       pdf.setFont('helvetica', 'normal');
-      pdf.text('Procedures Performed:', margin, y);
+      pdf.text('Procedures Performed:', col1XThree, y);
+      pdf.text('Type of Anesthesia:', col2XThree, y);
+      pdf.text('Bowel Preparation:', col3XThree, y);
       y += 4;
-      pdf.text(proceduresText, margin, y);
-      y += 6;
-      
-      pdf.text('Type of Anesthesia:', margin, y);
+
+      const proceduresLines = pdf.splitTextToSize(proceduresText || '', threeColumnWidth);
+      const anesthesiaLines = pdf.splitTextToSize(anesthesiaType || '', threeColumnWidth);
+      const bowelPrepLines = pdf.splitTextToSize(bowelPrep || '', threeColumnWidth);
+      const procedureInfoLineCount = Math.max(
+        proceduresLines.length,
+        anesthesiaLines.length,
+        bowelPrepLines.length,
+        1,
+      );
+
+      checkPageBreak(procedureInfoLineCount * 4 + 8);
+
+      for (let index = 0; index < procedureInfoLineCount; index++) {
+        if (proceduresLines[index]) {
+          pdf.text(proceduresLines[index], col1XThree, y);
+        }
+        if (anesthesiaLines[index]) {
+          pdf.text(anesthesiaLines[index], col2XThree, y);
+        }
+        if (bowelPrepLines[index]) {
+          pdf.text(bowelPrepLines[index], col3XThree, y);
+        }
+        y += 4;
+      }
+
       y += 4;
-      pdf.text(anesthesiaType, margin, y);
-      y += 6;
-      
-      pdf.text('Bowel Preparation:', margin, y);
-      y += 4;
-      pdf.text(bowelPrep, margin, y);
-      y += 8;
       
       // Separator line
       pdf.setDrawColor(0, 0, 0);
@@ -702,18 +732,17 @@ export const generateFinalPDF = async (
       
       // Add date/time if present, otherwise use current date
       if (reportData?.signature?.dateTime) {
-        const date = new Date(reportData.signature.dateTime);
-        const day = date.getDate();
-        const suffix = getOrdinalSuffix(day);
-        const month = date.toLocaleString('en-US', { month: 'long' });
-        const year = date.getFullYear();
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        
-        const dateTimeStr = `${day}${suffix} ${month} ${year} at ${hours}:${minutes}`;
-        pdf.text(dateTimeStr, dateTimeX + 25, signatureY); // Adjusted to match new position
+        pdf.text(
+          formatDateTimeDDMMYYYYWithDashes(reportData.signature.dateTime),
+          dateTimeX + 25,
+          signatureY,
+        );
       } else {
-        pdf.text(formatDateOnly(new Date()), dateTimeX + 25, signatureY); // Adjusted to match new position
+        pdf.text(
+          formatDateTimeDDMMYYYYWithDashes(new Date()),
+          dateTimeX + 25,
+          signatureY,
+        );
       }
       
       
@@ -737,7 +766,7 @@ export const generateFinalPDF = async (
       pdf.setPage(i);
       // Find and replace {{totalPages}} placeholder
       const footerY = pageHeight - 20;
-      const footerText = `Report Date: ${formatDateOnly(new Date())} | Page ${i} of ${totalPages}`;
+      const footerText = `Report Date: ${formatDateDDMMYYYYWithDashes(new Date())} | Page ${i} of ${totalPages}`;
       
       // Cover the old page number text
       pdf.setFillColor(255, 255, 255);

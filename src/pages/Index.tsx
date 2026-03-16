@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Microscope, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, Scissors, Shield, Activity, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
+import { FileText, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { PatientInfoForm } from "@/components/PatientInfoForm";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { ProcedureInfoForm } from "@/components/ProcedureInfoForm";
@@ -23,7 +23,7 @@ import { CholecystectomyForm } from "@/components/CholecystectomyForm";
 import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
 import { PeriAnalForm } from "@/components/PeriAnalForm";
 import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
-import { DateTime24HourInput, Time24HourInput } from "@/components/Time24HourInput";
+import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
@@ -40,6 +40,12 @@ import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { createInitialPeriAnalState } from "@/utils/periAnal";
 import {
+  createInitialPeriAnalDiagramMarkings,
+  DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+  periAnalDiagramImages,
+  periAnalDiagramLabels,
+} from "@/utils/periAnalDiagramConfig";
+import {
   createInitialPatientInfoState,
   hasExtractedPatientStickerData,
   mergePatientInfoUpdates,
@@ -47,8 +53,6 @@ import {
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
-import periAnalNeutralImage from "@/assets/peri-anal-neutral.svg";
-import periAnalFemaleImage from "@/assets/peri-anal-female.svg";
 
 const hasMeaningfulPatientInfoData = (patientInfo: any): boolean =>
   Object.values(createInitialPatientInfoState(patientInfo)).some((value) => {
@@ -3853,12 +3857,12 @@ const Index = () => {
 
   return (
     <AppLayout>
-      <GlassContainer>
+      <GlassContainer className="pt-2 sm:pt-4">
         {/* Glass Header */}
         <GlassHeader
           title="Gastroenterology Templates"
           subtitle=""
-          icon={<Stethoscope className="h-16 w-16 text-gray-700" />}
+          className="mb-4 sm:mb-6"
         />
 
         <div className="grid grid-cols-1 2xl:grid-cols-4 gap-8">
@@ -3868,10 +3872,7 @@ const Index = () => {
               <CardHeader>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Microscope className="h-5 w-5 text-gray-600" />
-                      Patient & Procedure Documentation
-                    </CardTitle>
+                    <CardTitle>Patient & Procedure Documentation</CardTitle>
                     <CardDescription>
                       Complete patient information and procedure documentation
                     </CardDescription>
@@ -3891,32 +3892,25 @@ const Index = () => {
               <CardContent>
 	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
 	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-7 sm:overflow-visible">
-                    <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                      <Microscope className="h-4 w-4" />
+                    <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Endoscopy
                     </TabsTrigger>
-                    <TabsTrigger value="appendectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                      <Scissors className="h-4 w-4" />
+                    <TabsTrigger value="appendectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Appendicectomy
                     </TabsTrigger>
-                    <TabsTrigger value="hernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                      <Shield className="h-4 w-4" />
+                    <TabsTrigger value="hernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Ventral Hernia Repair
                     </TabsTrigger>
-	                    <TabsTrigger value="rectal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-	                      <Activity className="h-4 w-4" />
+	                    <TabsTrigger value="rectal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
 	                      Colorectal Resection
 	                    </TabsTrigger>
-                      <TabsTrigger value="smallBowel" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                        <Scissors className="h-4 w-4" />
+                      <TabsTrigger value="smallBowel" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         Small Bowel Surgery
                       </TabsTrigger>
-                      <TabsTrigger value="cholecystectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                        <Scissors className="h-4 w-4" />
+                      <TabsTrigger value="cholecystectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         Cholecystectomy
                       </TabsTrigger>
-                      <TabsTrigger value="periAnal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center gap-2 whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
-                        <Scissors className="h-4 w-4" />
+                      <TabsTrigger value="periAnal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         Peri-Anal
                       </TabsTrigger>
 	                  </TabsList>
@@ -4628,16 +4622,31 @@ const Index = () => {
                                 </div>
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">Date & Time:</p>
-                                <Input 
-                                  type="datetime-local" 
-                                  className="w-full"
-                                  value={currentReport.signature?.dateTime || ''}
-                                  onChange={(e) => updateReport('signature', {
-                                    ...currentReport.signature,
-                                    dateTime: e.target.value
-                                  })}
-                                />
+                                <p className="text-sm font-medium text-gray-700 mb-2">Date/Time:</p>
+                                <div className="space-y-2">
+                                  <DateTimeDDMMYYYY24HourInput
+                                    className="w-full"
+                                    value={currentReport.signature?.dateTime || getLocalDateTimeValue()}
+                                    onChange={(value) => updateReport('signature', {
+                                      ...currentReport.signature,
+                                      dateTime: value
+                                    })}
+                                  />
+                                  <p className="text-xs text-gray-500">Display format: DD-MM-YYYY HH:MM</p>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs px-2 py-1"
+                                    onClick={() => {
+                                      updateReport('signature', {
+                                        ...currentReport.signature,
+                                        dateTime: getLocalDateTimeValue()
+                                      });
+                                    }}
+                                  >
+                                    Set Current Date/Time
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -4649,8 +4658,7 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <CardHeader>
                         <div className="flex justify-between items-center">
-                          <CardTitle className="flex items-center gap-2 text-sm">
-                            <FileText className="h-4 w-4 text-gray-600" />
+                          <CardTitle className="text-sm">
                             Live Report
                             <span className="text-xs text-gray-500 font-normal ml-2">
                               Real-time preview of procedure findings
@@ -4715,10 +4723,7 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <CardHeader>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex-shrink-0 p-2 bg-blue-100 rounded-md">
-                              <Scissors className="w-6 h-6 text-blue-600" />
-                            </div>
+                          <div>
                             <h1 className="text-2xl font-bold text-gray-800">
                               Synoptic Operative Report – Appendicectomy
                             </h1>
@@ -4805,6 +4810,7 @@ const Index = () => {
 	                            onBulkUpdate={updateAppendectomyPatientInfoBulk}
 	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                            onCurrentPatientChange={updateCurrentExtractedPatient}
+                              useDashDateInputs
                               use24HourTimeInputs
 	                          />
                         </CardContent>
@@ -4999,49 +5005,6 @@ const Index = () => {
                             </div>
 
                             <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
-                              <div className="flex flex-wrap gap-4 ml-4">
-                                {['Acute Appendicitis', 'Perforated Appendix', 'Abscess', 'Interval Appendicectomy', 'Other'].map(indication => (
-                                  <div className="flex items-center" key={`indication-${indication}`}>
-                                    <Checkbox 
-                                      id={`indication-${indication}`} 
-                                      checked={currentReport.appendectomy.preoperative.indication.includes(indication)}
-                                      onCheckedChange={(checked) => {
-                                        const currentIndications = currentReport.appendectomy.preoperative.indication;
-                                        const newIndications = checked 
-                                          ? [...currentIndications, indication]
-                                          : currentIndications.filter(i => i !== indication);
-                                        updateAppendectomy('preoperative', 'indication', newIndications);
-                                      }}
-                                    />
-                                    <label htmlFor={`indication-${indication}`} className="ml-2 block text-sm text-gray-700">{indication}</label>
-                                    {indication === 'Other' && (
-                                      <Input 
-                                        type="text" 
-                                        className="ml-2 w-32" 
-                                        value={currentReport.appendectomy.preoperative.indicationOther}
-                                        onChange={(e) => updateAppendectomy('preoperative', 'indicationOther', e.target.value)}
-                                        placeholder="Specify"
-                                      />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-
-                            {/* Operation Description - moved here after Preoperative Imaging */}
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                              <Textarea 
-                                className="w-full min-h-[100px]"
-                                placeholder="Please describe the surgical approach and key procedural steps"
-                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
-                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
-                              />
-                            </div>
-
-                            <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
                                 {['Emergency', 'Semi-Emergency', 'Semi-Elective', 'Elective'].map((urgency) => (
@@ -5093,7 +5056,7 @@ const Index = () => {
                               </div>
                             </div>
 
-                            {/* Duration of Operation with Start and End Times - moved here after Preoperative Imaging */}
+                            {/* Duration of Operation with Start and End Times */}
                             <div className="space-y-4">
                               <div className="grid grid-cols-3 gap-4 items-center">
                                 <label className="text-gray-800 font-medium">Start Time (24-hour):</label>
@@ -5146,6 +5109,47 @@ const Index = () => {
                                     : "Manual entry"}
                                 </div>
                               </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
+                              <div className="flex flex-wrap gap-4 ml-4">
+                                {['Acute Appendicitis', 'Perforated Appendix', 'Abscess', 'Interval Appendicectomy', 'Other'].map(indication => (
+                                  <div className="flex items-center" key={`indication-${indication}`}>
+                                    <Checkbox 
+                                      id={`indication-${indication}`} 
+                                      checked={currentReport.appendectomy.preoperative.indication.includes(indication)}
+                                      onCheckedChange={(checked) => {
+                                        const currentIndications = currentReport.appendectomy.preoperative.indication;
+                                        const newIndications = checked 
+                                          ? [...currentIndications, indication]
+                                          : currentIndications.filter(i => i !== indication);
+                                        updateAppendectomy('preoperative', 'indication', newIndications);
+                                      }}
+                                    />
+                                    <label htmlFor={`indication-${indication}`} className="ml-2 block text-sm text-gray-700">{indication}</label>
+                                    {indication === 'Other' && (
+                                      <Input 
+                                        type="text" 
+                                        className="ml-2 w-32" 
+                                        value={currentReport.appendectomy.preoperative.indicationOther}
+                                        onChange={(e) => updateAppendectomy('preoperative', 'indicationOther', e.target.value)}
+                                        placeholder="Specify"
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full min-h-[100px]"
+                                placeholder="Please describe the surgical approach and key procedural steps"
+                                value={currentReport.appendectomy?.procedure?.operationDescription || ''}
+                                onChange={(e) => updateAppendectomy('procedure', 'operationDescription', e.target.value)}
+                              />
                             </div>
                           </div>
                         </CardContent>
@@ -5362,6 +5366,7 @@ const Index = () => {
                                   }}
                                   currentProcedureFindings={currentReport.appendectomy?.procedureFindings || { findings: '', additionalNotes: '' }}
                                   customImage={appendectomyImage}
+                                  diagramMarkingScale={1.5}
                                 />
                               </div>
                             </div>
@@ -6159,8 +6164,7 @@ const Index = () => {
                       <Card className="shadow-glass-heavy sticky top-6">
                         <CardHeader>
                           <div className="flex justify-between items-center">
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
+                            <CardTitle className="text-sm">
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of appendectomy findings</span>
                             </CardTitle>
@@ -6187,10 +6191,7 @@ const Index = () => {
                     <Card className="glass-card-light">
                       <CardHeader>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex-shrink-0 p-2 bg-green-100 rounded-md">
-                              <Shield className="w-6 h-6 text-green-600" />
-                            </div>
+                          <div>
                             <h1 className="text-2xl font-bold text-gray-800">
                               Synoptic Operative Report – Ventral Hernia Repair
                             </h1>
@@ -6280,6 +6281,7 @@ const Index = () => {
 	                            onBulkUpdate={updateVentralHerniaPatientInfoBulk}
 	                            currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                            onCurrentPatientChange={updateCurrentExtractedPatient}
+                              useDashDateInputs
                               use24HourTimeInputs
 	                          />
                         </CardContent>
@@ -6540,90 +6542,6 @@ const Index = () => {
                             </div>
 
                             <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
-                              <div className="space-y-2 ml-4">
-                                {['Symptomatic Primary Ventral Hernia', 'Symptomatic Incisional Hernia', 'Recurrent Hernia', 'Incarceration'].map(indication => (
-                                  <div className="flex items-center" key={`hernia-indication-${indication}`}>
-                                    <Checkbox 
-                                      id={`hernia-indication-${indication}`}
-                                      checked={currentReport.ventralHernia?.preoperative?.indication?.includes(indication) || false}
-                                      onCheckedChange={(checked) => {
-                                        const currentIndications = currentReport.ventralHernia?.preoperative?.indication || [];
-                                        let newIndications;
-                                        if (checked) {
-                                          newIndications = [...currentIndications, indication];
-                                        } else {
-                                          newIndications = currentIndications.filter(i => i !== indication);
-                                        }
-                                        updateReport('ventralHernia', {
-                                          ...currentReport.ventralHernia,
-                                          preoperative: {
-                                            ...currentReport.ventralHernia?.preoperative,
-                                            indication: newIndications
-                                          }
-                                        });
-                                      }}
-                                    />
-                                    <label htmlFor={`hernia-indication-${indication}`} className="ml-2 block text-sm text-gray-700">{indication}</label>
-                                  </div>
-                                ))}
-                                <div className="flex items-center">
-                                  <Checkbox 
-                                    id="hernia-indication-other"
-                                    checked={currentReport.ventralHernia?.preoperative?.indication?.includes('Other') || false}
-                                    onCheckedChange={(checked) => {
-                                      const currentIndications = currentReport.ventralHernia?.preoperative?.indication || [];
-                                      let newIndications;
-                                      if (checked) {
-                                        newIndications = [...currentIndications, 'Other'];
-                                      } else {
-                                        newIndications = currentIndications.filter(i => i !== 'Other');
-                                      }
-                                      updateReport('ventralHernia', {
-                                        ...currentReport.ventralHernia,
-                                        preoperative: {
-                                          ...currentReport.ventralHernia?.preoperative,
-                                          indication: newIndications
-                                        }
-                                      });
-                                    }}
-                                  />
-                                  <label htmlFor="hernia-indication-other" className="ml-2 block text-sm text-gray-700">Other:</label>
-                                  <Input 
-                                    type="text" 
-                                    className="ml-2 w-48" 
-                                    placeholder="Specify other indication"
-                                    value={currentReport.ventralHernia?.preoperative?.indicationOther || ''}
-                                    onChange={(e) => updateReport('ventralHernia', {
-                                      ...currentReport.ventralHernia,
-                                      preoperative: {
-                                        ...currentReport.ventralHernia?.preoperative,
-                                        indicationOther: e.target.value
-                                      }
-                                    })}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                              <Textarea 
-                                className="w-full"
-                                rows={3}
-                                placeholder="Enter operation description"
-                                value={currentReport.ventralHernia?.operative?.operationDescription || ''}
-                                onChange={(e) => updateReport('ventralHernia', {
-                                  ...currentReport.ventralHernia,
-                                  operative: {
-                                    ...currentReport.ventralHernia?.operative,
-                                    operationDescription: e.target.value
-                                  }
-                                })}
-                              />
-                            </div>
-
-                            <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
                                 {['Emergency', 'Semi-Emergency', 'Semi-Elective', 'Elective'].map((urgency) => (
@@ -6798,6 +6716,90 @@ const Index = () => {
                                   />
                                 </div>
                               </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
+                              <div className="space-y-2 ml-4">
+                                {['Symptomatic Primary Ventral Hernia', 'Symptomatic Incisional Hernia', 'Recurrent Hernia', 'Incarceration'].map(indication => (
+                                  <div className="flex items-center" key={`hernia-indication-${indication}`}>
+                                    <Checkbox 
+                                      id={`hernia-indication-${indication}`}
+                                      checked={currentReport.ventralHernia?.preoperative?.indication?.includes(indication) || false}
+                                      onCheckedChange={(checked) => {
+                                        const currentIndications = currentReport.ventralHernia?.preoperative?.indication || [];
+                                        let newIndications;
+                                        if (checked) {
+                                          newIndications = [...currentIndications, indication];
+                                        } else {
+                                          newIndications = currentIndications.filter(i => i !== indication);
+                                        }
+                                        updateReport('ventralHernia', {
+                                          ...currentReport.ventralHernia,
+                                          preoperative: {
+                                            ...currentReport.ventralHernia?.preoperative,
+                                            indication: newIndications
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <label htmlFor={`hernia-indication-${indication}`} className="ml-2 block text-sm text-gray-700">{indication}</label>
+                                  </div>
+                                ))}
+                                <div className="flex items-center">
+                                  <Checkbox 
+                                    id="hernia-indication-other"
+                                    checked={currentReport.ventralHernia?.preoperative?.indication?.includes('Other') || false}
+                                    onCheckedChange={(checked) => {
+                                      const currentIndications = currentReport.ventralHernia?.preoperative?.indication || [];
+                                      let newIndications;
+                                      if (checked) {
+                                        newIndications = [...currentIndications, 'Other'];
+                                      } else {
+                                        newIndications = currentIndications.filter(i => i !== 'Other');
+                                      }
+                                      updateReport('ventralHernia', {
+                                        ...currentReport.ventralHernia,
+                                        preoperative: {
+                                          ...currentReport.ventralHernia?.preoperative,
+                                          indication: newIndications
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <label htmlFor="hernia-indication-other" className="ml-2 block text-sm text-gray-700">Other:</label>
+                                  <Input 
+                                    type="text" 
+                                    className="ml-2 w-48" 
+                                    placeholder="Specify other indication"
+                                    value={currentReport.ventralHernia?.preoperative?.indicationOther || ''}
+                                    onChange={(e) => updateReport('ventralHernia', {
+                                      ...currentReport.ventralHernia,
+                                      preoperative: {
+                                        ...currentReport.ventralHernia?.preoperative,
+                                        indicationOther: e.target.value
+                                      }
+                                    })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                              <Textarea 
+                                className="w-full"
+                                rows={3}
+                                placeholder="Enter operation description"
+                                value={currentReport.ventralHernia?.operative?.operationDescription || ''}
+                                onChange={(e) => updateReport('ventralHernia', {
+                                  ...currentReport.ventralHernia,
+                                  operative: {
+                                    ...currentReport.ventralHernia?.operative,
+                                    operationDescription: e.target.value
+                                  }
+                                })}
+                              />
                             </div>
 
                             <div>
@@ -7368,6 +7370,7 @@ const Index = () => {
                                   }}
                                   currentProcedureFindings={currentReport.ventralHernia?.procedureFindings || { findings: '', additionalNotes: '' }}
                                   customImage={appendectomyImage}
+                                  diagramMarkingScale={1.5}
                                 />
                               </div>
                             </div>
@@ -8643,8 +8646,7 @@ const Index = () => {
                       <Card className="shadow-glass-heavy sticky top-6">
                         <CardHeader>
                           <div className="flex justify-between items-center">
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
+                            <CardTitle className="text-sm">
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of your ventral hernia repair report</span>
                             </CardTitle>
@@ -8678,10 +8680,7 @@ const Index = () => {
                         <Card className="glass-card-light">
                           <CardHeader>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 p-2 bg-red-100 rounded-md">
-                                  <Activity className="w-6 h-6 text-red-600" />
-                                </div>
+                              <div>
                                 <h1 className="text-2xl font-bold text-gray-800">
                                   Colorectal Resection - Synoptic Operative Report
                                 </h1>
@@ -8743,6 +8742,7 @@ const Index = () => {
                                 updateRectalCancer('procedureFindings', 'additionalNotes', data.additionalNotes || '');
                               }}
                               currentProcedureFindings={currentReport.rectalCancer?.procedureFindings || { findings: '', additionalNotes: '' }}
+                              diagramMarkingScale={1.8}
                               customImage={appendectomyImage}
                             />
                           }
@@ -8753,8 +8753,7 @@ const Index = () => {
                     <div className="2xl:col-span-1">
                       <Card className="shadow-glass-heavy sticky top-6">
                         <CardHeader>
-                          <CardTitle className="flex items-center gap-2 text-sm">
-                            <FileText className="h-4 w-4 text-gray-600" />
+                          <CardTitle className="text-sm">
                             Live Report
                             <span className="text-xs text-gray-500 font-normal ml-2">Real-time preview of colorectal resection findings</span>
                           </CardTitle>
@@ -8787,10 +8786,7 @@ const Index = () => {
                         <Card className="glass-card-light">
                           <CardHeader>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 p-2 bg-red-100 rounded-md">
-                                  <Scissors className="w-6 h-6 text-red-600" />
-                                </div>
+                              <div>
                                 <h1 className="text-2xl font-bold text-gray-800">
                                   Small Bowel Surgery - Synoptic Operative Report
                                 </h1>
@@ -8857,6 +8853,7 @@ const Index = () => {
                                   additionalNotes: "",
                                 }
                               }
+                              diagramMarkingScale={1.8}
                               customImage={smallBowelDiagramImage}
                             />
                           }
@@ -8866,8 +8863,7 @@ const Index = () => {
                       <div className="2xl:col-span-1">
                         <Card className="shadow-glass-heavy sticky top-6">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
+                            <CardTitle className="text-sm">
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">
                                 Real-time preview of small bowel surgery findings
@@ -8890,10 +8886,7 @@ const Index = () => {
                         <Card className="glass-card-light">
                           <CardHeader>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 p-2 bg-amber-100 rounded-md">
-                                  <Scissors className="w-6 h-6 text-amber-600" />
-                                </div>
+                              <div>
                                 <h1 className="text-2xl font-bold text-gray-800">
                                   Cholecystectomy - Synoptic Operative Report
                                 </h1>
@@ -8961,6 +8954,7 @@ const Index = () => {
                                   additionalNotes: '',
                                 }
                               }
+                              diagramMarkingScale={1.5}
                               customImage={appendectomyImage}
                             />
                           }
@@ -8970,8 +8964,7 @@ const Index = () => {
                       <div className="2xl:col-span-1">
                         <Card className="shadow-glass-heavy sticky top-6">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
+                            <CardTitle className="text-sm">
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">
                                 Real-time preview of cholecystectomy findings
@@ -8994,10 +8987,7 @@ const Index = () => {
                         <Card className="glass-card-light">
                           <CardHeader>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0 p-2 bg-amber-100 rounded-md">
-                                  <Scissors className="w-6 h-6 text-amber-600" />
-                                </div>
+                              <div>
                                 <h1 className="text-2xl font-bold text-gray-800">
                                   Peri-Anal - Synoptic Operative Report
                                 </h1>
@@ -9053,22 +9043,25 @@ const Index = () => {
                               onColonoscopyUpdate={() => {}}
                               currentProcedureFindings={currentReport.periAnal?.procedureFindings}
                               currentSurgicalDiagramState={{
-                                activeVariant: currentReport.periAnal?.procedureFindings?.activeDiagramVariant || "neutral",
-                                markingsByVariant: currentReport.periAnal?.procedureFindings?.diagramMarkingsByVariant || {
-                                  neutral: [],
-                                  female: [],
-                                },
+                                activeVariant: Object.prototype.hasOwnProperty.call(
+                                  periAnalDiagramImages,
+                                  currentReport.periAnal?.procedureFindings?.activeDiagramVariant,
+                                )
+                                  ? currentReport.periAnal?.procedureFindings?.activeDiagramVariant
+                                  : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+                                markingsByVariant:
+                                  currentReport.periAnal?.procedureFindings?.diagramMarkingsByVariant ||
+                                  createInitialPeriAnalDiagramMarkings(),
                               }}
                               onSurgicalDiagramStateChange={(state) => {
-                                const activeMarkings = state.markingsByVariant?.[state.activeVariant] || [];
                                 updatePeriAnal('procedureFindings', 'activeDiagramVariant', state.activeVariant);
                                 updatePeriAnal('procedureFindings', 'diagramMarkingsByVariant', state.markingsByVariant);
-                                updatePeriAnal('procedureFindings', 'findings', JSON.stringify(activeMarkings));
+                                updatePeriAnal('procedureFindings', 'findings', JSON.stringify(state.markingsByVariant || {}));
                               }}
-                              surgicalDiagramVariants={{
-                                neutral: periAnalNeutralImage,
-                                female: periAnalFemaleImage,
-                              }}
+                              surgicalDiagramVariants={periAnalDiagramImages}
+                              surgicalDiagramVariantLabels={periAnalDiagramLabels}
+                              diagramMarkingScale={1.8}
+                              showAllSurgicalDiagramVariants
                             />
                           }
                         />
@@ -9077,8 +9070,7 @@ const Index = () => {
                       <div className="2xl:col-span-1">
                         <Card className="shadow-glass-heavy sticky top-6">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-sm">
-                              <FileText className="h-4 w-4 text-gray-600" />
+                            <CardTitle className="text-sm">
                               Live Report
                               <span className="text-xs text-gray-500 font-normal ml-2">
                                 Real-time preview of peri-anal findings

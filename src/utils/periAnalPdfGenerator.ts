@@ -12,13 +12,13 @@ import {
   formatPatientStickerDate,
   normalizePatientInfo,
 } from "@/utils/patientSticker";
-import neutralDiagram from "@/assets/peri-anal-neutral.svg";
-import femaleDiagram from "@/assets/peri-anal-female.svg";
+import {
+  PERI_ANAL_DIAGRAM_VARIANTS,
+  periAnalDiagramImages,
+} from "@/utils/periAnalDiagramConfig";
+import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
-const diagramImages: Record<string, string> = {
-  neutral: neutralDiagram,
-  female: femaleDiagram,
-};
+const PERI_ANAL_DIAGRAM_MARKING_SCALE = 1.8;
 
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{ width: number; height: number }> =>
   new Promise((resolve) => {
@@ -50,6 +50,7 @@ const createSurgicalDiagramCanvas = async (
 
     const image = new Image();
     image.onload = () => {
+      const drawingMetrics = getSurgicalDiagramMarkingMetrics(PERI_ANAL_DIAGRAM_MARKING_SCALE);
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -58,25 +59,28 @@ const createSurgicalDiagramCanvas = async (
       (markings || []).forEach((marking) => {
         if (marking.type === "port") {
           ctx.save();
-          ctx.font = "bold 10px Arial";
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = "black";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
-          ctx.lineWidth = marking.stomaType === "ileostomy" ? 2 : 4;
-          ctx.setLineDash(marking.stomaType === "ileostomy" ? [5, 3] : []);
+          ctx.lineWidth =
+            marking.stomaType === "ileostomy"
+              ? drawingMetrics.ileostomyLineWidth
+              : drawingMetrics.colostomyLineWidth;
+          ctx.setLineDash(marking.stomaType === "ileostomy" ? drawingMetrics.ileostomyDash : []);
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "incision") {
@@ -85,8 +89,8 @@ const createSurgicalDiagramCanvas = async (
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = "#8B0000";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]);
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
         }
@@ -124,11 +128,14 @@ export const generatePeriAnalPDF = async (
     const findingsSummary = getPeriAnalAdditionalFindingSection(periAnalData);
     const findingSections = getPeriAnalFindingSections(periAnalData);
     const diagramState = parsePeriAnalDiagramState(periAnalData?.procedureFindings);
-    const activeVariant = diagramState.activeVariant || "neutral";
-    const activeMarkings = diagramState.markingsByVariant?.[activeVariant] || [];
-    const diagramCanvas = await createSurgicalDiagramCanvas(
-      activeMarkings,
-      diagramImages[activeVariant] || neutralDiagram
+    const diagramCanvasEntries = await Promise.all(
+      PERI_ANAL_DIAGRAM_VARIANTS.map(async (variant) => ({
+        ...variant,
+        canvas: await createSurgicalDiagramCanvas(
+          diagramState.markingsByVariant?.[variant.key] || [],
+          periAnalDiagramImages[variant.key],
+        ),
+      })),
     );
 
     const col1X = margin;
@@ -310,9 +317,10 @@ export const generatePeriAnalPDF = async (
       `Work Number: ${txt(info.workNumber)}`,
       `Home Number: ${txt(info.homeNumber)}`
     );
-    row2(
+    row3(
       `Authorization: ${txt(info.authorization)}`,
-      `Depend Code: ${txt(info.dependCode)}`
+      `Depend Code: ${txt(info.dependCode)}`,
+      ""
     );
 
     startSection("Hospital Details");
@@ -329,9 +337,10 @@ export const generatePeriAnalPDF = async (
       `Height: ${txt(info.height)}`,
       `BMI: ${txt(info.bmi)}`
     );
-    row2(
+    row3(
       `Date: ${formatPatientStickerDate(info.visitDate)}`,
-      `Time: ${txt(info.visitTime)}`
+      `Time: ${txt(info.visitTime)}`,
+      ""
     );
 
     startSection("Preoperative Information");
@@ -345,9 +354,10 @@ export const generatePeriAnalPDF = async (
       `End Time: ${txt(preop?.endTime)}`,
       `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`
     );
-    row2(
+    row3(
       `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Preoperative Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`
+      `Preoperative Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
+      ""
     );
     row1(`Indication For Surgery: ${txt(preop?.indication)}`);
     row1(`Operation Description: ${txt(preop?.operationDescription)}`);
@@ -359,79 +369,52 @@ export const generatePeriAnalPDF = async (
       );
     }
 
-    ensureSpace(100);
-    startTwoColumnSection("Findings Summary", "Peri-Anal Diagram");
-    const summaryEntries =
+    startSection("Findings Summary");
+    writeEntries(
       findingsSummary?.entries?.length
         ? findingsSummary.entries
-        : [{ label: "Summary", value: "No findings summary recorded" }];
-    const contentTop = y;
-    const leftX = margin;
-    const leftW = 82;
-    const rightX = twoCol2X;
-    const rightW = pageWidth - margin - rightX;
-    const rightBoxW = rightW;
-    const diagramViewLabel =
-      activeVariant === "female" ? "Female Perineal Anatomy" : "Neutral Peri-Anal";
+        : [{ label: "Summary", value: "No findings summary recorded" }],
+    );
 
-    const leftEndY = writeColumnEntries(summaryEntries, leftX, leftW, contentTop);
+    startSection("Peri-Anal Diagrams");
+    row1("Legend: Ports (With Size Label), Ileostomy (Dashed Yellow Circle), Colostomy (Solid Green Circle), Incisions (Dashed Dark Red Line)");
+    const diagramGridHeight = 144;
+    ensureSpace(diagramGridHeight + 16);
+    const gridStartY = y;
+    const cellGap = 8;
+    const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
+    const cellHeight = 58;
+    const titleOffset = 5;
+    const rowGap = 12;
 
-    let rightY = contentTop;
-    pdf.text(`Diagram View: ${diagramViewLabel}`, rightX, rightY);
-    rightY += 6;
+    diagramCanvasEntries.forEach((entry, index) => {
+      const row = Math.floor(index / 2);
+      const column = index % 2;
+      const cellX = margin + column * (cellWidth + cellGap);
+      const titleY = gridStartY + row * (cellHeight + rowGap + titleOffset);
+      const boxY = titleY + 2;
 
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Legend:", rightX, rightY);
-    pdf.setFont("helvetica", "normal");
-    rightY += 5;
+      pdf.setFont("helvetica", "bold");
+      pdf.text(entry.label, cellX, titleY);
+      pdf.setFont("helvetica", "normal");
+      pdf.rect(cellX, boxY, cellWidth, cellHeight);
 
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.6);
-    pdf.line(rightX, rightY - 1, rightX + 8, rightY - 1);
-    pdf.text("Ports (With Size Label)", rightX + 11, rightY);
-    rightY += 5;
-
-    pdf.setDrawColor(245, 158, 11);
-    pdf.setLineWidth(0.7);
-    pdf.setLineDashPattern([1.2, 1.2], 0);
-    pdf.circle(rightX + 4, rightY - 1.5, 2.2);
-    pdf.setLineDashPattern([], 0);
-    pdf.text("Ileostomy (Dashed Yellow Circle)", rightX + 11, rightY);
-    rightY += 5;
-
-    pdf.setDrawColor(22, 163, 74);
-    pdf.setLineWidth(0.8);
-    pdf.circle(rightX + 4, rightY - 1.5, 2.2);
-    pdf.text("Colostomy (Solid Green Circle)", rightX + 11, rightY);
-    rightY += 5;
-
-    pdf.setDrawColor(127, 29, 29);
-    pdf.setLineWidth(0.7);
-    pdf.setLineDashPattern([1.5, 1.5], 0);
-    pdf.line(rightX, rightY - 1, rightX + 8, rightY - 1);
-    pdf.setLineDashPattern([], 0);
-    pdf.text("Incisions (Dashed Dark Red Line)", rightX + 11, rightY);
-    rightY += 4;
-
-    const boxX = rightX;
-    const boxY = rightY + 1;
-    const boxH = 70;
-    ensureSpace(boxH + 18);
-    pdf.rect(boxX, boxY, rightBoxW, boxH);
-    if (diagramCanvas) {
-      const props = pdf.getImageProperties(diagramCanvas);
-      const ar = props.width / props.height;
-      let w = rightBoxW - 4;
-      let h = w / ar;
-      if (h > boxH - 4) {
-        h = boxH - 4;
-        w = h * ar;
+      if (entry.canvas) {
+        const props = pdf.getImageProperties(entry.canvas);
+        const ar = props.width / props.height;
+        let w = cellWidth - 4;
+        let h = w / ar;
+        if (h > cellHeight - 4) {
+          h = cellHeight - 4;
+          w = h * ar;
+        }
+        pdf.addImage(entry.canvas, "PNG", cellX + (cellWidth - w) / 2, boxY + (cellHeight - h) / 2, w, h);
+      } else {
+        pdf.text("Diagram unavailable.", cellX + 4, boxY + 8);
       }
-      pdf.addImage(diagramCanvas, "PNG", boxX + (rightBoxW - w) / 2, boxY + (boxH - h) / 2, w, h);
-    } else {
-      pdf.text("Diagram unavailable.", boxX + 4, boxY + 8);
-    }
-    y = Math.max(leftEndY, boxY + boxH + 4);
+    });
+
+    y = gridStartY + 2 * (cellHeight + rowGap + titleOffset) + 2;
 
     findingSections.forEach((section) => {
       if (section.entries.length === 0) return;

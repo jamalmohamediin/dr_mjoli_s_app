@@ -453,11 +453,11 @@ export const getPatientInfoPdfSections = (
         rows: filterPatientPdfRows([
           [
             `Patient Name: ${txt(info.name || fallbackName)}`,
-            `Patient ID: ${txt(info.patientId || fallbackPatientId)}`,
             `Gender: ${gender}`,
+            `Age: ${txt(info.age)}`,
           ],
           [
-            `Age: ${txt(info.age)}`,
+            `Patient ID: ${txt(info.patientId || fallbackPatientId)}`,
             `Date Of Birth: ${formatPatientStickerDate(info.dateOfBirth)}`,
             `Address: ${txt(info.address)}`,
           ],
@@ -473,11 +473,11 @@ export const getPatientInfoPdfSections = (
           ],
           [
             `Main Member ID: ${txt(info.mainMemberId)}`,
-            `Authorization: ${txt(info.authorization)}`,
             `Work Number: ${txt(info.workNumber)}`,
+            `Home Number: ${txt(info.homeNumber)}`,
           ],
           [
-            `Home Number: ${txt(info.homeNumber)}`,
+            `Authorization: ${txt(info.authorization)}`,
             `Depend Code: ${txt(info.dependCode)}`,
             "",
           ],
@@ -486,24 +486,24 @@ export const getPatientInfoPdfSections = (
       {
         title: "Hospital Details",
         rows: filterPatientPdfRows([
+          [`Hospital Name: ${txt(info.hospitalName)}`, "", ""],
+          [`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`, "", ""],
+          [`Doctor's Name: ${txt(info.doctorName)}`, "", ""],
+          [`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`, "", ""],
           [
-            `Hospital Name: ${txt(info.hospitalName)}`,
-            `Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`,
-            `Doctor's Name: ${txt(info.doctorName)}`,
+            `ASA Physical Status Classification: ${info.asaScore ? getFullASAText(info.asaScore) : ""}`,
+            "",
+            "",
           ],
-          [
-            `Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`,
-            `Date: ${formatPatientStickerDate(info.visitDate)}`,
-            `Time: ${txt(info.visitTime)}`,
-          ],
+          [`ASA Notes: ${txt(info.asaNotes)}`, "", ""],
           [
             `Weight: ${txt(info.weight)}`,
             `Height: ${txt(info.height)}`,
             `BMI: ${txt(info.bmi)}`,
           ],
           [
-            `ASA Physical Status Classification: ${info.asaScore ? getFullASAText(info.asaScore) : ""}`,
-            `ASA Notes: ${txt(info.asaNotes)}`,
+            `Date: ${formatPatientStickerDate(info.visitDate)}`,
+            `Time: ${txt(info.visitTime)}`,
             "",
           ],
         ]),

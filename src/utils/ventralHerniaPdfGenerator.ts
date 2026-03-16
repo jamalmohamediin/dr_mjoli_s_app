@@ -10,6 +10,9 @@ import {
   normalizePatientInfo,
 } from "./patientSticker";
 import { getFullASAText } from "./asaDescriptions";
+import { getSurgicalDiagramMarkingMetrics } from "./surgicalDiagramMarkings";
+
+const VENTRAL_HERNIA_DIAGRAM_MARKING_SCALE = 1.5;
 
 const txt = (value: any) => String(value || "").trim();
 
@@ -44,6 +47,7 @@ const createSurgicalDiagramCanvas = async (markings: any[] = []): Promise<string
 
     const image = new Image();
     image.onload = () => {
+      const drawingMetrics = getSurgicalDiagramMarkingMetrics(VENTRAL_HERNIA_DIAGRAM_MARKING_SCALE);
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
 
@@ -53,16 +57,16 @@ const createSurgicalDiagramCanvas = async (markings: any[] = []): Promise<string
       markings.forEach((marking) => {
         if (marking.type === "port") {
           context.save();
-          context.font = "bold 10px Arial";
+          context.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           context.fillStyle = "black";
           context.textAlign = "center";
           context.textBaseline = "bottom";
-          context.fillText(marking.size, marking.x, marking.y - 3);
+          context.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
           context.beginPath();
-          context.moveTo(marking.x - 10, marking.y);
-          context.lineTo(marking.x + 10, marking.y);
+          context.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          context.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           context.strokeStyle = "black";
-          context.lineWidth = 2;
+          context.lineWidth = drawingMetrics.portLineWidth;
           context.stroke();
           context.restore();
           return;
@@ -71,10 +75,13 @@ const createSurgicalDiagramCanvas = async (markings: any[] = []): Promise<string
         if (marking.type === "stoma") {
           context.save();
           context.beginPath();
-          context.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+          context.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           context.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
-          context.lineWidth = marking.stomaType === "ileostomy" ? 2 : 3;
-          context.setLineDash(marking.stomaType === "ileostomy" ? [5, 3] : []);
+          context.lineWidth =
+            marking.stomaType === "ileostomy"
+              ? drawingMetrics.ileostomyLineWidth
+              : drawingMetrics.colostomyLineWidth;
+          context.setLineDash(marking.stomaType === "ileostomy" ? drawingMetrics.ileostomyDash : []);
           context.stroke();
           context.restore();
           return;
@@ -86,8 +93,8 @@ const createSurgicalDiagramCanvas = async (markings: any[] = []): Promise<string
           context.moveTo(marking.start.x, marking.start.y);
           context.lineTo(marking.end.x, marking.end.y);
           context.strokeStyle = "#8B0000";
-          context.lineWidth = 2;
-          context.setLineDash([8, 6]);
+          context.lineWidth = drawingMetrics.incisionLineWidth;
+          context.setLineDash(drawingMetrics.incisionDash);
           context.stroke();
           context.restore();
         }
@@ -228,34 +235,24 @@ export const generateVentralHerniaPDF = async (
       const x = options.x ?? margin;
       const width = options.width ?? contentWidth;
       const indent = options.indent ?? 0;
-      const labelText = `${label}: `;
-      const labelWidth = pdf.getTextWidth(labelText);
-      const lines = splitText(value, width - labelWidth - indent);
+      const fullText = `${label}: ${value}`;
+      const lines = splitText(fullText, width - indent);
+      const lineHeight = 4.4;
 
-      ensureSpace(Math.max(lines.length, 1) * 4 + 1);
-
-      pdf.setFont("helvetica", "bold");
-      pdf.text(labelText, x + indent, y);
+      ensureSpace(Math.max(lines.length, 1) * lineHeight + 1.2);
       pdf.setFont("helvetica", "normal");
 
-      if (lines.length === 0) {
-        y += 5;
-        return;
-      }
-
-      lines.forEach((line, lineIndex) => {
-        if (lineIndex > 0 && y + 4 > getBottomLimit()) {
+      lines.forEach((line) => {
+        if (y + lineHeight > getBottomLimit()) {
           startNewPage();
-          pdf.setFont("helvetica", "bold");
-          pdf.text(labelText, x + indent, y);
           pdf.setFont("helvetica", "normal");
         }
 
-        pdf.text(line, x + indent + labelWidth, y);
-        y += 4;
+        pdf.text(line, x + indent, y);
+        y += lineHeight;
       });
 
-      y += 1;
+      y += 1.2;
     };
 
     const patientInfo = normalizePatientInfo(ventralHerniaData?.patientInfo || {});
@@ -332,6 +329,7 @@ export const generateVentralHerniaPDF = async (
     drawAdaptiveRow([
       `Authorization: ${txt(patientInfo.authorization)}`,
       `Depend Code: ${txt(patientInfo.dependCode)}`,
+      "",
     ]);
 
     pdf.setFont("helvetica", "bold");
@@ -354,6 +352,7 @@ export const generateVentralHerniaPDF = async (
     drawAdaptiveRow([
       `Date: ${formatPatientStickerDate(patientInfo.visitDate)}`,
       `Time: ${txt(patientInfo.visitTime)}`,
+      "",
     ]);
 
     drawSeparator();
@@ -388,6 +387,7 @@ export const generateVentralHerniaPDF = async (
     drawAdaptiveRow([
       `Procedure Urgency: ${procedureUrgencyText}`,
       `Preoperative Imaging: ${imagingText}`,
+      "",
     ]);
     drawAdaptiveRow([`Indication for Surgery: ${indicationText}`]);
 
@@ -494,19 +494,15 @@ export const generateVentralHerniaPDF = async (
         return currentY;
       }
 
-      const labelText = `${label}: `;
-      const labelWidth = pdf.getTextWidth(labelText);
-      const lines = splitText(value, width - labelWidth);
-
-      pdf.setFont("helvetica", "bold");
-      pdf.text(labelText, x, currentY);
       pdf.setFont("helvetica", "normal");
+      const lines = splitText(`${label}: ${value}`, width);
+      const lineHeight = 4.4;
 
       lines.forEach((line, lineIndex) => {
-        pdf.text(line, x + labelWidth, currentY + lineIndex * 4);
+        pdf.text(line, x, currentY + lineIndex * lineHeight);
       });
 
-      return currentY + Math.max(lines.length, 1) * 4 + 1;
+      return currentY + Math.max(lines.length, 1) * lineHeight + 1.4;
     };
 
     ensureSpace(90);
@@ -596,7 +592,7 @@ export const generateVentralHerniaPDF = async (
     }
 
     rightY += diagramBoxHeight + 2;
-    y = Math.max(leftY, rightY) + 6;
+    y = Math.max(leftY, rightY) + 8;
 
     drawSeparator();
 
@@ -645,16 +641,10 @@ export const generateVentralHerniaPDF = async (
     drawLabelValue("Haemostasis", txt(procedure.haemostasis));
     drawLabelValue("Drain", txt(procedure.drain));
     if (procedure.drain === "Yes") {
-      drawLabelValue("Type of Drain", drainTypeText, { indent: 4, width: contentWidth - 4 });
-      drawLabelValue("Intra-Peritoneal Placement", drainPlacementText, {
-        indent: 4,
-        width: contentWidth - 4,
-      });
-      drawLabelValue("Exit Site", drainExitSiteText, { indent: 4, width: contentWidth - 4 });
-      drawLabelValue("Additional Drain Details", txt(procedure.drainDetails), {
-        indent: 4,
-        width: contentWidth - 4,
-      });
+      drawLabelValue("Type of Drain", drainTypeText);
+      drawLabelValue("Intra-Peritoneal Placement", drainPlacementText);
+      drawLabelValue("Exit Site", drainExitSiteText);
+      drawLabelValue("Additional Drain Details", txt(procedure.drainDetails));
     }
     drawLabelValue("Fascial Closure", fascialClosureText);
     drawLabelValue("Fascial Closure Material Used", fascialMaterialText);

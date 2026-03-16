@@ -10,6 +10,9 @@ import {
   normalizePatientInfo,
 } from './patientSticker';
 import { getFullASAText } from './asaDescriptions';
+import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
+
+const RECTAL_DIAGRAM_MARKING_SCALE = 1.8;
 
 // Helper function to render label and value with different font weights
 const renderLabelValue = (pdf: any, label: string, value: string, x: number, y: number) => {
@@ -56,7 +59,10 @@ const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: num
 };
 
 // Function to create surgical diagram canvas with markings
-const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | null> => {
+const createSurgicalDiagramCanvas = async (
+  markings: any[],
+  markingScale = RECTAL_DIAGRAM_MARKING_SCALE,
+): Promise<string | null> => {
   if (!markings || markings.length === 0) return null;
   
   return new Promise((resolve) => {
@@ -69,6 +75,7 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
 
     const image = new Image();
     image.onload = () => {
+      const drawingMetrics = getSurgicalDiagramMarkingMetrics(markingScale);
       // Set canvas size to match image
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
@@ -82,17 +89,17 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
         if (marking.type === 'port') {
           // Draw port marking: black line with size label
           ctx.save();
-          ctx.font = 'bold 10px Arial';
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
@@ -100,16 +107,16 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
           ctx.save();
           if (marking.stomaType === 'ileostomy') {
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#f59e0b'; // Gold/Yellow
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 3]); // Dashed line
+            ctx.lineWidth = drawingMetrics.ileostomyLineWidth;
+            ctx.setLineDash(drawingMetrics.ileostomyDash); // Dashed line
             ctx.stroke();
           } else { // colostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#16a34a'; // Green
-            ctx.lineWidth = 4;
+            ctx.lineWidth = drawingMetrics.colostomyLineWidth;
             ctx.setLineDash([]); // Continuous line
             ctx.stroke();
           }
@@ -121,8 +128,8 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = '#8B0000'; // Dark red
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]); // Dashed line
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash); // Dashed line
           ctx.stroke();
           ctx.restore();
         }
@@ -170,7 +177,7 @@ export const generateRectalCancerPDF = async (
     // Process surgical diagram
     let diagramCanvas: string | null = null;
     if (diagrams && diagrams.length > 0) {
-      diagramCanvas = await createSurgicalDiagramCanvas(diagrams);
+      diagramCanvas = await createSurgicalDiagramCanvas(diagrams, RECTAL_DIAGRAM_MARKING_SCALE);
     }
     
     const pdf = new jsPDF('portrait', 'mm', 'a4');
@@ -283,12 +290,18 @@ export const generateRectalCancerPDF = async (
         y += spacing;
       }
     };
-    const writePatientRow = (row: string[]) =>
+    const writePatientRow = (row: string[]) => {
+      if (hasPrintableValue(row[0]) && !hasPrintableValue(row[1]) && !hasPrintableValue(row[2])) {
+        writeColumnsRow([{ text: row[0] || '', x: col1X, width: pageWidth - margin * 2 }]);
+        return;
+      }
+
       writeColumnsRow([
         { text: row[0] || '', x: col1X, width: 60 },
         { text: row[1] || '', x: col2X, width: 60 },
         { text: row[2] || '', x: col3X, width: 60 },
       ]);
+    };
     const addWrappedField = (
       label: string,
       value: string,
@@ -414,6 +427,10 @@ export const generateRectalCancerPDF = async (
     const endTime = rectalCancerData?.procedureDetails?.endTime || '';
     const totalDuration = rectalCancerData?.procedureDetails?.duration ? `${rectalCancerData.procedureDetails.duration} minutes` : '';
     const procedureUrgency = rectalCancerData?.procedureDetails?.procedureUrgency || '';
+    const operationDescription =
+      rectalCancerData?.operationType?.operationFindings ||
+      rectalCancerData?.procedureDetails?.operationDescription ||
+      '';
     const imagingText = rectalCancerData?.procedureDetails?.preoperativeImaging?.map(imaging => 
       imaging === 'Other' && rectalCancerData.procedureDetails.preoperativeImagingOther 
         ? `Other: ${rectalCancerData.procedureDetails.preoperativeImagingOther}` 
@@ -441,10 +458,11 @@ export const generateRectalCancerPDF = async (
     ]);
     writeColumnsRow([
       { text: `Procedure Urgency: ${procedureUrgency}`, x: col1X, width: 55 },
-      { text: `Preoperative Imaging: ${imagingText}`, x: col2X, width: 110 },
+      { text: `Preoperative Imaging: ${imagingText}`, x: col2X, width: 55 },
+      { text: `Neoadjuvant Treatment: ${neoadjuvantTreatment}`, x: col3X, width: 45 },
     ]);
     addWrappedField('Indication for Surgery', indicationText);
-    addWrappedField('Neoadjuvant Treatment', neoadjuvantTreatment);
+    addWrappedField('Operation Description', operationDescription);
     y += 3;
     
     // Separator line
@@ -466,7 +484,6 @@ export const generateRectalCancerPDF = async (
     const operationTypeArray = rectalCancerData?.operationType?.type || [];
     const isColonSelected = Array.isArray(operationTypeArray) ? operationTypeArray.includes('Colon') : false;
     const isRectumSelected = Array.isArray(operationTypeArray) ? operationTypeArray.includes('Rectum') : false;
-    const operationFindingsDescription = rectalCancerData?.operationType?.operationFindings || '';
     const operationFindingsOptions = rectalCancerData?.operationType?.operationFindingsOptions || [];
     const operationFindingsSelectionText = operationFindingsOptions
       .map((option: string) => {
@@ -481,7 +498,6 @@ export const generateRectalCancerPDF = async (
     // Only show the operation findings fields if Colon or Rectum is selected
     if (isColonSelected || isRectumSelected) {
       addWrappedField('Operation Findings', operationFindingsSelectionText);
-      addWrappedField('Description of Operation Findings', operationFindingsDescription);
     }
     
     // Row 2 & 3: Rectum-specific fields (conditional - only show when Rectum is selected)
@@ -531,7 +547,6 @@ export const generateRectalCancerPDF = async (
     // RESTRUCTURED PROCEDURE DETAILS - According to new layout
     
     // Prepare all field values
-    const operationDescription = rectalCancerData?.procedureDetails?.operationDescription || '';
     const primaryApproachRaw = rectalCancerData?.surgicalApproach?.primaryApproach;
     const primaryApproachList = Array.isArray(primaryApproachRaw) 
       ? primaryApproachRaw 
@@ -578,39 +593,31 @@ export const generateRectalCancerPDF = async (
     };
     
     // NEW LAYOUT ORDER - PROCEDURE DETAILS SECTION
-    // Row 1: Surgical Approach
+    addProcedureField('Operation Type', operationTypeText);
+
+    if (isRectumSelected) {
+      addProcedureField('Rectum Operation Types', rectumOperationTypes);
+    }
+
     addProcedureField('Surgical Approach', primaryApproach);
     
-    // Row 2: Reason for Conversion (only if converted)
     if (isConverted && conversionText) {
       addProcedureField('Reason for Conversion', conversionText);
     }
     
-    // Row 3: Trocar Number
     addProcedureField('Trocar Number', trocarNumber);
-    
-    // Row 4: Operation Description
-    addProcedureField('Operation Description', operationDescription);
-    
-    // Row 5: Operation Type
-    addProcedureField('Operation Type', operationTypeText);
-    
-    // Row 6: Rectum Operation Types (only show if Rectum is selected)
-    if (isRectumSelected) {
-      addProcedureField('Rectum Operation Types', rectumOperationTypes);
-    }
     
     y += 6;
     
     // RIGHT COLUMN: PORTS AND INCISIONS content (moved from later section)
     let portsY = procedureStartY + 6; // Start right after the title
     
-    pdf.setFontSize(8);
+    pdf.setFontSize(8.5);
     pdf.setFont('helvetica', 'bold');
     pdf.text('Legend:', portsCol1X, portsY);
-    portsY += 4;
+    portsY += 3.5;
     
-    pdf.setFontSize(6);
+    pdf.setFontSize(6.5);
     pdf.setFont('helvetica', 'normal');
     
     // Define column positions for legend
@@ -622,48 +629,49 @@ export const generateRectalCancerPDF = async (
     
     // Ports icon (left side)
     pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(1);
-    pdf.line(legendCol1X, legendRow1Y, legendCol1X + 6, legendRow1Y);
-    pdf.setFontSize(4);
-    pdf.text('12mm', legendCol1X + 1, legendRow1Y - 0.5);
-    pdf.setFontSize(6);
-    pdf.text('Ports (with size)', legendCol1X + 8, legendRow1Y + 1);
+    pdf.setLineWidth(1.6);
+    pdf.line(legendCol1X, legendRow1Y, legendCol1X + 8, legendRow1Y);
+    pdf.setFontSize(4.8);
+    pdf.text('12mm', legendCol1X + 1.5, legendRow1Y - 0.8);
+    pdf.setFontSize(6.5);
+    pdf.text('Ports (with size)', legendCol1X + 10, legendRow1Y + 1);
     
     // Ileostomy icon (right side)
     pdf.setDrawColor(245, 158, 11); // Gold/Yellow
-    pdf.setLineWidth(1);
+    pdf.setLineWidth(1.3);
     pdf.setLineDash([1.5, 1]);
-    pdf.circle(legendCol2X + 3, legendRow1Y, 1.5, 'S');
+    pdf.circle(legendCol2X + 3.5, legendRow1Y, 2, 'S');
     pdf.setLineDash([]);
     pdf.setDrawColor(0, 0, 0);
-    pdf.text('Ileostomy', legendCol2X + 6, legendRow1Y + 1);
+    pdf.text('Ileostomy', legendCol2X + 7.5, legendRow1Y + 1);
     
-    portsY += 4;
+    portsY += 3.5;
     
     // ROW 2: Incisions and Colostomy
     let legendRow2Y = portsY;
     
     // Incisions icon (left side)
     pdf.setDrawColor(139, 0, 0); // Dark red
-    pdf.setLineWidth(1);
-    pdf.setLineDash([2, 1.5]);
-    pdf.line(legendCol1X, legendRow2Y, legendCol1X + 6, legendRow2Y);
+    pdf.setLineWidth(1.4);
+    pdf.setLineDash([2.5, 1.8]);
+    pdf.line(legendCol1X, legendRow2Y, legendCol1X + 8, legendRow2Y);
     pdf.setLineDash([]);
     pdf.setDrawColor(0, 0, 0);
-    pdf.text('Incisions', legendCol1X + 8, legendRow2Y + 1);
+    pdf.text('Incisions', legendCol1X + 10, legendRow2Y + 1);
     
     // Colostomy icon (right side)
     pdf.setDrawColor(22, 163, 74); // Green
-    pdf.setLineWidth(1);
-    pdf.circle(legendCol2X + 3, legendRow2Y, 1.5, 'S');
+    pdf.setLineWidth(1.6);
+    pdf.circle(legendCol2X + 3.5, legendRow2Y, 2, 'S');
     pdf.setDrawColor(0, 0, 0);
-    pdf.text('Colostomy', legendCol2X + 6, legendRow2Y + 1);
+    pdf.text('Colostomy', legendCol2X + 7.5, legendRow2Y + 1);
     
-    portsY += 6;
+    portsY += 4.5;
     
     // Diagram box
     const diagramWidth = 80;
-    const diagramHeight = 60;
+    const maxDiagramBottom = pageHeight - 32;
+    const diagramHeight = Math.max(48, Math.min(60, maxDiagramBottom - portsY));
     pdf.setDrawColor(0, 0, 0);
     pdf.setLineWidth(0.2);
     pdf.rect(portsCol1X, portsY, diagramWidth, diagramHeight);
@@ -769,11 +777,11 @@ export const generateRectalCancerPDF = async (
     addWrappedField('Vessel Hemostasis Technique', vesselHemostasisText);
     addWrappedField('Lymph Node Dissection (LND)', lnd);
     addWrappedField('Proximal Transection Site', proximalSite);
-    addWrappedField('Excised En-Bloc Resection', enBlocResection);
     addWrappedField('Distal Transection Site', distalSiteStr);
     if (isAnalCanalSelected) {
       addWrappedField('Anal Canal Transection Level', analCanalTransectionStr);
     }
+    addWrappedField('Excised En-Bloc Resection', enBlocResection);
 
     y += 3;
     pdf.setDrawColor(0, 0, 0);

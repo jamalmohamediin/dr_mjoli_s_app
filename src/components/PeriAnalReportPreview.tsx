@@ -9,18 +9,18 @@ import {
   parsePeriAnalDiagramState,
   toArray,
 } from "@/utils/periAnalHelpers";
+import {
+  PERI_ANAL_DIAGRAM_VARIANTS,
+  periAnalDiagramImages,
+} from "@/utils/periAnalDiagramConfig";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
-import neutralDiagram from "@/assets/peri-anal-neutral.svg";
-import femaleDiagram from "@/assets/peri-anal-female.svg";
+import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+
+const PERI_ANAL_PREVIEW_MARKING_SCALE = 1.8;
 
 interface PeriAnalReportPreviewProps {
   report: any;
 }
-
-const diagramImages: Record<string, string> = {
-  neutral: neutralDiagram,
-  female: femaleDiagram,
-};
 
 const SurgicalDiagramDisplay = ({
   markings,
@@ -31,6 +31,7 @@ const SurgicalDiagramDisplay = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const drawingMetrics = getSurgicalDiagramMarkingMetrics(PERI_ANAL_PREVIEW_MARKING_SCALE);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -47,25 +48,28 @@ const SurgicalDiagramDisplay = ({
       (markings || []).forEach((marking) => {
         if (marking.type === "port") {
           ctx.save();
-          ctx.font = "bold 10px Arial";
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = "black";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
-          ctx.lineWidth = marking.stomaType === "ileostomy" ? 2 : 4;
-          ctx.setLineDash(marking.stomaType === "ileostomy" ? [5, 3] : []);
+          ctx.lineWidth =
+            marking.stomaType === "ileostomy"
+              ? drawingMetrics.ileostomyLineWidth
+              : drawingMetrics.colostomyLineWidth;
+          ctx.setLineDash(marking.stomaType === "ileostomy" ? drawingMetrics.ileostomyDash : []);
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "incision") {
@@ -74,8 +78,8 @@ const SurgicalDiagramDisplay = ({
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = "#8B0000";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]);
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
         }
@@ -95,7 +99,11 @@ const SurgicalDiagramDisplay = ({
     } else {
       image.src = diagramImage;
     }
-  }, [markings, diagramImage]);
+  }, [
+    diagramImage,
+    markings,
+    drawingMetrics,
+  ]);
 
   return (
     <div className="mt-3 border rounded-lg overflow-hidden bg-white" style={{ maxWidth: "fit-content" }}>
@@ -118,13 +126,18 @@ const EntryList = ({ entries }: { entries: { label: string; value: string }[] })
 export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) => {
   const periAnal = report.periAnal;
   const patientEntries = getPatientInfoDisplayEntries(periAnal?.patientInfo);
+  const diagramState = parsePeriAnalDiagramState(periAnal?.procedureFindings);
+  const hasDiagramMarkings = PERI_ANAL_DIAGRAM_VARIANTS.some(
+    (variant) => (diagramState.markingsByVariant?.[variant.key] || []).length > 0,
+  );
 
   const hasData =
     patientEntries.length > 0 ||
     periAnal?.preoperative?.surgeons?.some((item: string) => item?.trim()) ||
     periAnal?.findings?.selectedFindings?.length > 0 ||
     periAnal?.woundManagement?.woundClosure ||
-    periAnal?.additionalInfo?.additionalInformation;
+    periAnal?.additionalInfo?.additionalInformation ||
+    hasDiagramMarkings;
 
   if (!hasData) {
     return (
@@ -134,9 +147,6 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
     );
   }
 
-  const diagramState = parsePeriAnalDiagramState(periAnal?.procedureFindings);
-  const activeDiagramVariant = diagramState.activeVariant || "neutral";
-  const activeDiagramMarkings = diagramState.markingsByVariant?.[activeDiagramVariant] || [];
   const findingSummary = getPeriAnalAdditionalFindingSection(periAnal);
   const findingSections = getPeriAnalFindingSections(periAnal);
 
@@ -221,11 +231,7 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
       <>
         <Separator />
         <div className="space-y-2">
-          <h5 className="text-xs font-medium text-gray-600">Peri-Anal Diagram</h5>
-          <p className="text-xs text-gray-700">
-            <span className="font-medium">Diagram View:</span>{" "}
-            {activeDiagramVariant === "female" ? "Female Perineal Anatomy" : "Neutral Peri-Anal"}
-          </p>
+          <h5 className="text-xs font-medium text-gray-600">Peri-Anal Diagrams</h5>
           <div className="bg-gray-50 p-3 rounded border text-xs">
             <h6 className="font-medium text-gray-700 mb-2">Legend:</h6>
             <div className="grid grid-cols-1 gap-1 text-gray-600">
@@ -247,7 +253,17 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
               </div>
             </div>
           </div>
-          <SurgicalDiagramDisplay markings={activeDiagramMarkings} diagramImage={diagramImages[activeDiagramVariant] || neutralDiagram} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {PERI_ANAL_DIAGRAM_VARIANTS.map((variant) => (
+              <div key={variant.key} className="space-y-2 rounded-lg border bg-white p-3">
+                <h6 className="text-xs font-medium text-gray-700">{variant.label}</h6>
+                <SurgicalDiagramDisplay
+                  markings={diagramState.markingsByVariant?.[variant.key] || []}
+                  diagramImage={periAnalDiagramImages[variant.key]}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </>
 

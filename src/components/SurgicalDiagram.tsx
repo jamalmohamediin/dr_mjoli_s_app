@@ -3,11 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { PortMarking, StomaMarking, IncisionMarking, SurgicalMarking } from '@/types/surgical';
+import { getSurgicalDiagramMarkingMetrics } from '@/utils/surgicalDiagramMarkings';
 
 interface SurgicalDiagramProps {
   diagramImage: string;
   onUpdate: (markings: SurgicalMarking[]) => void;
   initialMarkings?: SurgicalMarking[];
+  markingScale?: number;
 }
 
 type Tool = 'port' | 'stoma' | 'incision';
@@ -16,6 +18,7 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
   diagramImage,
   onUpdate,
   initialMarkings = [],
+  markingScale = 1,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -33,6 +36,7 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
   const [portSize, setPortSize] = useState<'5mm' | '10/11mm' | '12mm' | '15mm'>('12mm');
   const [stomaType, setStomaType] = useState<'ileostomy' | 'colostomy'>('ileostomy');
   const serializedInitialMarkings = JSON.stringify(initialMarkings);
+  const drawingMetrics = getSurgicalDiagramMarkingMetrics(markingScale);
 
   const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -114,17 +118,17 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
 
   const drawPort = (ctx: CanvasRenderingContext2D, mark: PortMarking) => {
     ctx.save();
-    ctx.font = 'bold 8px Arial';
+    ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
     ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(mark.size, mark.x, mark.y - 3);
+    ctx.fillText(mark.size, mark.x, mark.y - drawingMetrics.portLabelOffset);
 
     ctx.beginPath();
-    ctx.moveTo(mark.x - 8, mark.y);
-    ctx.lineTo(mark.x + 8, mark.y);
+    ctx.moveTo(mark.x - drawingMetrics.portHalfLength, mark.y);
+    ctx.lineTo(mark.x + drawingMetrics.portHalfLength, mark.y);
     ctx.strokeStyle = 'black';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = drawingMetrics.portLineWidth;
     ctx.stroke();
     ctx.restore();
   };
@@ -133,16 +137,16 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
     ctx.save();
     if (mark.stomaType === 'ileostomy') {
       ctx.beginPath();
-      ctx.arc(mark.x, mark.y, 15, 0, 2 * Math.PI);
+      ctx.arc(mark.x, mark.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = drawingMetrics.ileostomyLineWidth;
+      ctx.setLineDash(drawingMetrics.ileostomyDash);
       ctx.stroke();
     } else {
       ctx.beginPath();
-      ctx.arc(mark.x, mark.y, 15, 0, 2 * Math.PI);
+      ctx.arc(mark.x, mark.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
       ctx.strokeStyle = '#16a34a'; // Green
-      ctx.lineWidth = 4;
+      ctx.lineWidth = drawingMetrics.colostomyLineWidth;
       ctx.setLineDash([]);
       ctx.stroke();
     }
@@ -155,8 +159,8 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
     ctx.moveTo(mark.start.x, mark.start.y);
     ctx.lineTo(mark.end.x, mark.end.y);
     ctx.strokeStyle = '#8B0000'; // Dark red
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
+    ctx.lineWidth = drawingMetrics.incisionLineWidth;
+    ctx.setLineDash(drawingMetrics.incisionDash);
     ctx.stroke();
     ctx.restore();
   };

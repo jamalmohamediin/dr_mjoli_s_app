@@ -1,4 +1,8 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import {
+  createInitialPeriAnalDiagramMarkings,
+  DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+} from "@/utils/periAnalDiagramConfig";
 
 export const initialPeriAnalState = {
   patientInfo: createInitialPatientInfoState(),
@@ -250,11 +254,8 @@ export const initialPeriAnalState = {
   procedureFindings: {
     findings: "",
     additionalNotes: "",
-    activeDiagramVariant: "neutral",
-    diagramMarkingsByVariant: {
-      neutral: [] as any[],
-      female: [] as any[],
-    },
+    activeDiagramVariant: DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+    diagramMarkingsByVariant: createInitialPeriAnalDiagramMarkings(),
   },
 };
 

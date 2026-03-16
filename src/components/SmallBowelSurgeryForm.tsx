@@ -403,56 +403,6 @@ export const SmallBowelSurgeryForm = ({
                   </div>
 
                   <div>
-                    <label className="text-gray-800 font-medium mb-2 block">
-                      Indication for Surgery:
-                    </label>
-                    <Textarea
-                      placeholder="Enter indication for surgery"
-                      value={smallBowel.preoperative?.indication || ""}
-                      onChange={(e) => updateSmallBowel("preoperative", "indication", e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-gray-800 font-medium mb-2 block">
-                      Operation Description:
-                    </label>
-                    <Textarea
-                      placeholder="Enter operation description"
-                      value={smallBowel.preoperative?.operationDescription || ""}
-                      onChange={(e) =>
-                        updateSmallBowel("preoperative", "operationDescription", e.target.value)
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
-                    <div className="flex flex-wrap gap-4 ml-4">
-                      {["Emergency", "Semi-Emergency", "Semi-Elective", "Elective"].map(
-                        (urgency) => (
-                          <div className="flex items-center" key={`sb-urgency-${urgency}`}>
-                            <Checkbox
-                              id={`sb-urgency-${urgency}`}
-                              checked={smallBowel.preoperative?.procedureUrgency === urgency}
-                              onCheckedChange={(checked) =>
-                                updateSmallBowel(
-                                  "preoperative",
-                                  "procedureUrgency",
-                                  checked ? urgency : ""
-                                )
-                              }
-                            />
-                            <label htmlFor={`sb-urgency-${urgency}`} className="ml-2 text-sm">
-                              {urgency}
-                            </label>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
                     <div className="flex flex-wrap gap-4 ml-4">
                       {["None", "X-Ray", "Ultrasound", "CT Scan", "Contrast Study", "Other"].map(
@@ -489,6 +439,56 @@ export const SmallBowelSurgeryForm = ({
                         />
                       </div>
                     )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
+                    <div className="flex flex-wrap gap-4 ml-4">
+                      {["Emergency", "Semi-Emergency", "Semi-Elective", "Elective"].map(
+                        (urgency) => (
+                          <div className="flex items-center" key={`sb-urgency-${urgency}`}>
+                            <Checkbox
+                              id={`sb-urgency-${urgency}`}
+                              checked={smallBowel.preoperative?.procedureUrgency === urgency}
+                              onCheckedChange={(checked) =>
+                                updateSmallBowel(
+                                  "preoperative",
+                                  "procedureUrgency",
+                                  checked ? urgency : ""
+                                )
+                              }
+                            />
+                            <label htmlFor={`sb-urgency-${urgency}`} className="ml-2 text-sm">
+                              {urgency}
+                            </label>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-800 font-medium mb-2 block">
+                      Indication for Surgery:
+                    </label>
+                    <Textarea
+                      placeholder="Enter indication for surgery"
+                      value={smallBowel.preoperative?.indication || ""}
+                      onChange={(e) => updateSmallBowel("preoperative", "indication", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-gray-800 font-medium mb-2 block">
+                      Operation Description:
+                    </label>
+                    <Textarea
+                      placeholder="Enter operation description"
+                      value={smallBowel.preoperative?.operationDescription || ""}
+                      onChange={(e) =>
+                        updateSmallBowel("preoperative", "operationDescription", e.target.value)
+                      }
+                    />
                   </div>
                 </div>
               </div>

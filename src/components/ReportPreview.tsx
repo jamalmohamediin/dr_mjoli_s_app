@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateDDMMYYYYInput } from "@/components/Time24HourInput";
 import { Edit, Trash2, Redo2, X, Save } from "lucide-react";
 import { getFullASAText } from '@/utils/asaDescriptions';
-import { formatDateDDMMYYYY } from '@/utils/dateFormatter';
+import {
+  formatDateDDMMYYYYWithDashes,
+  formatDateTimeDDMMYYYYWithDashes,
+} from '@/utils/dateFormatter';
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import appendectomyImage from '@/assets/appendectomy.jpg';
 
@@ -320,69 +324,14 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
   };
   
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'Not specified';
-    
-    const date = new Date(dateString);
-    
-    // Get ordinal suffix for day
-    const getOrdinalSuffix = (day: number) => {
-      if (day >= 11 && day <= 13) return 'th';
-      switch (day % 10) {
-        case 1: return 'st';
-        case 2: return 'nd';
-        case 3: return 'rd';
-        default: return 'th';
-      }
-    };
-    
-    const day = date.getDate();
-    const month = date.toLocaleDateString('en-US', { month: 'long' });
-    const year = date.getFullYear();
-    
-    return `${day}${getOrdinalSuffix(day)} ${month} ${year}`;
+    return formatDateDDMMYYYYWithDashes(dateString) || 'Not specified';
   };
 
   const formatDateTime = (dateString?: string) => {
-    if (!dateString) {
-      // Use current date and time if no date provided
-      const now = new Date();
-      const day = now.getDate();
-      const month = now.toLocaleDateString('en-US', { month: 'long' });
-      const year = now.getFullYear();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      
-      const getOrdinalSuffix = (day: number) => {
-        if (day >= 11 && day <= 13) return 'th';
-        switch (day % 10) {
-          case 1: return 'st';
-          case 2: return 'nd';
-          case 3: return 'rd';
-          default: return 'th';
-        }
-      };
-      
-      return `${day}${getOrdinalSuffix(day)} - ${month} - ${year} at ${hours}:${minutes}`;
-    }
-    
-    const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date.toLocaleDateString('en-US', { month: 'long' });
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    
-    const getOrdinalSuffix = (day: number) => {
-      if (day >= 11 && day <= 13) return 'th';
-      switch (day % 10) {
-        case 1: return 'st';
-        case 2: return 'nd';
-        case 3: return 'rd';
-        default: return 'th';
-      }
-    };
-    
-    return `${day}${getOrdinalSuffix(day)} - ${month} - ${year} at ${hours}:${minutes}`;
+    return (
+      formatDateTimeDDMMYYYYWithDashes(dateString || new Date()) ||
+      formatDateTimeDDMMYYYYWithDashes(new Date())
+    );
   };
 
   const formatAnesthesiaType = (anesthesia: string) => {
@@ -912,12 +861,11 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
               <span className="font-medium text-xs">Date Of Birth:</span>
               {editingPatientField === 'dateOfBirth' ? (
                 <div className="flex gap-1 items-center">
-                  <Input
-                    value={patientFieldValue}
-                    onChange={(e) => setPatientFieldValue(e.target.value)}
+                  <DateDDMMYYYYInput
+                    ariaLabel="Date of birth"
                     className="h-6 text-xs w-32"
-                    type="date"
-                    lang="en-GB"
+                    onChange={setPatientFieldValue}
+                    value={patientFieldValue}
                   />
                   <Button variant="outline" size="sm" onClick={cancelPatientEdit} className="h-6 w-6 p-0">
                     <X className="h-3 w-3" />
@@ -928,7 +876,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                 </div>
               ) : (
                 <div className="flex items-center gap-1">
-                  <span className="text-xs">{formatDateDDMMYYYY(report.patientInfo.dateOfBirth)}</span>
+                  <span className="text-xs">{formatDate(report.patientInfo.dateOfBirth)}</span>
                   {onEditPatientInfo && (
                     <Button
                       variant="ghost"
@@ -1104,11 +1052,11 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
               <span className="font-medium text-xs">Date:</span>
               {editingPatientField === 'date' ? (
                 <div className="flex gap-1 items-center">
-                  <Input
-                    value={patientFieldValue}
-                    onChange={(e) => setPatientFieldValue(e.target.value)}
+                  <DateDDMMYYYYInput
+                    ariaLabel="Procedure date"
                     className="h-6 text-xs w-32"
-                    type="date"
+                    onChange={setPatientFieldValue}
+                    value={patientFieldValue}
                   />
                   <Button variant="outline" size="sm" onClick={cancelPatientEdit} className="h-6 w-6 p-0">
                     <X className="h-3 w-3" />
@@ -2638,7 +2586,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
               )}
               {report.signature.dateTime && (
                 <p className="text-xs text-gray-700">
-                  <span className="font-medium">Date/Time:</span> {report.signature.dateTime}
+                  <span className="font-medium">Date/Time:</span> {formatDateTime(report.signature.dateTime)}
                 </p>
               )}
             </div>

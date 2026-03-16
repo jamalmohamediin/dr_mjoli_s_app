@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateDDMMYYYYInput, Time24HourInput } from "@/components/Time24HourInput";
 import { Save, Edit } from "lucide-react";
 
 interface ProcedureInfoFormProps {
@@ -247,12 +248,11 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           <div className="space-y-0.5">
             <Label htmlFor="date" className="text-xs font-medium">Procedure Date:</Label>
-            <Input
-              id="date"
-              type="date"
+            <DateDDMMYYYYInput
+              ariaLabel="Procedure date"
+              className="w-full"
               value={formData.date}
-              onChange={(e) => handleChange('date', e.target.value)}
-              placeholder="dd/mm/yyyy"
+              onChange={(value) => handleChange('date', value)}
             />
           </div>
           <div className="space-y-0.5">
@@ -260,20 +260,22 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div className="space-y-1">
                 <span className="text-xs">Start Time</span>
-                <Input
-                  type="time"
-                  value={formData.operationStartTime}
-                  onChange={(e) => handleChange('operationStartTime', e.target.value)}
+                <Time24HourInput
                   className="w-full"
+                  hourAriaLabel="Operation start hour"
+                  minuteAriaLabel="Operation start minute"
+                  value={formData.operationStartTime}
+                  onChange={(value) => handleChange('operationStartTime', value)}
                 />
               </div>
               <div className="space-y-1">
                 <span className="text-xs">End Time</span>
-                <Input
-                  type="time"
-                  value={formData.operationEndTime}
-                  onChange={(e) => handleChange('operationEndTime', e.target.value)}
+                <Time24HourInput
                   className="w-full"
+                  hourAriaLabel="Operation end hour"
+                  minuteAriaLabel="Operation end minute"
+                  value={formData.operationEndTime}
+                  onChange={(value) => handleChange('operationEndTime', value)}
                 />
               </div>
               <div className="space-y-1">

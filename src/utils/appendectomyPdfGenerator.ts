@@ -3,6 +3,9 @@ import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
 import { formatPatientGender, formatPatientStickerDate } from './patientSticker';
+import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
+
+const APPENDECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
 
 // Function to calculate signature dimensions while maintaining aspect ratio
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
@@ -51,6 +54,7 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
 
     const image = new Image();
     image.onload = () => {
+      const drawingMetrics = getSurgicalDiagramMarkingMetrics(APPENDECTOMY_DIAGRAM_MARKING_SCALE);
       // Set canvas size to match image
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
@@ -64,17 +68,17 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
         if (marking.type === 'port') {
           // Draw port marking: black line with size label
           ctx.save();
-          ctx.font = 'bold 10px Arial';
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = 'black';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
 
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === 'stoma') {
@@ -82,16 +86,16 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
           ctx.save();
           if (marking.stomaType === 'ileostomy') {
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#f59e0b'; // Gold/Yellow
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 3]); // Dashed line
+            ctx.lineWidth = drawingMetrics.ileostomyLineWidth;
+            ctx.setLineDash(drawingMetrics.ileostomyDash); // Dashed line
             ctx.stroke();
           } else { // colostomy
             ctx.beginPath();
-            ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+            ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
             ctx.strokeStyle = '#16a34a'; // Green
-            ctx.lineWidth = 4;
+            ctx.lineWidth = drawingMetrics.colostomyLineWidth;
             ctx.setLineDash([]); // Continuous line
             ctx.stroke();
           }
@@ -103,8 +107,8 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = '#8B0000'; // Dark red
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]); // Dashed line
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash); // Dashed line
           ctx.stroke();
           ctx.restore();
         }
@@ -687,15 +691,21 @@ export const generateAppendectomyPDF = async (
       const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
       if (diagramImageData) {
         try {
-          const diagramPadding = 2;
+          const diagramPadding = 1;
           const availableWidth = diagramColumnWidth - (diagramPadding * 2);
           const availableHeight = diagramBoxHeight - (diagramPadding * 2);
-          
-          const diagramSize = Math.min(availableWidth, availableHeight);
-          const centerX = diagramX + (diagramColumnWidth - diagramSize) / 2;
-          const centerY = diagramY + (diagramBoxHeight - diagramSize) / 2;
-          
-          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, diagramSize, diagramSize);
+
+          const properties = pdf.getImageProperties(diagramImageData);
+          const renderScale = Math.min(
+            availableWidth / properties.width,
+            availableHeight / properties.height,
+          );
+          const renderWidth = properties.width * renderScale;
+          const renderHeight = properties.height * renderScale;
+          const centerX = diagramX + (diagramColumnWidth - renderWidth) / 2;
+          const centerY = diagramY + (diagramBoxHeight - renderHeight) / 2;
+
+          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, renderWidth, renderHeight);
         } catch (error) {
           pdf.setFontSize(8);
           pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
@@ -826,10 +836,19 @@ export const generateAppendectomyPDF = async (
     }
     
     // Other Specimens Taken
-    const otherSpecimens = closure.otherSpecimens || '';
-    if (otherSpecimens && otherSpecimens.trim() && otherSpecimens !== 'Not specified' && otherSpecimens !== 'None') {
-      pdf.text(`Other Specimens Taken: ${otherSpecimens}`, margin, y);
-      y += 8;
+    const otherSpecimens = getTextValue(closure.otherSpecimens);
+    const specimenDetails = getTextValue(closure.specimenDetails);
+    const otherSpecimensDisplay =
+      otherSpecimens === 'Yes' && hasPrintableValue(specimenDetails)
+        ? `${otherSpecimens} - ${specimenDetails}`
+        : otherSpecimens;
+    if (hasPrintableValue(otherSpecimensDisplay)) {
+      const otherSpecimenLines = pdf.splitTextToSize(`Other Specimens Taken: ${otherSpecimensDisplay}`, fullWidth);
+      otherSpecimenLines.forEach((line: string) => {
+        pdf.text(line, margin, y);
+        y += 4;
+      });
+      y += 4;
     }
     
     // Add separator line after SPECIMEN

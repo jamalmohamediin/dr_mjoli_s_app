@@ -1475,7 +1475,7 @@ export const PeriAnalForm = ({
               </div>
             </div>
           </div>
-          <div className="pt-2">
+          <div className="flex justify-center pt-2">
             <Button
               variant="outline"
               size="sm"

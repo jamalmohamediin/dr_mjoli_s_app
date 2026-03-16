@@ -1,3 +1,8 @@
+import {
+  createInitialPeriAnalDiagramMarkings,
+  DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+} from "@/utils/periAnalDiagramConfig";
+
 export interface PeriAnalEntry {
   label: string;
   value: string;
@@ -46,12 +51,29 @@ const selectedFindings = (data: any) => {
 
 export const parsePeriAnalDiagramState = (procedureFindings: any): PeriAnalDiagramState => {
   const state = procedureFindings || {};
+  const defaultMarkings = createInitialPeriAnalDiagramMarkings();
+  const defaultVariantKeys = Object.keys(defaultMarkings);
+  const rawMarkings = state.diagramMarkingsByVariant || {};
+  const legacyNeutralMarkings = Array.isArray(rawMarkings.neutral) ? rawMarkings.neutral : [];
+  const legacyFemaleMarkings = Array.isArray(rawMarkings.female) ? rawMarkings.female : [];
+  const markingsByVariant = {
+    ...defaultMarkings,
+    ...rawMarkings,
+  };
+
+  if (!Array.isArray(rawMarkings.externalPerianalSkin) && legacyNeutralMarkings.length > 0) {
+    markingsByVariant.externalPerianalSkin = legacyNeutralMarkings;
+  }
+
+  if (!Array.isArray(rawMarkings.lithotomyPosition) && legacyFemaleMarkings.length > 0) {
+    markingsByVariant.lithotomyPosition = legacyFemaleMarkings;
+  }
+
   return {
-    activeVariant: state.activeDiagramVariant || "neutral",
-    markingsByVariant: state.diagramMarkingsByVariant || {
-      neutral: [],
-      female: [],
-    },
+    activeVariant: defaultVariantKeys.includes(state.activeDiagramVariant)
+      ? state.activeDiagramVariant
+      : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
+    markingsByVariant,
   };
 };
 

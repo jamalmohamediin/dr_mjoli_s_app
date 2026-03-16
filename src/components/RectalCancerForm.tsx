@@ -492,50 +492,6 @@ export const RectalCancerForm = ({
                 <h3 className="font-semibold text-gray-800 mb-4">Procedure Details</h3>
                 <div className="space-y-4">
                   
-                  {/* Indication for Surgery */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
-                      {operationFindingsOptions.map((findingOption) => (
-                        <div className="flex items-center" key={`preop-indication-${findingOption}`}>
-                          <Checkbox
-                            id={`preop-indication-${findingOption}`}
-                            checked={getOperationFindingsList().includes(findingOption)}
-                            onCheckedChange={(checked) => {
-                              const current = getOperationFindingsList();
-                              const updated = checked
-                                ? Array.from(new Set([...current, findingOption]))
-                                : current.filter((item) => item !== findingOption);
-                              updateRectalCancer('operationType', 'operationFindingsOptions', updated);
-                            }}
-                          />
-                          <label htmlFor={`preop-indication-${findingOption}`} className="ml-2 text-sm">{findingOption}</label>
-                        </div>
-                      ))}
-                    </div>
-                    {getOperationFindingsList().includes('Other') && (
-                      <div className="mt-3 ml-4">
-                        <Input
-                          type="text"
-                          placeholder="Specify other indication"
-                          value={currentReport.rectalCancer?.operationType?.operationFindingsOther || ''}
-                          onChange={(e) => updateRectalCancer('operationType', 'operationFindingsOther', e.target.value)}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Operation Description */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
-                    <Textarea
-                      placeholder="Enter Operation Description"
-                      value={currentReport.rectalCancer?.operationType?.operationFindings || ''}
-                      onChange={(e) => updateRectalCancer('operationType', 'operationFindings', e.target.value)}
-                      className="w-full"
-                    />
-                  </div>
-
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>
                     <div className="flex flex-wrap gap-4 ml-4">
@@ -627,6 +583,50 @@ export const RectalCancerForm = ({
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Indication for Surgery */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Indication for Surgery:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                      {operationFindingsOptions.map((findingOption) => (
+                        <div className="flex items-center" key={`preop-indication-${findingOption}`}>
+                          <Checkbox
+                            id={`preop-indication-${findingOption}`}
+                            checked={getOperationFindingsList().includes(findingOption)}
+                            onCheckedChange={(checked) => {
+                              const current = getOperationFindingsList();
+                              const updated = checked
+                                ? Array.from(new Set([...current, findingOption]))
+                                : current.filter((item) => item !== findingOption);
+                              updateRectalCancer('operationType', 'operationFindingsOptions', updated);
+                            }}
+                          />
+                          <label htmlFor={`preop-indication-${findingOption}`} className="ml-2 text-sm">{findingOption}</label>
+                        </div>
+                      ))}
+                    </div>
+                    {getOperationFindingsList().includes('Other') && (
+                      <div className="mt-3 ml-4">
+                        <Input
+                          type="text"
+                          placeholder="Specify other indication"
+                          value={currentReport.rectalCancer?.operationType?.operationFindingsOther || ''}
+                          onChange={(e) => updateRectalCancer('operationType', 'operationFindingsOther', e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Operation Description */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Operation Description:</p>
+                    <Textarea
+                      placeholder="Enter Operation Description"
+                      value={currentReport.rectalCancer?.operationType?.operationFindings || ''}
+                      onChange={(e) => updateRectalCancer('operationType', 'operationFindings', e.target.value)}
+                      className="w-full"
+                    />
                   </div>
                   
                   {/* Neoadjuvant Treatment */}

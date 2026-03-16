@@ -6,6 +6,9 @@ import {
 } from "@/utils/dateFormatter";
 import { getFullASAText } from "@/utils/asaDescriptions";
 import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
+import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+
+const CHOLECYSTECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
 
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) return value.filter(Boolean) as string[];
@@ -47,6 +50,7 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
 
     const image = new Image();
     image.onload = () => {
+      const drawingMetrics = getSurgicalDiagramMarkingMetrics(CHOLECYSTECTOMY_DIAGRAM_MARKING_SCALE);
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -55,25 +59,28 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
       markings.forEach((marking) => {
         if (marking.type === "port") {
           ctx.save();
-          ctx.font = "bold 10px Arial";
+          ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - 3);
+          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - 10, marking.y);
-          ctx.lineTo(marking.x + 10, marking.y);
+          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
+          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
           ctx.strokeStyle = "black";
-          ctx.lineWidth = 2;
+          ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, 15, 0, 2 * Math.PI);
+          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
-          ctx.lineWidth = marking.stomaType === "ileostomy" ? 2 : 4;
-          ctx.setLineDash(marking.stomaType === "ileostomy" ? [5, 3] : []);
+          ctx.lineWidth =
+            marking.stomaType === "ileostomy"
+              ? drawingMetrics.ileostomyLineWidth
+              : drawingMetrics.colostomyLineWidth;
+          ctx.setLineDash(marking.stomaType === "ileostomy" ? drawingMetrics.ileostomyDash : []);
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "incision") {
@@ -82,8 +89,8 @@ const createSurgicalDiagramCanvas = async (markings: any[]): Promise<string | nu
           ctx.moveTo(marking.start.x, marking.start.y);
           ctx.lineTo(marking.end.x, marking.end.y);
           ctx.strokeStyle = "#8B0000";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([8, 6]);
+          ctx.lineWidth = drawingMetrics.incisionLineWidth;
+          ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
         }
@@ -141,15 +148,14 @@ export const generateCholecystectomyPDF = async (
     };
 
     const sec = (title: string) => {
-      // Extra top padding so section headers don't crowd previous rows
-      y += 3;
-      ensureSpace(14);
+      y += 2;
+      ensureSpace(20);
+      drawRule();
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(11);
       pdf.text(title, margin, y);
-      y += 6;
+      y += 5;
       drawRule();
-      // Slight breathing room under divider
       y += 1;
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
@@ -279,7 +285,7 @@ export const generateCholecystectomyPDF = async (
       `Work Number: ${txt(info.workNumber)}`,
       `Home Number: ${txt(info.homeNumber)}`
     );
-    row2(`Authorization: ${txt(info.authorization)}`, `Depend Code: ${txt(info.dependCode)}`);
+    row3(`Authorization: ${txt(info.authorization)}`, `Depend Code: ${txt(info.dependCode)}`, "");
     y += 1;
     patientSubsection("Hospital Details");
     rowFull(`Hospital Name: ${txt(info.hospitalName)}`);
@@ -291,9 +297,10 @@ export const generateCholecystectomyPDF = async (
       rowFull(`ASA Notes: ${txt(info.asaNotes)}`);
     }
     row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
-    row2(
+    row3(
       `Date: ${formatDateDDMMYYYYWithDashes(info.visitDate)}`,
-      `Time: ${txt(info.visitTime)}`
+      `Time: ${txt(info.visitTime)}`,
+      ""
     );
     y += 2;
 
@@ -306,8 +313,8 @@ export const generateCholecystectomyPDF = async (
     row3(`Start Time: ${txt(preop?.startTime)}`, `End Time: ${txt(preop?.endTime)}`, `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`);
     row3(
       `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
-      "",
-      `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`
+      `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`,
+      ""
     );
     rowFull(`Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`);
     rowFull(`Operation Description: ${txt(preop?.operationDescription)}`);
@@ -345,11 +352,6 @@ export const generateCholecystectomyPDF = async (
     addLeftCh("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
     addLeftCh("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
     addLeftCh("Critical View of Safety - Two Structures Entering Gall Bladder Confirmed", txt(proc?.twoStructuresConfirmed));
-    addLeftCh("Gall Bladder Dissected from Liver Bed", joinSelections(toArray(proc?.gallbladderDissectedFromLiverBed), proc?.gallbladderDissectedFromLiverBedOther));
-    addLeftCh("Cystic Duct Control", joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther));
-    addLeftCh("Cystic Artery Control", joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther));
-    addLeftCh("Bile Spillage", txt(proc?.bileSpillage));
-    addLeftCh("Stones Spillage", txt(proc?.stonesSpillage));
 
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
@@ -440,6 +442,16 @@ export const generateCholecystectomyPDF = async (
     y = margin;
 
     sec("PROCEDURE DETAILS");
+    rowFull(`Cystic Duct Control: ${joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther)}`);
+    rowFull(`Cystic Artery Control: ${joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther)}`);
+    rowFull(
+      `Gall Bladder Dissected from Liver Bed: ${joinSelections(
+        toArray(proc?.gallbladderDissectedFromLiverBed),
+        proc?.gallbladderDissectedFromLiverBedOther
+      )}`
+    );
+    rowFull(`Bile Spillage: ${txt(proc?.bileSpillage)}`);
+    rowFull(`Stones Spillage: ${txt(proc?.stonesSpillage)}`);
     rowFull(`Additional Procedures: ${additionalProceduresText}`);
     rowFull(`Cholangiogram Findings: ${cholangiogramText}`);
     rowFull(
