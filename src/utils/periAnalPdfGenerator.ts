@@ -376,6 +376,8 @@ export const generatePeriAnalPDF = async (
         : [{ label: "Summary", value: "No findings summary recorded" }],
     );
 
+    const diagramSectionRequiredHeight = 170;
+    ensureSpace(diagramSectionRequiredHeight);
     startSection("Peri-Anal Diagrams");
     row1("Legend: Ports (With Size Label), Ileostomy (Dashed Yellow Circle), Colostomy (Solid Green Circle), Incisions (Dashed Dark Red Line)");
     const diagramGridHeight = 144;

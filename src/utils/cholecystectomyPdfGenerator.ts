@@ -6,6 +6,7 @@ import {
 } from "@/utils/dateFormatter";
 import { getFullASAText } from "@/utils/asaDescriptions";
 import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
+import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
 const CHOLECYSTECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
@@ -357,86 +358,19 @@ export const generateCholecystectomyPDF = async (
     pdf.setFontSize(11);
     pdf.text("PORTS AND INCISIONS", rightXCh, blockTopCh);
     let ryCh = blockTopCh + 5;
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(7.5);
-    pdf.text("Legend:", rightXCh, ryCh);
-    pdf.setFont("helvetica", "normal");
-    ryCh += 4;
+    const { diagramBottomY } = drawRectalStylePortsAndIncisions({
+      pdf,
+      x: rightXCh,
+      y: ryCh,
+      pageHeight,
+      diagramCanvas,
+      fallbackLabel: "CHOLECYSTECTOMY DIAGRAM",
+    });
 
-    const legendCol1X = rightXCh;
-    const legendCol2X = rightXCh + 40;
-
-    pdf.text("Ports (with size label)", legendCol1X + 6, ryCh);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.8);
-    pdf.line(legendCol1X, ryCh - 1, legendCol1X + 4, ryCh - 1);
-    pdf.setFontSize(4);
-    pdf.text("5mm", legendCol1X + 0.5, ryCh - 2);
-    pdf.setFontSize(7.5);
-
-    pdf.text("Ileostomy (dashed yellow circle)", legendCol2X + 6, ryCh);
-    pdf.setDrawColor(245, 158, 11);
-    pdf.setLineWidth(0.8);
-    pdf.setLineDashPattern([1.5, 1], 0);
-    pdf.circle(legendCol2X + 2, ryCh - 1, 1.5);
-    pdf.setLineDashPattern([], 0);
-
-    ryCh += 4.5;
-
-    pdf.text("Incisions (dashed dark red line)", legendCol1X + 6, ryCh);
-    pdf.setDrawColor(139, 0, 0);
-    pdf.setLineWidth(0.8);
-    pdf.setLineDashPattern([2, 1.5], 0);
-    pdf.line(legendCol1X, ryCh - 1, legendCol1X + 4, ryCh - 1);
-    pdf.setLineDashPattern([], 0);
-
-    pdf.text("Colostomy (solid green circle)", legendCol2X + 6, ryCh);
-    pdf.setDrawColor(22, 163, 74);
-    pdf.setLineWidth(1.2);
-    pdf.circle(legendCol2X + 2, ryCh - 1, 1.5);
-
-    ryCh += 5;
     pdf.setDrawColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
-
-    const availableDiagramHeight = pageHeight - margin - ryCh - 2;
-    const boxXCh = rightXCh;
-    const boxYCh = ryCh;
-    const boxWCh = rightWCh;
-    const boxHCh = Math.min(46, Math.max(18, availableDiagramHeight));
-    pdf.setLineWidth(0.5);
-    pdf.rect(boxXCh, boxYCh, boxWCh, boxHCh);
-
-    if (diagramCanvas) {
-      const props = pdf.getImageProperties(diagramCanvas);
-      const ar = props.width / props.height;
-      const diagramPadding = 2;
-      const availableWidth = boxWCh - diagramPadding * 2;
-      const availableHeight = boxHCh - diagramPadding * 2;
-      let w = availableWidth;
-      let h = w / ar;
-      if (h > availableHeight) {
-        h = availableHeight;
-        w = h * ar;
-      }
-      pdf.addImage(
-        diagramCanvas,
-        "PNG",
-        boxXCh + (boxWCh - w) / 2,
-        boxYCh + (boxHCh - h) / 2,
-        w,
-        h
-      );
-    } else {
-      pdf.setFontSize(8);
-      pdf.text("CHOLECYSTECTOMY DIAGRAM", boxXCh + boxWCh / 2, boxYCh + boxHCh / 2, {
-        align: "center",
-      });
-      pdf.setFontSize(9);
-    }
-
-    y = Math.max(lyCh, boxYCh + boxHCh) + 5;
+    y = Math.max(lyCh, diagramBottomY + 10) + 5;
 
     pdf.addPage();
     y = margin;

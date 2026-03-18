@@ -10,6 +10,7 @@ import {
   normalizePatientInfo,
 } from "./patientSticker";
 import { getFullASAText } from "./asaDescriptions";
+import { drawRectalStylePortsAndIncisions } from "./pdfPortsAndIncisionsLayout";
 import { getSurgicalDiagramMarkingMetrics } from "./surgicalDiagramMarkings";
 
 const VENTRAL_HERNIA_DIAGRAM_MARKING_SCALE = 1.5;
@@ -526,72 +527,17 @@ export const generateVentralHerniaPDF = async (
       leftY = addColumnItem(label, value, leftColX, columnWidth, leftY);
     });
 
-    pdf.setFontSize(8);
-    pdf.text("Legend:", rightColX, rightY);
-    rightY += 5;
-
-    const legendCol1X = rightColX;
-    const legendCol2X = rightColX + 45;
-
-    pdf.text("Ports (with size label)", legendCol1X + 6, rightY);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.8);
-    pdf.line(legendCol1X, rightY - 1, legendCol1X + 4, rightY - 1);
-    pdf.setFontSize(4);
-    pdf.text("5mm", legendCol1X + 0.5, rightY - 2);
-    pdf.setFontSize(8);
-
-    pdf.text("Ileostomy", legendCol2X + 6, rightY);
-    pdf.setDrawColor(245, 158, 11);
-    pdf.setLineWidth(0.8);
-    pdf.setLineDash([1.5, 1]);
-    pdf.circle(legendCol2X + 2, rightY - 1, 1.5);
-    pdf.setLineDash([]);
-    rightY += 5;
-
-    pdf.text("Incisions", legendCol1X + 6, rightY);
-    pdf.setDrawColor(139, 0, 0);
-    pdf.setLineWidth(0.8);
-    pdf.setLineDash([2, 1.5]);
-    pdf.line(legendCol1X, rightY - 1, legendCol1X + 4, rightY - 1);
-    pdf.setLineDash([]);
-
-    pdf.text("Colostomy", legendCol2X + 6, rightY);
-    pdf.setDrawColor(22, 163, 74);
-    pdf.setLineWidth(1.2);
-    pdf.circle(legendCol2X + 2, rightY - 1, 1.5);
-    pdf.setDrawColor(0, 0, 0);
-    rightY += 8;
-
-    const diagramBoxWidth = columnWidth - 2;
-    const diagramBoxHeight = 58;
-    pdf.rect(rightColX, rightY, diagramBoxWidth, diagramBoxHeight);
-
     const diagramImageData = await createSurgicalDiagramCanvas(diagrams || []);
-    if (diagramImageData) {
-      try {
-        const properties = pdf.getImageProperties(diagramImageData);
-        const aspectRatio = properties.width / properties.height;
-        const maxWidth = diagramBoxWidth - 8;
-        const maxHeight = diagramBoxHeight - 8;
-        let finalWidth = maxWidth;
-        let finalHeight = maxWidth / aspectRatio;
+    const { diagramBottomY } = drawRectalStylePortsAndIncisions({
+      pdf,
+      x: rightColX,
+      y: rightY,
+      pageHeight,
+      diagramCanvas: diagramImageData,
+      fallbackLabel: "VENTRAL HERNIA DIAGRAM",
+    });
 
-        if (finalHeight > maxHeight) {
-          finalHeight = maxHeight;
-          finalWidth = maxHeight * aspectRatio;
-        }
-
-        const imageX = rightColX + (diagramBoxWidth - finalWidth) / 2;
-        const imageY = rightY + (diagramBoxHeight - finalHeight) / 2;
-        pdf.addImage(diagramImageData, "PNG", imageX, imageY, finalWidth, finalHeight);
-      } catch (error) {
-        pdf.setFontSize(8);
-        pdf.text("Diagram unavailable", rightColX + 18, rightY + 30);
-      }
-    }
-
-    rightY += diagramBoxHeight + 2;
+    rightY = diagramBottomY + 10;
     y = Math.max(leftY, rightY) + 8;
 
     drawSeparator();

@@ -3,6 +3,7 @@ import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
 import { formatPatientGender, formatPatientStickerDate } from './patientSticker';
+import { drawRectalStylePortsAndIncisions } from './pdfPortsAndIncisionsLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
 
 const APPENDECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
@@ -551,6 +552,7 @@ export const generateAppendectomyPDF = async (
     
     let procedureY = sectionStartY + 6.5;
     let diagramY = sectionStartY + 6.5;
+    const diagramImageData = diagrams && diagrams.length > 0 ? await createSurgicalDiagramCanvas(diagrams) : null;
     
     // PROCEDURE DETAILS Content (Left Column)
     pdf.setFontSize(bodyFontSize);
@@ -632,91 +634,15 @@ export const generateAppendectomyPDF = async (
     addContentLine(`Drain Placement: ${drainText}`, 5.5);
     
     // PORTS AND INCISIONS Content (Right Column)
-    // Legend with visual indicators in two rows - smaller and neater icons
-    pdf.setFontSize(7.5);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('Legend:', diagramX, diagramY);
-    diagramY += 4;
-    
-    // Row 1: Ports and Ileostomy
-    const legendCol1X = diagramX;
-    const legendCol2X = diagramX + 40;
-    
-    // Ports legend with smaller visual indicator
-    pdf.text('Ports (with size label)', legendCol1X + 6, diagramY);
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.8);
-    pdf.line(legendCol1X, diagramY - 1, legendCol1X + 4, diagramY - 1);
-    pdf.setFontSize(4);
-    pdf.text('5mm', legendCol1X + 0.5, diagramY - 2);
-    pdf.setFontSize(7.5);
-    
-    // Ileostomy legend with smaller visual indicator
-    pdf.text('Ileostomy (dashed yellow circle)', legendCol2X + 6, diagramY);
-    pdf.setDrawColor(245, 158, 11); // Yellow/Gold color
-    pdf.setLineWidth(0.8);
-    pdf.setLineDash([1.5, 1]);
-    pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
-    pdf.setLineDash([]);
-    
-    diagramY += 4.5;
-    
-    // Row 2: Incisions and Colostomy
-    // Incisions legend with smaller visual indicator
-    pdf.text('Incisions (dashed dark red line)', legendCol1X + 6, diagramY);
-    pdf.setDrawColor(139, 0, 0); // Dark red color
-    pdf.setLineWidth(0.8);
-    pdf.setLineDash([2, 1.5]);
-    pdf.line(legendCol1X, diagramY - 1, legendCol1X + 4, diagramY - 1);
-    pdf.setLineDash([]);
-    
-    // Colostomy legend with smaller visual indicator
-    pdf.text('Colostomy (solid green circle)', legendCol2X + 6, diagramY);
-    pdf.setDrawColor(22, 163, 74); // Green color
-    pdf.setLineWidth(1.2);
-    pdf.circle(legendCol2X + 2, diagramY - 1, 1.5);
-    
-    diagramY += 5;
-    
-    // Reset draw color
-    pdf.setDrawColor(0, 0, 0);
-
-    const availableDiagramHeight = pageHeight - margin - diagramY - 2;
-    const diagramBoxHeight = Math.min(46, Math.max(18, availableDiagramHeight));
-    pdf.setLineWidth(0.5);
-    pdf.rect(diagramX, diagramY, diagramColumnWidth, diagramBoxHeight);
-    
-    // Add diagram if available
-    if (diagrams && diagrams.length > 0) {
-      const diagramImageData = await createSurgicalDiagramCanvas(diagrams);
-      if (diagramImageData) {
-        try {
-          const diagramPadding = 1;
-          const availableWidth = diagramColumnWidth - (diagramPadding * 2);
-          const availableHeight = diagramBoxHeight - (diagramPadding * 2);
-
-          const properties = pdf.getImageProperties(diagramImageData);
-          const renderScale = Math.min(
-            availableWidth / properties.width,
-            availableHeight / properties.height,
-          );
-          const renderWidth = properties.width * renderScale;
-          const renderHeight = properties.height * renderScale;
-          const centerX = diagramX + (diagramColumnWidth - renderWidth) / 2;
-          const centerY = diagramY + (diagramBoxHeight - renderHeight) / 2;
-
-          pdf.addImage(diagramImageData, 'PNG', centerX, centerY, renderWidth, renderHeight);
-        } catch (error) {
-          pdf.setFontSize(8);
-          pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
-        }
-      }
-    } else {
-      pdf.setFontSize(8);
-      pdf.text('APPENDICECTOMY DIAGRAM', diagramX + diagramColumnWidth/2, diagramY + diagramBoxHeight/2, { align: 'center' });
-    }
-    
-    diagramY += diagramBoxHeight + 5;
+    const { diagramBottomY } = drawRectalStylePortsAndIncisions({
+      pdf,
+      x: diagramX,
+      y: diagramY,
+      pageHeight,
+      diagramCanvas: diagramImageData,
+      fallbackLabel: 'APPENDICECTOMY DIAGRAM',
+    });
+    diagramY = diagramBottomY + 10;
     
     // Page 1 ends here
     y = Math.max(procedureY, diagramY) + 5;

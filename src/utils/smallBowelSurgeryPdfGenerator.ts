@@ -9,6 +9,7 @@ import {
   normalizePatientInfo,
 } from "@/utils/patientSticker";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
+import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
 const SMALL_BOWEL_DIAGRAM_MARKING_SCALE = 1.8;
@@ -445,45 +446,16 @@ export const generateSmallBowelSurgeryPDF = async (
     pdf.setFontSize(9);
 
     let rightY = blockTop + 5;
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Legend:", rightX, rightY);
-    pdf.setFont("helvetica", "normal");
-    rightY += 4;
-    pdf.setTextColor(0, 0, 0);
-    pdf.text("-  Ports (with size)", rightX, rightY);
-    rightY += 4;
-    pdf.setTextColor(139, 0, 0);
-    pdf.text("- -  Incisions", rightX, rightY);
-    pdf.setTextColor(0, 0, 0);
-    rightY += 4;
+    const { diagramBottomY } = drawRectalStylePortsAndIncisions({
+      pdf,
+      x: rightX,
+      y: rightY,
+      pageHeight,
+      diagramCanvas,
+      fallbackLabel: "SMALL BOWEL DIAGRAM",
+    });
 
-    const diagramBoxX = rightX;
-    const diagramBoxY = rightY + 1;
-    const diagramBoxHeight = 70;
-    pdf.rect(diagramBoxX, diagramBoxY, rightWidth, diagramBoxHeight);
-
-    if (diagramCanvas) {
-      const props = pdf.getImageProperties(diagramCanvas);
-      const aspectRatio = props.width / props.height;
-      let width = rightWidth - 4;
-      let height = width / aspectRatio;
-
-      if (height > diagramBoxHeight - 4) {
-        height = diagramBoxHeight - 4;
-        width = height * aspectRatio;
-      }
-
-      pdf.addImage(
-        diagramCanvas,
-        "PNG",
-        diagramBoxX + (rightWidth - width) / 2,
-        diagramBoxY + (diagramBoxHeight - height) / 2,
-        width,
-        height,
-      );
-    }
-
-    y = Math.max(leftY, diagramBoxY + diagramBoxHeight) + 4;
+    y = Math.max(leftY, diagramBottomY + 10) + 4;
 
     sec("RECONSTRUCTION");
     row3(
