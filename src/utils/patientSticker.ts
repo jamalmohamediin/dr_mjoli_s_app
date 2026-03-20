@@ -27,6 +27,24 @@ export const PATIENT_STICKER_METADATA_KEYS = [
   "stickerLastExtractedAt",
 ] as const;
 
+export const PATIENT_STICKER_SYNC_KEYS = [
+  "name",
+  "patientId",
+  "sex",
+  "sexOther",
+  "age",
+  "dateOfBirth",
+  ...PATIENT_STICKER_FIELD_KEYS,
+] as const;
+
+export const PATIENT_STICKER_SYNC_METADATA_KEYS = [
+  "stickerMode",
+  "stickerImageName",
+  "stickerExtractionStatus",
+  "stickerExtractionError",
+  "stickerLastExtractedAt",
+] as const;
+
 const PATIENT_STICKER_SHARED_SYNC_KEYS = [
   "name",
   "patientId",
@@ -155,6 +173,47 @@ export const normalizePatientInfo = (patientInfo?: any) => {
 export const hasMeaningfulPatientInfoSyncData = (patientInfo?: any) => {
   const info = normalizePatientInfo(patientInfo);
   return PATIENT_STICKER_SHARED_SYNC_KEYS.some((key) => hasTextValue(info[key]));
+};
+
+export const createPatientStickerSyncSnapshot = (patientInfo?: any) => {
+  const info = normalizePatientInfo(patientInfo);
+  const snapshot = PATIENT_STICKER_SYNC_KEYS.reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: typeof info[key] === "string" ? info[key].trim() : info[key] || "",
+    }),
+    {} as Record<string, any>,
+  );
+
+  return normalizePatientInfo({
+    ...snapshot,
+    stickerMode: hasPatientStickerMode(info),
+    stickerImageName: String(info.stickerImageName || "").trim(),
+    stickerExtractionStatus:
+      String(info.stickerExtractionStatus || "").trim() ||
+      (hasMeaningfulPatientInfoSyncData(info) ? "success" : "idle"),
+    stickerExtractionError: String(info.stickerExtractionError || "").trim(),
+    stickerLastExtractedAt: String(info.stickerLastExtractedAt || "").trim(),
+  });
+};
+
+export const getPatientStickerSyncSignature = (patientInfo?: any) => {
+  const info = createPatientStickerSyncSnapshot(patientInfo);
+  const signaturePayload = [...PATIENT_STICKER_SYNC_KEYS, ...PATIENT_STICKER_SYNC_METADATA_KEYS].reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: typeof info[key] === "string" ? info[key].trim() : info[key] || "",
+    }),
+    {} as Record<string, any>,
+  );
+
+  return JSON.stringify(signaturePayload);
+};
+
+export const getPatientStickerSyncTimestamp = (patientInfo?: any) => {
+  const info = createPatientStickerSyncSnapshot(patientInfo);
+  const timestamp = Date.parse(String(info.stickerLastExtractedAt || "").trim());
+  return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
 export const calculatePatientAge = (dateOfBirth: string) => {

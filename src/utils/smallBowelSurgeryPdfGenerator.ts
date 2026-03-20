@@ -148,8 +148,8 @@ export const generateSmallBowelSurgeryPDF = async (
       return normalized ? `${label}: ${normalized}` : "";
     };
 
-    const ensureSpace = (height = 10) => {
-      if (y + height > pageHeight - 20) {
+    const ensureSpace = (height = 10, bottomPadding = 20) => {
+      if (y + height > pageHeight - bottomPadding) {
         pdf.addPage();
         y = margin;
       }
@@ -162,9 +162,9 @@ export const generateSmallBowelSurgeryPDF = async (
       y += 5;
     };
 
-    const sec = (title: string) => {
+    const sec = (title: string, bottomPadding = 20) => {
       y += 3;
-      ensureSpace(16);
+      ensureSpace(16, bottomPadding);
       drawRule();
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(11);
@@ -185,13 +185,13 @@ export const generateSmallBowelSurgeryPDF = async (
       pdf.setFontSize(9);
     };
 
-    const row3 = (a: string, b: string, c: string) => {
+    const row3 = (a: string, b: string, c: string, bottomPadding = 20) => {
       if (!a && !b && !c) return;
       const l1 = pdf.splitTextToSize(a || "", colWidth);
       const l2 = pdf.splitTextToSize(b || "", colWidth);
       const l3 = pdf.splitTextToSize(c || "", colWidth);
       const lines = Math.max(l1.length, l2.length, l3.length, 1);
-      ensureSpace(lines * lineHeight + 1);
+      ensureSpace(lines * lineHeight + 1, bottomPadding);
 
       for (let index = 0; index < lines; index += 1) {
         if (l1[index]) pdf.text(l1[index], margin, y);
@@ -201,12 +201,12 @@ export const generateSmallBowelSurgeryPDF = async (
       }
     };
 
-    const row2 = (a: string, b: string) => {
+    const row2 = (a: string, b: string, bottomPadding = 20) => {
       if (!a && !b) return;
       const l1 = pdf.splitTextToSize(a || "", twoColWidth);
       const l2 = pdf.splitTextToSize(b || "", twoColWidth);
       const lines = Math.max(l1.length, l2.length, 1);
-      ensureSpace(lines * lineHeight + 1);
+      ensureSpace(lines * lineHeight + 1, bottomPadding);
 
       for (let index = 0; index < lines; index += 1) {
         if (l1[index]) pdf.text(l1[index], margin, y);
@@ -215,14 +215,20 @@ export const generateSmallBowelSurgeryPDF = async (
       }
     };
 
-    const row1 = (value: string) => {
+    const row1 = (value: string, bottomPadding = 20) => {
       if (!value) return;
       const lines = pdf.splitTextToSize(value, contentWidth);
-      ensureSpace(lines.length * lineHeight + 1);
+      ensureSpace(lines.length * lineHeight + 1, bottomPadding);
       lines.forEach((line: string) => {
         pdf.text(line, margin, y);
         y += lineHeight;
       });
+    };
+
+    const estimateRow1Height = (value: string) => {
+      if (!value) return 0;
+      const lines = pdf.splitTextToSize(value, contentWidth);
+      return lines.length * lineHeight + 1;
     };
 
     const gender = formatPatientGender(info);
@@ -601,10 +607,17 @@ export const generateSmallBowelSurgeryPDF = async (
       ),
     );
 
-    sec("SPECIMEN");
-    row1(cell("Specimen", joinSelections(toArray(events?.specimen), events?.specimenOther)));
-    row1(cell("Specimen Sent to Laboratory", txt(events?.specimenSentToLaboratory)));
-    row1(cell("Specify Laboratory Sent to", txt(events?.specifyLaboratorySentTo)));
+    const specimenBottomPadding = 10;
+    const specimenRows = [
+      cell("Specimen", joinSelections(toArray(events?.specimen), events?.specimenOther)),
+      cell("Specimen Sent to Laboratory", txt(events?.specimenSentToLaboratory)),
+      cell("Specify Laboratory Sent to", txt(events?.specifyLaboratorySentTo)),
+    ].filter(Boolean);
+    const specimenSectionHeight =
+      16 + specimenRows.reduce((total, row) => total + estimateRow1Height(row), 0);
+    ensureSpace(specimenSectionHeight, specimenBottomPadding);
+    sec("SPECIMEN", specimenBottomPadding);
+    specimenRows.forEach((row) => row1(row, specimenBottomPadding));
 
     sec("ADDITIONAL NOTES");
     row1(cell("Additional Notes", txt(addInfo?.additionalInformation)));

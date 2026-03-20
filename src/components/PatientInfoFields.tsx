@@ -1,4 +1,4 @@
-import { ChangeEvent, useRef } from "react";
+import { ChangeEvent, useEffect, useRef } from "react";
 import { Upload, Camera, Loader2, RotateCcw, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,9 @@ import { ASAClassificationSection } from "@/components/ASAClassificationSection"
 import { DateDDMMYYYYInput, Time24HourInput } from "@/components/Time24HourInput";
 import {
   createEmptyPatientStickerPatch,
+  createPatientStickerSyncSnapshot,
   formatPatientStickerDate,
+  getPatientStickerSyncSignature,
   hasExtractedPatientStickerData,
   hasMeaningfulPatientInfoSyncData,
   hasPatientStickerMode,
@@ -72,6 +74,7 @@ export const PatientInfoFields = ({
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const lastSelectedFileRef = useRef<File | null>(null);
+  const lastAutoFilledSignatureRef = useRef("");
   const webhookUrl =
     import.meta.env.VITE_N8N_PATIENT_STICKER_WEBHOOK_URL?.trim() ||
     (import.meta.env.DEV ? "/api/patient-sticker-extract" : "");
@@ -80,6 +83,10 @@ export const PatientInfoFields = ({
   const canAutofillExtractedPatient = hasExtractedPatientStickerData(
     normalizedCurrentExtractedPatient,
   );
+  const extractedPatientSignature = canAutofillExtractedPatient
+    ? getPatientStickerSyncSignature(normalizedCurrentExtractedPatient)
+    : "";
+  const currentPatientHasSyncedDetails = hasMeaningfulPatientInfoSyncData(normalizedInfo);
 
   const syncCurrentPatient = (nextInfo: any) => {
     if (onCurrentPatientChange && hasExtractedPatientStickerData(nextInfo)) {
@@ -256,6 +263,43 @@ export const PatientInfoFields = ({
     applyUpdates({ ...normalizedCurrentExtractedPatient });
     toast.success("Extracted patient sticker details autofilled.");
   };
+
+  useEffect(() => {
+    if (!canAutofillExtractedPatient || !extractedPatientSignature) {
+      return;
+    }
+
+    if (currentPatientHasSyncedDetails) {
+      return;
+    }
+
+    if (lastAutoFilledSignatureRef.current === extractedPatientSignature) {
+      return;
+    }
+
+    lastAutoFilledSignatureRef.current = extractedPatientSignature;
+
+    const updates = createPatientStickerSyncSnapshot(normalizedCurrentExtractedPatient);
+    if (onBulkUpdate) {
+      onBulkUpdate(updates);
+    } else {
+      Object.entries(updates).forEach(([field, value]) => {
+        onFieldChange(field, value);
+      });
+    }
+
+    if (onCurrentPatientChange) {
+      onCurrentPatientChange(updates);
+    }
+  }, [
+    canAutofillExtractedPatient,
+    currentPatientHasSyncedDetails,
+    extractedPatientSignature,
+    normalizedCurrentExtractedPatient,
+    onBulkUpdate,
+    onCurrentPatientChange,
+    onFieldChange,
+  ]);
 
   const renderFieldRow = (label: string, field: string, input: React.ReactNode) => (
     <div

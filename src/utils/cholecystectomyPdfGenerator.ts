@@ -150,14 +150,12 @@ export const generateCholecystectomyPDF = async (
 
     const sec = (title: string) => {
       y += 2;
-      ensureSpace(20);
+      ensureSpace(14);
       drawRule();
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(11);
       pdf.text(title, margin, y);
-      y += 5;
-      drawRule();
-      y += 1;
+      y += 6;
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
     };
@@ -328,12 +326,24 @@ export const generateCholecystectomyPDF = async (
     );
     y += 2;
 
-    sec("PROCEDURE DETAILS");
-    const blockTopCh = y;
     const leftXCh = col1X;
     const rightXCh = twoCol2X;
     const leftWCh = 82;
     const rightWCh = 80;
+
+    y += 2;
+    ensureSpace(18);
+    drawRule();
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    const blockTitleYCh = y;
+    pdf.text("PROCEDURE DETAILS", leftXCh, blockTitleYCh);
+    pdf.text("PORTS AND INCISIONS", rightXCh, blockTitleYCh);
+    y += 6;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    const blockTopCh = y;
     let lyCh = blockTopCh;
 
     const addLeftCh = (label: string, value: string) => {
@@ -354,10 +364,7 @@ export const generateCholecystectomyPDF = async (
     addLeftCh("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
     addLeftCh("Critical View of Safety - Two Structures Entering Gall Bladder Confirmed", txt(proc?.twoStructuresConfirmed));
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("PORTS AND INCISIONS", rightXCh, blockTopCh);
-    let ryCh = blockTopCh + 5;
+    let ryCh = blockTopCh + 2;
     const { diagramBottomY } = drawRectalStylePortsAndIncisions({
       pdf,
       x: rightXCh,

@@ -22,6 +22,9 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+  const serializedInitialMarkings = JSON.stringify(initialMarkings);
+  const lastCommittedMarkingsRef = useRef(serializedInitialMarkings);
+  const previousDiagramImageRef = useRef(diagramImage);
 
   const [markings, setMarkings] = useState<SurgicalMarking[]>(initialMarkings);
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
@@ -31,11 +34,9 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
   // Undo/Redo state - Initialize with current markings as first history entry
   const [history, setHistory] = useState<SurgicalMarking[][]>([initialMarkings]);
   const [historyIndex, setHistoryIndex] = useState(0);
-  const [historyInitialized, setHistoryInitialized] = useState(false);
 
   const [portSize, setPortSize] = useState<'5mm' | '10/11mm' | '12mm' | '15mm'>('12mm');
   const [stomaType, setStomaType] = useState<'ileostomy' | 'colostomy'>('ileostomy');
-  const serializedInitialMarkings = JSON.stringify(initialMarkings);
   const drawingMetrics = getSurgicalDiagramMarkingMetrics(markingScale);
 
   const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
@@ -78,19 +79,19 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
     });
   }, [markings]);
 
-  // Initialize history properly when component mounts
   useEffect(() => {
-    if (!historyInitialized) {
-      setHistory([initialMarkings]);
-      setHistoryIndex(0);
-      setHistoryInitialized(true);
-    }
-  }, [historyInitialized, initialMarkings]);
+    const diagramChanged = previousDiagramImageRef.current !== diagramImage;
+    const isLocalEcho = serializedInitialMarkings === lastCommittedMarkingsRef.current;
 
-  useEffect(() => {
+    if (!diagramChanged && isLocalEcho) {
+      return;
+    }
+
     setMarkings(initialMarkings);
     setHistory([initialMarkings]);
     setHistoryIndex(0);
+    previousDiagramImageRef.current = diagramImage;
+    lastCommittedMarkingsRef.current = serializedInitialMarkings;
   }, [diagramImage, serializedInitialMarkings, initialMarkings]);
 
   useEffect(() => {
@@ -202,6 +203,8 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
 
     if (newMarking) {
       const newMarkings = [...markings, newMarking];
+      const serializedNewMarkings = JSON.stringify(newMarkings);
+      lastCommittedMarkingsRef.current = serializedNewMarkings;
       setMarkings(newMarkings);
       onUpdate(newMarkings);
       
@@ -241,6 +244,7 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const previousMarkings = history[newIndex];
+      lastCommittedMarkingsRef.current = JSON.stringify(previousMarkings);
       setHistoryIndex(newIndex);
       setMarkings(previousMarkings);
       onUpdate(previousMarkings);
@@ -251,6 +255,7 @@ export const SurgicalDiagram: React.FC<SurgicalDiagramProps> = ({
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const nextMarkings = history[newIndex];
+      lastCommittedMarkingsRef.current = JSON.stringify(nextMarkings);
       setHistoryIndex(newIndex);
       setMarkings(nextMarkings);
       onUpdate(nextMarkings);
