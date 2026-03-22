@@ -86,6 +86,13 @@ import {
   saveLatestExtractedPatientDraft,
   subscribeToLatestExtractedPatientDraft,
 } from "@/utils/patientExtractionDraftStore";
+import {
+  createLiveTemplateDraftSnapshot,
+  loadQueuedLiveTemplateDraftSync,
+  processQueuedLiveTemplateDraftSync,
+  queueLiveTemplateDraftSync,
+  subscribeToLiveTemplateDraft,
+} from "@/utils/liveTemplateDraftStore";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
@@ -359,6 +366,7 @@ interface WorkingSessionState {
   appSection?: "templates" | "patients" | "reports";
   currentTab?: string;
   forcedPatientsProcedureFilter?: string | null;
+  updatedAtIso?: string;
   editingPatientContext?: {
     patientId: string;
     recordId: string;
@@ -385,6 +393,10 @@ const sanitizeWorkingSessionState = (value: any): WorkingSessionState | null => 
     nextState.forcedPatientsProcedureFilter = value.forcedPatientsProcedureFilter;
   } else if (value.forcedPatientsProcedureFilter === null) {
     nextState.forcedPatientsProcedureFilter = null;
+  }
+
+  if (typeof value.updatedAtIso === "string") {
+    nextState.updatedAtIso = value.updatedAtIso;
   }
 
   if (
@@ -690,6 +702,9 @@ const Index = () => {
   const dismissedExtractedPatientSignatureRef = useRef("");
   const hasHydratedExtractedPatientFromReportRef = useRef(false);
   const hasHydratedWorkingSessionRef = useRef(false);
+  const workingSessionUpdatedAtRef = useRef("");
+  const liveTemplateDraftSignatureRef = useRef("");
+  const applyingLiveTemplateDraftRef = useRef(false);
 
 	  // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
@@ -1212,15 +1227,50 @@ const Index = () => {
       patientDatabaseCache.records.some((record) => record.id === editingPatientContext.recordId),
   );
 
-  const buildWorkingSessionState = (): WorkingSessionState => ({
+  const buildWorkingSessionState = (
+    updatedAtIso = workingSessionUpdatedAtRef.current || new Date().toISOString(),
+  ): WorkingSessionState => ({
     appSection,
     currentTab,
     forcedPatientsProcedureFilter,
+    updatedAtIso,
     editingPatientContext,
     currentExtractedPatientInfo: hasExtractedPatientStickerData(currentExtractedPatientInfo)
       ? createInitialPatientInfoState(currentExtractedPatientInfo)
       : null,
   });
+
+  const buildLiveTemplateDraftPayload = () => ({
+    ...buildWorkingSessionState(workingSessionUpdatedAtRef.current || new Date().toISOString()),
+    currentReport,
+  });
+
+  const applyLiveTemplateDraftPayload = (payload: Record<string, any>) => {
+    const restoredReport = normalizeReportPatientInfos(payload?.currentReport || currentReport);
+
+    applyingLiveTemplateDraftRef.current = true;
+
+    setCurrentReport(restoredReport);
+    setAppSection(
+      payload?.appSection && VALID_APP_SECTIONS.has(payload.appSection)
+        ? payload.appSection
+        : "templates",
+    );
+    setCurrentTab(
+      payload?.currentTab && VALID_TEMPLATE_TABS.has(payload.currentTab)
+        ? payload.currentTab
+        : "procedure",
+    );
+    setForcedPatientsProcedureFilter(payload?.forcedPatientsProcedureFilter ?? null);
+    setEditingPatientContext(payload?.editingPatientContext ?? null);
+    setCurrentExtractedPatientInfo(
+      createInitialPatientInfoState(payload?.currentExtractedPatientInfo),
+    );
+
+    window.setTimeout(() => {
+      applyingLiveTemplateDraftRef.current = false;
+    }, 0);
+  };
 
   const persistPatientCache = (nextCache: PatientDatabaseCache) => {
     setPatientDatabaseCache(nextCache);
@@ -1849,6 +1899,10 @@ const Index = () => {
         loadFromStorage(WORKING_SESSION_STORAGE_KEY),
       );
 
+      if (savedWorkingSession?.updatedAtIso) {
+        workingSessionUpdatedAtRef.current = savedWorkingSession.updatedAtIso;
+      }
+
       if (savedWorkingSession?.appSection) {
         setAppSection(savedWorkingSession.appSection);
       }
@@ -1934,7 +1988,9 @@ const Index = () => {
       return;
     }
 
-    autoSaveWorkingSession(buildWorkingSessionState());
+    const updatedAtIso = new Date().toISOString();
+    workingSessionUpdatedAtRef.current = updatedAtIso;
+    autoSaveWorkingSession(buildWorkingSessionState(updatedAtIso));
   }, [
     appSection,
     autoSaveWorkingSession,
@@ -1952,12 +2008,133 @@ const Index = () => {
 
     const flushWorkingDraft = () => {
       saveToStorage("endoscopy_report", currentReport);
-      saveToStorage(WORKING_SESSION_STORAGE_KEY, buildWorkingSessionState());
+      saveToStorage(
+        WORKING_SESSION_STORAGE_KEY,
+        buildWorkingSessionState(workingSessionUpdatedAtRef.current || new Date().toISOString()),
+      );
     };
 
     window.addEventListener("beforeunload", flushWorkingDraft);
     return () => {
       window.removeEventListener("beforeunload", flushWorkingDraft);
+    };
+  }, [
+    appSection,
+    currentExtractedPatientInfo,
+    currentReport,
+    currentTab,
+    editingPatientContext,
+    enablePersistence,
+    forcedPatientsProcedureFilter,
+  ]);
+
+  useEffect(() => {
+    if (!enablePersistence || !isFirebaseConfigured) {
+      return;
+    }
+
+    const syncPendingDraft = async () => {
+      const pendingDraft = loadQueuedLiveTemplateDraftSync();
+      if (!pendingDraft) {
+        return;
+      }
+
+      try {
+        await processQueuedLiveTemplateDraftSync();
+        liveTemplateDraftSignatureRef.current = pendingDraft.payloadSignature;
+      } catch (error) {
+        console.error("Failed to sync live template draft", error);
+      }
+    };
+
+    void syncPendingDraft();
+
+    const handleOnline = () => {
+      void syncPendingDraft();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [enablePersistence]);
+
+  useEffect(() => {
+    if (!enablePersistence || !isFirebaseConfigured) {
+      return;
+    }
+
+    const unsubscribe = subscribeToLiveTemplateDraft((remoteDraft) => {
+      if (!remoteDraft?.payload || !remoteDraft.payloadSignature) {
+        return;
+      }
+
+      const pendingDraft = loadQueuedLiveTemplateDraftSync();
+      if (
+        pendingDraft &&
+        pendingDraft.payloadSignature !== remoteDraft.payloadSignature &&
+        pendingDraft.updatedAtIso >= remoteDraft.updatedAtIso
+      ) {
+        return;
+      }
+
+      if (
+        workingSessionUpdatedAtRef.current &&
+        remoteDraft.payloadSignature !== liveTemplateDraftSignatureRef.current &&
+        workingSessionUpdatedAtRef.current > remoteDraft.updatedAtIso
+      ) {
+        return;
+      }
+
+      if (remoteDraft.payloadSignature === liveTemplateDraftSignatureRef.current) {
+        return;
+      }
+
+      liveTemplateDraftSignatureRef.current = remoteDraft.payloadSignature;
+      workingSessionUpdatedAtRef.current = remoteDraft.updatedAtIso || workingSessionUpdatedAtRef.current;
+      applyLiveTemplateDraftPayload(remoteDraft.payload);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [enablePersistence]);
+
+  useEffect(() => {
+    if (
+      !enablePersistence ||
+      !isFirebaseConfigured ||
+      !hasHydratedWorkingSessionRef.current ||
+      applyingLiveTemplateDraftRef.current
+    ) {
+      return;
+    }
+
+    const liveDraftPayload = buildLiveTemplateDraftPayload();
+    const payloadSignature = JSON.stringify(liveDraftPayload);
+
+    if (!payloadSignature || payloadSignature === liveTemplateDraftSignatureRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const snapshot = createLiveTemplateDraftSnapshot(liveDraftPayload, payloadSignature);
+      queueLiveTemplateDraftSync(snapshot);
+      workingSessionUpdatedAtRef.current = snapshot.updatedAtIso;
+
+      if (typeof navigator !== "undefined" && navigator.onLine) {
+        void processQueuedLiveTemplateDraftSync()
+          .then(() => {
+            liveTemplateDraftSignatureRef.current = payloadSignature;
+          })
+          .catch((error) => {
+            console.error("Failed to sync live template draft", error);
+          });
+      }
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
     };
   }, [
     appSection,

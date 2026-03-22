@@ -6,6 +6,10 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /development_state/live_template_draft {
+      allow read, write: if true;
+    }
+
     match /patient_sticker_drafts/{draftId} {
       allow read, write: if true;
     }
