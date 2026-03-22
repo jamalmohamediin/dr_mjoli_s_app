@@ -97,6 +97,12 @@ export const createInitialPatientInfoState = (overrides: Record<string, any> = {
 });
 
 export const createEmptyPatientStickerPatch = () => ({
+  name: "",
+  patientId: "",
+  dateOfBirth: "",
+  age: "",
+  sex: "",
+  sexOther: "",
   address: "",
   medicalAidName: "",
   medicalAidNumber: "",
@@ -121,6 +127,12 @@ export const createEmptyPatientStickerPatch = () => ({
 });
 
 const hasTextValue = (value: any) => typeof value === "string" && value.trim().length > 0;
+
+const isGeneratedDraftSyncName = (value: any) =>
+  /^Draft Sync \d+$/i.test(String(value || "").trim());
+
+const isGeneratedDraftSyncPatientId = (value: any) =>
+  /^SYNC-\d+$/i.test(String(value || "").trim());
 
 const getStickerFieldValue = (patientInfo: any, key: string) => {
   const info = patientInfo || {};
@@ -152,8 +164,14 @@ export const hasExtractedPatientStickerData = (patientInfo?: any) => {
     hasTextValue(info.stickerLastExtractedAt) ||
     hasTextValue(info.stickerImageName) ||
     hasTextValue(info.stickerImageData);
+  const hasStickerSpecificFields = PATIENT_STICKER_FIELD_KEYS.some((key) =>
+    hasTextValue(info[key]),
+  );
 
-  if (!hasExtractionMarker) {
+  // Some templates can end up with the extracted sticker payload copied into
+  // patientInfo without the original extraction metadata. In that case we still
+  // want every template to recognize the shared sticker details.
+  if (!hasExtractionMarker && !hasStickerSpecificFields) {
     return false;
   }
 
@@ -162,6 +180,14 @@ export const hasExtractedPatientStickerData = (patientInfo?: any) => {
 
 export const normalizePatientInfo = (patientInfo?: any) => {
   const normalized = createInitialPatientInfoState(patientInfo || {});
+
+  if (isGeneratedDraftSyncName(normalized.name)) {
+    normalized.name = "";
+  }
+
+  if (isGeneratedDraftSyncPatientId(normalized.patientId)) {
+    normalized.patientId = "";
+  }
 
   if (!normalized.stickerMode && hasPatientStickerMode(normalized)) {
     normalized.stickerMode = true;

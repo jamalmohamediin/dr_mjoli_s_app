@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { DateDDMMYYYYInput, Time24HourInput } from "@/components/Time24HourInput";
 import {
+  createInitialPatientInfoState,
   createEmptyPatientStickerPatch,
   createPatientStickerSyncSnapshot,
   formatPatientStickerDate,
@@ -77,7 +78,7 @@ export const PatientInfoFields = ({
   const lastAutoFilledSignatureRef = useRef("");
   const webhookUrl =
     import.meta.env.VITE_N8N_PATIENT_STICKER_WEBHOOK_URL?.trim() ||
-    (import.meta.env.DEV ? "/api/patient-sticker-extract" : "");
+    "/api/patient-sticker-extract";
   const stickerMode = hasPatientStickerMode(normalizedInfo);
   const isExtracting = normalizedInfo.stickerExtractionStatus === "extracting";
   const canAutofillExtractedPatient = hasExtractedPatientStickerData(
@@ -88,13 +89,18 @@ export const PatientInfoFields = ({
     : "";
   const currentPatientHasSyncedDetails = hasMeaningfulPatientInfoSyncData(normalizedInfo);
 
-  const syncCurrentPatient = (nextInfo: any) => {
-    if (onCurrentPatientChange && hasExtractedPatientStickerData(nextInfo)) {
-      onCurrentPatientChange(nextInfo);
+  const syncExtractedPatientDraft = (nextInfo: any) => {
+    if (onCurrentPatientChange) {
+      onCurrentPatientChange(createPatientStickerSyncSnapshot(nextInfo));
     }
   };
 
-  const applyUpdates = (updates: Record<string, any>) => {
+  const applyUpdates = (
+    updates: Record<string, any>,
+    options: {
+      syncExtractedDraft?: boolean;
+    } = {},
+  ) => {
     const nextInfo = normalizePatientInfo({ ...normalizedInfo, ...updates });
 
     if (onBulkUpdate) {
@@ -105,13 +111,13 @@ export const PatientInfoFields = ({
       });
     }
 
-    syncCurrentPatient(nextInfo);
+    if (options.syncExtractedDraft) {
+      syncExtractedPatientDraft(nextInfo);
+    }
   };
 
   const handleBaseChange = (field: string, value: string) => {
-    const nextInfo = normalizePatientInfo({ ...normalizedInfo, [field]: value });
     onFieldChange(field, value);
-    syncCurrentPatient(nextInfo);
   };
 
   const extractSticker = async (file: File) => {
@@ -197,14 +203,14 @@ export const PatientInfoFields = ({
       }
 
       applyUpdates({
-        ...extracted,
+        ...createPatientStickerSyncSnapshot(extracted),
         stickerMode: true,
         stickerImageName: file.name,
         stickerImageData,
         stickerExtractionStatus: "success",
         stickerExtractionError: "",
         stickerLastExtractedAt: new Date().toISOString(),
-      });
+      }, { syncExtractedDraft: true });
 
       toast.success("Patient sticker extracted successfully.");
     } catch (error: any) {
@@ -249,7 +255,11 @@ export const PatientInfoFields = ({
   };
 
   const clearStickerData = () => {
+    lastAutoFilledSignatureRef.current = "";
     applyUpdates(createEmptyPatientStickerPatch());
+    if (onCurrentPatientChange) {
+      onCurrentPatientChange(createInitialPatientInfoState());
+    }
     lastSelectedFileRef.current = null;
     toast.success("Patient sticker data cleared.");
   };
@@ -260,12 +270,13 @@ export const PatientInfoFields = ({
       return;
     }
 
-    applyUpdates({ ...normalizedCurrentExtractedPatient });
+    applyUpdates(createPatientStickerSyncSnapshot(normalizedCurrentExtractedPatient));
     toast.success("Extracted patient sticker details autofilled.");
   };
 
   useEffect(() => {
     if (!canAutofillExtractedPatient || !extractedPatientSignature) {
+      lastAutoFilledSignatureRef.current = "";
       return;
     }
 
@@ -288,9 +299,6 @@ export const PatientInfoFields = ({
       });
     }
 
-    if (onCurrentPatientChange) {
-      onCurrentPatientChange(updates);
-    }
   }, [
     canAutofillExtractedPatient,
     currentPatientHasSyncedDetails,

@@ -23,8 +23,6 @@ import { CholecystectomyForm } from "@/components/CholecystectomyForm";
 import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
 import { PeriAnalForm } from "@/components/PeriAnalForm";
 import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
-import { PatientsTab } from "@/components/patients/PatientsTab";
-import { ReportsTab } from "@/components/reports/ReportsTab";
 import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
@@ -38,7 +36,6 @@ import { generatePeriAnalPDF } from "@/utils/periAnalPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
-import { exportSavedRecordPdf } from "@/utils/exportSavedRecord";
 import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { createInitialPeriAnalState } from "@/utils/periAnal";
@@ -57,33 +54,10 @@ import {
   mergePatientInfoUpdates,
 } from "@/utils/patientSticker";
 import {
+  clearLatestExtractedPatientDraft,
   saveLatestExtractedPatientDraft,
   subscribeToLatestExtractedPatientDraft,
 } from "@/utils/patientExtractionDraftStore";
-import {
-  fetchPatientDatabaseSnapshot,
-  loadPatientDatabaseCache,
-  loadPatientSyncQueue,
-  processPatientSyncQueue,
-  queuePatientDeletedStateSync,
-  queuePatientRecordSync,
-  resetPatientDatabaseCache,
-  savePatientDatabaseCache,
-} from "@/utils/patientDatabaseStore";
-import {
-  applyPatientDeletedState,
-  buildPatientRecord,
-  createEmptyPatientDatabaseCache,
-  createNewPatientId,
-  findMatchingPatientId,
-  getCurrentTabForTemplate,
-  getTemplateLabel,
-  getTemplatePatientInfo,
-  getTemplateTypeFromTab,
-  PatientDatabaseCache,
-  PatientRecord,
-  upsertPatientRecordInCache,
-} from "@/utils/patientRecords";
 import { toast } from "sonner";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
@@ -615,6 +589,8 @@ const Index = () => {
   );
   const extractedPatientSyncSignatureRef = useRef("");
   const extractedPatientSyncTimeoutRef = useRef<number | null>(null);
+  const dismissedExtractedPatientSignatureRef = useRef("");
+  const hasHydratedExtractedPatientFromReportRef = useRef(false);
 
 	  // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
@@ -915,24 +891,9 @@ const Index = () => {
   });
 
   // Current tab state
-  const [appSection, setAppSection] = useState<"templates" | "patients" | "reports">("templates");
   const [currentTab, setCurrentTab] = useState("procedure");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [patientDatabaseCache, setPatientDatabaseCache] = useState<PatientDatabaseCache>(
-    createEmptyPatientDatabaseCache(),
-  );
-  const [isPatientDatabaseLoading, setIsPatientDatabaseLoading] = useState(true);
-  const [isPatientDatabaseSyncing, setIsPatientDatabaseSyncing] = useState(false);
-  const [pendingPatientSyncCount, setPendingPatientSyncCount] = useState(() => loadPatientSyncQueue().length);
-  const [forcedPatientsProcedureFilter, setForcedPatientsProcedureFilter] = useState<string | null>(null);
-  const [editingPatientContext, setEditingPatientContext] = useState<{
-    patientId: string | null;
-    recordId: string | null;
-  }>({
-    patientId: null,
-    recordId: null,
-  });
   const [diagramUpdateTrigger, setDiagramUpdateTrigger] = useState(0);
   const [isEditingConclusion, setIsEditingConclusion] = useState(false);
   const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
@@ -965,23 +926,52 @@ const Index = () => {
   }, [currentReport.followUp, isEditingFollowUp, tempFollowUpOther, tempFollowUpNotes]);
 
   useEffect(() => {
+    if (hasHydratedExtractedPatientFromReportRef.current) {
+      return;
+    }
+
     if (hasExtractedPatientStickerData(currentExtractedPatientInfo)) {
+      hasHydratedExtractedPatientFromReportRef.current = true;
       return;
     }
 
     const derivedPatient = getCurrentExtractedPatientInfoFromReport(currentReport);
-    if (hasExtractedPatientStickerData(derivedPatient)) {
-      setCurrentExtractedPatientInfo(derivedPatient);
+    if (!hasExtractedPatientStickerData(derivedPatient)) {
+      hasHydratedExtractedPatientFromReportRef.current = true;
+      return;
     }
+
+    const derivedSignature = getPatientStickerSyncSignature(derivedPatient);
+    if (
+      derivedSignature &&
+      derivedSignature === dismissedExtractedPatientSignatureRef.current
+    ) {
+      hasHydratedExtractedPatientFromReportRef.current = true;
+      return;
+    }
+
+    hasHydratedExtractedPatientFromReportRef.current = true;
+    setCurrentExtractedPatientInfo(derivedPatient);
   }, [currentExtractedPatientInfo, currentReport]);
 
   useEffect(() => {
     const unsubscribe = subscribeToLatestExtractedPatientDraft((remotePatientInfo) => {
       if (!remotePatientInfo || !hasExtractedPatientStickerData(remotePatientInfo)) {
+        setCurrentExtractedPatientInfo((previousPatientInfo) =>
+          hasExtractedPatientStickerData(previousPatientInfo)
+            ? createInitialPatientInfoState()
+            : previousPatientInfo,
+        );
         return;
       }
 
       const remoteSignature = getPatientStickerSyncSignature(remotePatientInfo);
+      if (
+        remoteSignature &&
+        remoteSignature === dismissedExtractedPatientSignatureRef.current
+      ) {
+        return;
+      }
       extractedPatientSyncSignatureRef.current = remoteSignature;
 
       setCurrentExtractedPatientInfo((previousPatientInfo) => {
@@ -1007,6 +997,14 @@ const Index = () => {
 
   useEffect(() => {
     if (!hasExtractedPatientStickerData(currentExtractedPatientInfo)) {
+      if (extractedPatientSyncSignatureRef.current) {
+        const previousSignature = extractedPatientSyncSignatureRef.current;
+        extractedPatientSyncSignatureRef.current = "";
+        void clearLatestExtractedPatientDraft().catch((error) => {
+          extractedPatientSyncSignatureRef.current = previousSignature;
+          console.error("Failed to clear extracted patient draft", error);
+        });
+      }
       return;
     }
 
@@ -1039,86 +1037,6 @@ const Index = () => {
     };
   }, [currentExtractedPatientInfo]);
 
-  const persistPatientCache = (nextCache: PatientDatabaseCache) => {
-    setPatientDatabaseCache(nextCache);
-    savePatientDatabaseCache(nextCache);
-    setPendingPatientSyncCount(loadPatientSyncQueue().length);
-  };
-
-  const syncPatientDatabase = async (showToast = false) => {
-    setIsPatientDatabaseSyncing(true);
-
-    try {
-      const syncResult = await processPatientSyncQueue();
-      const remoteCache = await fetchPatientDatabaseSnapshot();
-      persistPatientCache(remoteCache);
-
-      if (showToast) {
-        const remainingQueue = loadPatientSyncQueue().length;
-        if (syncResult.processed > 0 || remainingQueue === 0) {
-          toast.success(
-            remainingQueue === 0
-              ? "Patient data synced successfully."
-              : `Patient data partially synced. ${remainingQueue} item(s) still pending.`,
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Failed to sync patient database", error);
-      const cached = loadPatientDatabaseCache();
-      if (cached.patients.length || cached.records.length) {
-        persistPatientCache(cached);
-      }
-
-      if (showToast) {
-        toast.error("Failed to sync patient data. Cached data is still available.");
-      }
-    } finally {
-      setIsPatientDatabaseLoading(false);
-      setIsPatientDatabaseSyncing(false);
-      setPendingPatientSyncCount(loadPatientSyncQueue().length);
-    }
-  };
-
-  useEffect(() => {
-    const cached = loadPatientDatabaseCache();
-    if (cached.patients.length || cached.records.length) {
-      setPatientDatabaseCache(cached);
-      setIsPatientDatabaseLoading(false);
-    }
-
-    void syncPatientDatabase();
-
-    const handleOnline = () => {
-      void syncPatientDatabase(true);
-    };
-
-    window.addEventListener("online", handleOnline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!editingPatientContext.recordId) {
-      return;
-    }
-
-    const activeRecord = patientDatabaseCache.records.find(
-      (record) => record.id === editingPatientContext.recordId,
-    );
-
-    if (
-      activeRecord &&
-      activeRecord.templateType !== getTemplateTypeFromTab(currentTab)
-    ) {
-      setEditingPatientContext((previousContext) => ({
-        patientId: previousContext.patientId,
-        recordId: null,
-      }));
-    }
-  }, [currentTab, editingPatientContext.recordId, patientDatabaseCache.records]);
-
   
 
   
@@ -1147,139 +1065,23 @@ const Index = () => {
     setHistoryIndex(newHistory.length - 1);
   };
   const updateCurrentExtractedPatient = (patientInfo: any) => {
-    setCurrentExtractedPatientInfo(createInitialPatientInfoState(patientInfo));
-  };
-  const loadRecordIntoTemplates = (record: PatientRecord, createNewEntry = false) => {
-    setCurrentReport(
-      normalizeReportPatientInfos(JSON.parse(JSON.stringify(record.reportSnapshot))),
-    );
-    setCurrentTab(getCurrentTabForTemplate(record.templateType));
-    setCurrentExtractedPatientInfo(createInitialPatientInfoState(record.patientInfo));
-    setEditingPatientContext({
-      patientId: record.patientDocId,
-      recordId: createNewEntry ? null : record.id,
+    setCurrentExtractedPatientInfo((previousPatientInfo) => {
+      const nextPatientInfo = createInitialPatientInfoState(patientInfo);
+      const previousHadExtractedData = hasExtractedPatientStickerData(previousPatientInfo);
+      const nextHasExtractedData = hasExtractedPatientStickerData(nextPatientInfo);
+
+      if (nextHasExtractedData) {
+        dismissedExtractedPatientSignatureRef.current = "";
+      } else if (previousHadExtractedData) {
+        dismissedExtractedPatientSignatureRef.current =
+          getPatientStickerSyncSignature(previousPatientInfo);
+      }
+
+      return nextPatientInfo;
     });
-    setAppSection("templates");
   };
-
-  const saveCurrentTemplateToPatients = async (saveMode: "update" | "newEntry" | "create") => {
-    const templateType = getTemplateTypeFromTab(currentTab);
-    const currentPatientInfo = createInitialPatientInfoState(
-      getTemplatePatientInfo(currentReport, templateType),
-    );
-
-    if (
-      !currentPatientInfo.name &&
-      !currentPatientInfo.patientId &&
-      !currentPatientInfo.dateOfBirth &&
-      !currentPatientInfo.medicalAidNumber
-    ) {
-      toast.error("Add patient details before saving this template.");
-      return;
-    }
-
-    const existingRecord =
-      saveMode === "update" && editingPatientContext.recordId
-        ? patientDatabaseCache.records.find(
-            (record) => record.id === editingPatientContext.recordId,
-          ) || null
-        : null;
-
-    const patientDocId =
-      (saveMode === "update" ? existingRecord?.patientDocId : null) ||
-      editingPatientContext.patientId ||
-      findMatchingPatientId(patientDatabaseCache.patients, currentPatientInfo) ||
-      createNewPatientId();
-
-    const record = buildPatientRecord({
-      currentTab,
-      existingRecord,
-      patientDocId,
-      reportSnapshot: normalizeReportPatientInfos(
-        JSON.parse(JSON.stringify(currentReport)),
-      ),
-      templateType,
-    });
-
-    const nextCache = upsertPatientRecordInCache(patientDatabaseCache, record);
-    const savedPatient = nextCache.patients.find((patient) => patient.id === patientDocId);
-
-    if (!savedPatient) {
-      toast.error("Failed to prepare the patient record for saving.");
-      return;
-    }
-
-    persistPatientCache(nextCache);
-    const nextPendingQueueCount = queuePatientRecordSync(savedPatient, record);
-    setPendingPatientSyncCount(nextPendingQueueCount);
-    setEditingPatientContext({
-      patientId: patientDocId,
-      recordId: record.id,
-    });
-
-    if (navigator.onLine) {
-      await syncPatientDatabase();
-      toast.success(
-        saveMode === "update"
-          ? "Saved record updated successfully."
-          : "Patient record saved successfully.",
-      );
-      return;
-    }
-
-    toast.success("Saved locally. The patient record will sync when the app is online.");
-  };
-
-  const handleOpenSavedRecord = (record: PatientRecord) => {
-    loadRecordIntoTemplates(record);
-    toast.success("Saved template loaded.");
-  };
-
-  const handleStartNewEntry = (record: PatientRecord) => {
-    loadRecordIntoTemplates(record, true);
-    toast.success("Previous template loaded as a new entry.");
-  };
-
-  const handleExportSavedRecord = async (record: PatientRecord) => {
-    try {
-      await exportSavedRecordPdf(record);
-      toast.success("Saved record PDF exported successfully.");
-    } catch (error: any) {
-      console.error("Failed to export saved record PDF", error);
-      toast.error(error?.message || "Failed to export the saved record PDF.");
-    }
-  };
-
-  const handleSetPatientDeletedState = async (
-    patientId: string,
-    deletedAt: string | null,
-  ) => {
-    const recordIds = patientDatabaseCache.records
-      .filter((record) => record.patientDocId === patientId)
-      .map((record) => record.id);
-    const nextCache = applyPatientDeletedState(
-      patientDatabaseCache,
-      patientId,
-      deletedAt,
-    );
-
-    persistPatientCache(nextCache);
-    const nextPendingQueueCount = queuePatientDeletedStateSync(
-      patientId,
-      deletedAt,
-      recordIds,
-    );
-    setPendingPatientSyncCount(nextPendingQueueCount);
-
-    if (navigator.onLine) {
-      await syncPatientDatabase();
-    }
-
-    toast.success(
-      deletedAt
-        ? "Patient moved to the recycle bin."
-        : "Patient restored successfully.",
-    );
+  const clearCurrentExtractedPatient = () => {
+    setCurrentExtractedPatientInfo(createInitialPatientInfoState());
   };
   const handleUndo = () => {
     if (historyIndex > 0) {
@@ -1504,7 +1306,7 @@ const Index = () => {
     toast.success(`${section} cleared`);
   };
 
-  const clearAllEndoscopyData = () => {
+  const clearAllEndoscopyData = (showToast = true) => {
     const initialEndoscopyData = {
       patientInfo: createInitialPatientInfoState(),
       procedureInfo: {},
@@ -1554,41 +1356,30 @@ const Index = () => {
         gastroscopyCanvasData: '',
         colonoscopyCanvasData: '',
       }],
-      gastroscopyFindings: [{ findings: [] }],
-      colonoscopyFindings: [{ findings: [] }],
+      procedureTypes: [{
+        gastroscopyFindings: { findings: [] },
+        colonoscopyFindings: { findings: [] },
+        procedureFindings: { findings: '', additionalNotes: '' }
+      }],
       specimen: [{
         sentForPathology: '',
         laboratoryName: '',
         otherSpecimensTaken: '',
         otherSpecimensDetails: '',
-      }],
-      conclusion: [''],
-      followUp: [{
-        enabled: false,
-        options: [],
-        other: '',
-        notes: '',
-        postOperativeManagement: '',
-      }],
-      signature: [{
-        surgeonSignature: '',
-        surgeonSignatureText: '',
-        dateTime: '',
       }]
     });
 
     setEndoscopyHistoryIndex({
       patientInfo: 0,
       procedureInfo: 0,
-      gastroscopyFindings: 0,
-      colonoscopyFindings: 0,
-      specimen: 0,
-      conclusion: 0,
-      followUp: 0,
-      signature: 0
+      procedureTypes: 0,
+      specimen: 0
     });
 
-    toast.success("All endoscopy data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All endoscopy data cleared successfully!");
+    }
   };
   
   // Auto-save functionality with shorter debouncing for better user experience
@@ -2565,7 +2356,7 @@ const Index = () => {
     toast.success(`${section} section cleared`);
   };
 
-  const clearAllRectalCancerData = () => {
+  const clearAllRectalCancerData = (showToast = true) => {
     const initialRectalCancer = {
       patientInfo: createInitialPatientInfoState(),
       operationType: {
@@ -2678,7 +2469,10 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success("All rectal cancer data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All rectal cancer data cleared successfully!");
+    }
   };
 
   const undoSmallBowel = (section: keyof typeof smallBowelHistory) => {
@@ -2753,7 +2547,7 @@ const Index = () => {
     toast.success(`${section} section cleared`);
   };
 
-  const clearAllSmallBowelData = () => {
+  const clearAllSmallBowelData = (showToast = true) => {
     const initialSmallBowel = createInitialSmallBowelSurgeryState();
 
     setCurrentReport(prev => ({
@@ -2785,7 +2579,10 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success("All small bowel surgery data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All small bowel surgery data cleared successfully!");
+    }
   };
 
   const undoCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
@@ -2860,7 +2657,7 @@ const Index = () => {
     toast.success(`${section} section cleared`);
   };
 
-  const clearAllCholecystectomyData = () => {
+  const clearAllCholecystectomyData = (showToast = true) => {
     const initialCholecystectomy = createInitialCholecystectomyState();
 
     setCurrentReport(prev => ({
@@ -2888,7 +2685,10 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success("All cholecystectomy data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All cholecystectomy data cleared successfully!");
+    }
   };
 
   const undoPeriAnal = (section: keyof typeof periAnalHistory) => {
@@ -2963,7 +2763,7 @@ const Index = () => {
     toast.success(`${section} section cleared`);
   };
 
-  const clearAllPeriAnalData = () => {
+  const clearAllPeriAnalData = (showToast = true) => {
     const initialPeriAnal = createInitialPeriAnalState();
 
     setCurrentReport(prev => ({
@@ -2995,10 +2795,13 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success("All peri-anal data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All peri-anal data cleared successfully!");
+    }
   };
 
-  const clearAllAppendectomyData = () => {
+  const clearAllAppendectomyData = (showToast = true) => {
     const initialAppendectomy = {
       patientInfo: createInitialPatientInfoState(),
       preoperative: {
@@ -3077,10 +2880,13 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success('All appendectomy data cleared');
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success('All appendectomy data cleared');
+    }
   };
 
-  const clearAllVentralHerniaData = () => {
+  const clearAllVentralHerniaData = (showToast = true) => {
     const initialVentralHernia = createInitialVentralHerniaState();
 
     setCurrentReport(prev => ({
@@ -3105,7 +2911,65 @@ const Index = () => {
       procedureFindings: 0
     });
 
-    toast.success("All ventral hernia data cleared successfully!");
+    clearCurrentExtractedPatient();
+    if (showToast) {
+      toast.success("All ventral hernia data cleared successfully!");
+    }
+  };
+
+  const handleClearAllTemplatesData = () => {
+    clearAllEndoscopyData(false);
+    clearAllAppendectomyData(false);
+    clearAllVentralHerniaData(false);
+    clearAllRectalCancerData(false);
+    clearAllSmallBowelData(false);
+    clearAllCholecystectomyData(false);
+    clearAllPeriAnalData(false);
+
+    setHistory([]);
+    setHistoryIndex(-1);
+    setCurrentTab("procedure");
+    setActiveSection("section1");
+    setExpanded({
+      section1: true,
+      section2: true,
+      section3: false,
+      section4: false,
+      section5: false,
+    });
+    setHerniaActiveSection("section1");
+    setHerniaExpanded({
+      section1: true,
+      section2: true,
+      section3: false,
+      section4: false,
+      section5: false,
+    });
+    setHerniaPrimaryClosure(false);
+    setHerniaMeshRepair(false);
+    setRectalActiveSection("section1");
+    setRectalExpanded({
+      section1: true,
+      section2: false,
+      section3: false,
+      section4: false,
+      section5: false,
+    });
+    setTempConclusion('');
+    setIsEditingConclusion(false);
+    setIsEditingFollowUp(false);
+    setIsFollowUpOpen(false);
+    setIsEditingProcedureFindings(false);
+    setTempFollowUp({
+      enabled: false,
+      options: [],
+      other: '',
+      notes: ''
+    });
+    setTempFollowUpOther('');
+    setTempFollowUpNotes('');
+    clearAllStorage();
+    toast.success("All template data cleared successfully!");
   };
 
   // Handle clearing endoscopy data (section-specific or all)
@@ -3118,6 +2982,7 @@ const Index = () => {
             ...prev,
             patientInfo: createInitialPatientInfoState()
           }));
+          clearCurrentExtractedPatient();
           toast.success('Patient information cleared');
           break;
         
@@ -3210,42 +3075,7 @@ const Index = () => {
           break;
       }
     } else {
-      // Clear all endoscopy data
-      setCurrentReport(prev => ({
-        ...prev,
-        patientInfo: createInitialPatientInfoState(),
-        gastroscopyFindings: { findings: [] },
-        colonoscopyFindings: { findings: [] },
-        media: [],
-        notes: "",
-        selectedProcedures: [],
-        gastroscopyCanvasData: '',
-        colonoscopyCanvasData: '',
-        procedureFindings: {
-          findings: '',
-          additionalNotes: ''
-        },
-        specimen: {
-          sentForPathology: '',
-          laboratoryName: '',
-          otherSpecimensTaken: '',
-          otherSpecimensDetails: ''
-        },
-        conclusion: '',
-        followUp: {
-          enabled: false,
-          options: [],
-          other: '',
-          notes: '',
-          postOperativeManagement: ''
-        },
-        signature: {
-          surgeonSignature: '',
-          surgeonSignatureText: '',
-          dateTime: ''
-        }
-      }));
-      toast.success('All endoscopy data cleared');
+      clearAllEndoscopyData();
     }
   };
 
@@ -4230,7 +4060,6 @@ const Index = () => {
 
   // Development helper function to clear persistent data
   const clearPersistentData = () => {
-    resetPatientDatabaseCache();
     if (clearAllStorage()) {
       toast.success("All persistent data cleared successfully!");
       // Refresh the page to reset all state
@@ -4269,53 +4098,16 @@ const Index = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [enablePersistence]);
 
-  const currentTemplateType = getTemplateTypeFromTab(currentTab);
-  const activeTemplatePatientInfo = createInitialPatientInfoState(
-    getTemplatePatientInfo(currentReport, currentTemplateType),
-  );
-  const isEditingSavedPatientRecord = Boolean(editingPatientContext.recordId);
-
   return (
     <AppLayout>
       <GlassContainer className="pt-2 sm:pt-4">
         {/* Glass Header */}
         <GlassHeader
-          title={
-            appSection === "templates"
-              ? "Gastroenterology Templates"
-              : appSection === "patients"
-                ? "Patients"
-                : "Reports"
-          }
+          title="Gastroenterology Templates"
           subtitle=""
           className="mb-4 sm:mb-6"
         />
 
-        <div className="mb-6 flex flex-wrap gap-2">
-          <Button
-            variant={appSection === "templates" ? "default" : "outline"}
-            onClick={() => setAppSection("templates")}
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Templates
-          </Button>
-          <Button
-            variant={appSection === "patients" ? "default" : "outline"}
-            onClick={() => setAppSection("patients")}
-          >
-            <ClipboardList className="mr-2 h-4 w-4" />
-            Patients
-          </Button>
-          <Button
-            variant={appSection === "reports" ? "default" : "outline"}
-            onClick={() => setAppSection("reports")}
-          >
-            <FileSearch className="mr-2 h-4 w-4" />
-            Reports
-          </Button>
-        </div>
-
-        {appSection === "templates" && (
         <div className="grid grid-cols-1 2xl:grid-cols-4 gap-8">
           {/* Main Content with Tabs */}
           <div className="2xl:col-span-3">
@@ -4332,8 +4124,8 @@ const Index = () => {
                     variant="destructive" 
                     size="sm" 
                     className="w-full text-xs sm:w-auto"
-                    onClick={() => handleClearData()}
-                    title="Clear all endoscopy data"
+                    onClick={handleClearAllTemplatesData}
+                    title="Clear all template data"
                   >
                     <RotateCcw className="w-4 h-4 mr-2" />
                     Clear All Data
@@ -4341,70 +4133,6 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 rounded-xl border border-white/50 bg-white/55 p-4">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {isEditingSavedPatientRecord
-                          ? "Editing saved patient record"
-                          : editingPatientContext.patientId
-                            ? "Preparing a new entry for an existing patient"
-                            : "Current template is not saved to Patients yet"}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Template: {getTemplateLabel(currentTemplateType)} | Patient:{" "}
-                        {activeTemplatePatientInfo.name || "Not entered yet"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        onClick={() => {
-                          void saveCurrentTemplateToPatients(
-                            isEditingSavedPatientRecord ? "update" : "create",
-                          );
-                        }}
-                        disabled={isPatientDatabaseSyncing}
-                      >
-                        <Save className="mr-2 h-4 w-4" />
-                        {isEditingSavedPatientRecord ? "Update Saved Record" : "Save Patient Record"}
-                      </Button>
-                      {editingPatientContext.patientId && (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            void saveCurrentTemplateToPatients("newEntry");
-                          }}
-                          disabled={isPatientDatabaseSyncing}
-                        >
-                          Save As New Entry
-                        </Button>
-                      )}
-                      {editingPatientContext.patientId && (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setEditingPatientContext({
-                              patientId: null,
-                              recordId: null,
-                            });
-                            toast.success("Template detached from the current patient context.");
-                          }}
-                        >
-                          Start Fresh Patient
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          void syncPatientDatabase(true);
-                        }}
-                        disabled={isPatientDatabaseSyncing}
-                      >
-                        {isPatientDatabaseSyncing ? "Syncing..." : "Sync Patients"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
 	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
 	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-7 sm:overflow-visible">
                     <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
@@ -9607,53 +9335,6 @@ const Index = () => {
           </div>
 
         </div>
-        )}
-
-        {appSection === "patients" && (
-          <PatientsTab
-            patients={patientDatabaseCache.patients}
-            records={patientDatabaseCache.records}
-            isLoading={isPatientDatabaseLoading}
-            isSyncing={isPatientDatabaseSyncing}
-            pendingQueueCount={pendingPatientSyncCount}
-            forcedProcedureFilter={forcedPatientsProcedureFilter}
-            onOpenRecord={handleOpenSavedRecord}
-            onStartNewEntry={(patient, record) => {
-              const baseRecord =
-                record ||
-                patientDatabaseCache.records.find(
-                  (patientRecord) =>
-                    patientRecord.patientDocId === patient.id && !patientRecord.deletedAt,
-                ) ||
-                null;
-
-              if (!baseRecord) {
-                toast.error("There is no saved record to use as a starting point yet.");
-                return;
-              }
-
-              handleStartNewEntry(baseRecord);
-            }}
-            onExportRecord={handleExportSavedRecord}
-            onDeletePatient={(patientId) => {
-              void handleSetPatientDeletedState(patientId, new Date().toISOString());
-            }}
-            onRestorePatient={(patientId) => {
-              void handleSetPatientDeletedState(patientId, null);
-            }}
-          />
-        )}
-
-        {appSection === "reports" && (
-          <ReportsTab
-            patients={patientDatabaseCache.patients}
-            records={patientDatabaseCache.records}
-            onOpenProcedureFilter={(procedureFilter) => {
-              setForcedPatientsProcedureFilter(procedureFilter);
-              setAppSection("patients");
-            }}
-          />
-        )}
       </GlassContainer>
     </AppLayout>
   );

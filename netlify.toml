@@ -5,6 +5,14 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/patient-sticker-extract"
+  to = "/.netlify/functions/patient-sticker-extract"
+  status = 200
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
