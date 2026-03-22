@@ -785,12 +785,26 @@ export const PatientsTab = ({
                                           variant={
                                             previewRecord?.id === record.id ? "default" : "outline"
                                           }
-                                          onClick={() =>
+                                          onClick={() => {
                                             setPreviewRecordIdsByPatient((previousState) => ({
                                               ...previousState,
                                               [patient.id]: record.id,
-                                            }))
-                                          }
+                                            }));
+                                            setExpandedPatientId(patient.id);
+                                            setExpandedPatientPanels((previousState) => {
+                                              const currentState =
+                                                previousState[patient.id] ||
+                                                createInitialPatientPanelState();
+                                              return {
+                                                ...previousState,
+                                                [patient.id]: {
+                                                  ...currentState,
+                                                  savedRecords: true,
+                                                  templatePreview: true,
+                                                },
+                                              };
+                                            });
+                                          }}
                                         >
                                           Preview
                                         </Button>

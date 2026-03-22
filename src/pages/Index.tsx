@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -343,6 +343,76 @@ const getCurrentExtractedPatientInfoFromReport = (report: any) => {
   return createInitialPatientInfoState(match);
 };
 
+const WORKING_SESSION_STORAGE_KEY = "working_session_state_v1";
+const VALID_APP_SECTIONS = new Set(["templates", "patients", "reports"]);
+const VALID_TEMPLATE_TABS = new Set([
+  "procedure",
+  "appendectomy",
+  "hernia",
+  "rectal",
+  "smallBowel",
+  "cholecystectomy",
+  "periAnal",
+]);
+
+interface WorkingSessionState {
+  appSection?: "templates" | "patients" | "reports";
+  currentTab?: string;
+  forcedPatientsProcedureFilter?: string | null;
+  editingPatientContext?: {
+    patientId: string;
+    recordId: string;
+  } | null;
+  currentExtractedPatientInfo?: Record<string, any> | null;
+}
+
+const sanitizeWorkingSessionState = (value: any): WorkingSessionState | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const nextState: WorkingSessionState = {};
+
+  if (typeof value.appSection === "string" && VALID_APP_SECTIONS.has(value.appSection)) {
+    nextState.appSection = value.appSection;
+  }
+
+  if (typeof value.currentTab === "string" && VALID_TEMPLATE_TABS.has(value.currentTab)) {
+    nextState.currentTab = value.currentTab;
+  }
+
+  if (typeof value.forcedPatientsProcedureFilter === "string") {
+    nextState.forcedPatientsProcedureFilter = value.forcedPatientsProcedureFilter;
+  } else if (value.forcedPatientsProcedureFilter === null) {
+    nextState.forcedPatientsProcedureFilter = null;
+  }
+
+  if (
+    value.editingPatientContext &&
+    typeof value.editingPatientContext === "object" &&
+    typeof value.editingPatientContext.patientId === "string" &&
+    typeof value.editingPatientContext.recordId === "string"
+  ) {
+    nextState.editingPatientContext = {
+      patientId: value.editingPatientContext.patientId,
+      recordId: value.editingPatientContext.recordId,
+    };
+  } else if (value.editingPatientContext === null) {
+    nextState.editingPatientContext = null;
+  }
+
+  if (
+    value.currentExtractedPatientInfo &&
+    typeof value.currentExtractedPatientInfo === "object"
+  ) {
+    nextState.currentExtractedPatientInfo = createInitialPatientInfoState(
+      value.currentExtractedPatientInfo,
+    );
+  }
+
+  return nextState;
+};
+
 const Index = () => {
   
   
@@ -619,6 +689,7 @@ const Index = () => {
   const extractedPatientSyncTimeoutRef = useRef<number | null>(null);
   const dismissedExtractedPatientSignatureRef = useRef("");
   const hasHydratedExtractedPatientFromReportRef = useRef(false);
+  const hasHydratedWorkingSessionRef = useRef(false);
 
 	  // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
@@ -1141,6 +1212,16 @@ const Index = () => {
       patientDatabaseCache.records.some((record) => record.id === editingPatientContext.recordId),
   );
 
+  const buildWorkingSessionState = (): WorkingSessionState => ({
+    appSection,
+    currentTab,
+    forcedPatientsProcedureFilter,
+    editingPatientContext,
+    currentExtractedPatientInfo: hasExtractedPatientStickerData(currentExtractedPatientInfo)
+      ? createInitialPatientInfoState(currentExtractedPatientInfo)
+      : null,
+  });
+
   const persistPatientCache = (nextCache: PatientDatabaseCache) => {
     setPatientDatabaseCache(nextCache);
     savePatientDatabaseCache(nextCache);
@@ -1512,8 +1593,15 @@ const Index = () => {
     }
   };
   
-  // Auto-save functionality with shorter debouncing for better user experience
-  const autoSaveEndoscopy = createAutoSave('endoscopy_report', 3000); // 3 seconds for good responsiveness
+  // Auto-save functionality with stable debouncing to avoid racing restores and repeated timers.
+  const autoSaveEndoscopy = useMemo(
+    () => createAutoSave("endoscopy_report", 3000),
+    [],
+  );
+  const autoSaveWorkingSession = useMemo(
+    () => createAutoSave(WORKING_SESSION_STORAGE_KEY, 1500),
+    [],
+  );
   
   // Track if this is initial load to prevent interference during development
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
@@ -1755,9 +1843,38 @@ const Index = () => {
           additionalInfo: 0,
           procedureFindings: 0
         });
-        console.log('Restored previous session data for all templates');
+      }
+
+      const savedWorkingSession = sanitizeWorkingSessionState(
+        loadFromStorage(WORKING_SESSION_STORAGE_KEY),
+      );
+
+      if (savedWorkingSession?.appSection) {
+        setAppSection(savedWorkingSession.appSection);
+      }
+
+      if (savedWorkingSession?.currentTab) {
+        setCurrentTab(savedWorkingSession.currentTab);
+      }
+
+      if ("forcedPatientsProcedureFilter" in (savedWorkingSession || {})) {
+        setForcedPatientsProcedureFilter(savedWorkingSession?.forcedPatientsProcedureFilter ?? null);
+      }
+
+      if ("editingPatientContext" in (savedWorkingSession || {})) {
+        setEditingPatientContext(savedWorkingSession?.editingPatientContext ?? null);
+      }
+
+      if (
+        savedWorkingSession?.currentExtractedPatientInfo &&
+        hasExtractedPatientStickerData(savedWorkingSession.currentExtractedPatientInfo)
+      ) {
+        setCurrentExtractedPatientInfo(
+          createInitialPatientInfoState(savedWorkingSession.currentExtractedPatientInfo),
+        );
       }
     }
+    hasHydratedWorkingSessionRef.current = true;
   }, [enablePersistence]);
   
   // Helper function to check if saved data has meaningful content (very lenient - save almost everything)
@@ -1804,11 +1921,53 @@ const Index = () => {
   
   // Auto-save whenever currentReport changes (if persistence enabled)
   useEffect(() => {
-    // Auto-save if persistence is enabled - save almost everything to ensure nothing is lost
-    if (enablePersistence) {
-      autoSaveEndoscopy(currentReport);
+    if (!enablePersistence || !hasHydratedWorkingSessionRef.current) {
+      return;
     }
+
+    // Keep unsaved in-progress template work local and resumable without touching patient records.
+    autoSaveEndoscopy(currentReport);
   }, [currentReport, autoSaveEndoscopy, enablePersistence]);
+
+  useEffect(() => {
+    if (!enablePersistence || !hasHydratedWorkingSessionRef.current) {
+      return;
+    }
+
+    autoSaveWorkingSession(buildWorkingSessionState());
+  }, [
+    appSection,
+    autoSaveWorkingSession,
+    currentExtractedPatientInfo,
+    currentTab,
+    editingPatientContext,
+    enablePersistence,
+    forcedPatientsProcedureFilter,
+  ]);
+
+  useEffect(() => {
+    if (!enablePersistence) {
+      return;
+    }
+
+    const flushWorkingDraft = () => {
+      saveToStorage("endoscopy_report", currentReport);
+      saveToStorage(WORKING_SESSION_STORAGE_KEY, buildWorkingSessionState());
+    };
+
+    window.addEventListener("beforeunload", flushWorkingDraft);
+    return () => {
+      window.removeEventListener("beforeunload", flushWorkingDraft);
+    };
+  }, [
+    appSection,
+    currentExtractedPatientInfo,
+    currentReport,
+    currentTab,
+    editingPatientContext,
+    enablePersistence,
+    forcedPatientsProcedureFilter,
+  ]);
   
   // Track user interaction to enable smart saving
   useEffect(() => {
@@ -2059,7 +2218,10 @@ const Index = () => {
   };
 
   // Create auto-save function with longer debouncing to reduce interference
-  const autoSaveAppendectomy = createAutoSave('appendectomy_data', 10000); // 10 seconds instead of 2
+  const autoSaveAppendectomy = useMemo(
+    () => createAutoSave("appendectomy_data", 10000),
+    [],
+  );
 
   // Update appendectomy specific data
   const updateAppendectomy = (section: string, field: string, value: any) => {
