@@ -10,6 +10,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /patients/{patientId} {
+      allow read, write: if true;
+    }
+
+    match /patient_records/{recordId} {
+      allow read, write: if true;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -40,6 +40,7 @@ interface CholecystectomyFormProps {
   onUndo?: (section: string) => void;
   onRedo?: (section: string) => void;
   onExportPDF?: () => void;
+  onSavePatient?: () => void;
   isGeneratingPDF?: boolean;
   diagramElement?: React.ReactNode;
 }
@@ -195,9 +196,11 @@ export const CholecystectomyForm = ({
   currentExtractedPatientInfo,
   onCurrentPatientChange,
   onClear,
+  onClearAll,
   onUndo,
   onRedo,
   onExportPDF,
+  onSavePatient,
   isGeneratingPDF,
   diagramElement,
 }: CholecystectomyFormProps) => {
@@ -1836,18 +1839,44 @@ export const CholecystectomyForm = ({
               </div>
             </div>
           </div>
-          <div className="flex justify-center pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="glass-button text-xs"
-              disabled={isGeneratingPDF}
-              onClick={onExportPDF}
-              type="button"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
-            </Button>
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            {onExportPDF ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="glass-button text-xs"
+                disabled={isGeneratingPDF}
+                onClick={onExportPDF}
+                type="button"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+              </Button>
+            ) : null}
+            {onSavePatient ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="glass-button text-xs"
+                onClick={onSavePatient}
+                type="button"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Save Patient
+              </Button>
+            ) : null}
+            {onClearAll ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="text-xs"
+                onClick={onClearAll}
+                type="button"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Clear All Data
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>

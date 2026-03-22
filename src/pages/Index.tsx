@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Stethoscope, User, Download, Save, Edit, Trash2, ChevronDown, ChevronUp, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
+import { FileText, Stethoscope, User, Download, Save, Trash2, ChevronDown, ChevronUp, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { PatientInfoForm } from "@/components/PatientInfoForm";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { ProcedureInfoForm } from "@/components/ProcedureInfoForm";
@@ -26,6 +26,8 @@ import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
 import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
+import { PatientsTab } from "@/components/patients/PatientsTab";
+import { ReportsTab } from "@/components/reports/ReportsTab";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
 import { generateFinalPDF, FinalDiagramCapture } from "@/utils/finalPdfGenerator";
 import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
@@ -36,6 +38,32 @@ import { generatePeriAnalPDF } from "@/utils/periAnalPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
+import { isFirebaseConfigured } from "@/lib/firebase";
+import { exportSavedRecordPdf } from "@/utils/exportSavedRecord";
+import {
+  fetchPatientDatabaseSnapshot,
+  loadPatientDatabaseCache,
+  loadPatientSyncQueue,
+  processPatientSyncQueue,
+  queuePermanentPatientDeleteSync,
+  queuePatientDeletedStateSync,
+  queuePatientRecordSync,
+  savePatientDatabaseCache,
+} from "@/utils/patientDatabaseStore";
+import {
+  applyPatientDeletedState,
+  buildPatientRecord,
+  createNewPatientId,
+  findMatchingPatientId,
+  getCurrentTabForTemplate,
+  getTemplateLabel,
+  getTemplatePatientInfo,
+  getTemplateTypeFromTab,
+  PatientDatabaseCache,
+  PatientRecord,
+  removePatientsFromCache,
+  upsertPatientRecordInCache,
+} from "@/utils/patientRecords";
 import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { createInitialPeriAnalState } from "@/utils/periAnal";
@@ -891,7 +919,27 @@ const Index = () => {
   });
 
   // Current tab state
+  const [appSection, setAppSection] = useState<"templates" | "patients" | "reports">(
+    "templates",
+  );
   const [currentTab, setCurrentTab] = useState("procedure");
+  const [patientDatabaseCache, setPatientDatabaseCache] = useState<PatientDatabaseCache>(
+    loadPatientDatabaseCache(),
+  );
+  const [isPatientDatabaseLoading, setIsPatientDatabaseLoading] = useState(
+    isFirebaseConfigured,
+  );
+  const [isPatientDatabaseSyncing, setIsPatientDatabaseSyncing] = useState(false);
+  const [pendingPatientSyncCount, setPendingPatientSyncCount] = useState(
+    loadPatientSyncQueue().length,
+  );
+  const [forcedPatientsProcedureFilter, setForcedPatientsProcedureFilter] = useState<string | null>(
+    null,
+  );
+  const [editingPatientContext, setEditingPatientContext] = useState<{
+    patientId: string;
+    recordId: string;
+  } | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [diagramUpdateTrigger, setDiagramUpdateTrigger] = useState(0);
@@ -1083,6 +1131,88 @@ const Index = () => {
   const clearCurrentExtractedPatient = () => {
     setCurrentExtractedPatientInfo(createInitialPatientInfoState());
   };
+  const activeTemplateType = getTemplateTypeFromTab(currentTab);
+  const activeTemplateLabel = getTemplateLabel(activeTemplateType);
+  const activeTemplatePatientInfo = createInitialPatientInfoState(
+    getTemplatePatientInfo(currentReport, activeTemplateType),
+  );
+  const isEditingSavedPatientRecord = Boolean(
+    editingPatientContext &&
+      patientDatabaseCache.records.some((record) => record.id === editingPatientContext.recordId),
+  );
+
+  const persistPatientCache = (nextCache: PatientDatabaseCache) => {
+    setPatientDatabaseCache(nextCache);
+    savePatientDatabaseCache(nextCache);
+  };
+
+  const syncPatientDatabase = async (showSuccessToast = false) => {
+    if (!isFirebaseConfigured) {
+      setPendingPatientSyncCount(loadPatientSyncQueue().length);
+      return;
+    }
+
+    setIsPatientDatabaseSyncing(true);
+
+    try {
+      await processPatientSyncQueue();
+      const remoteSnapshot = await fetchPatientDatabaseSnapshot();
+      persistPatientCache(remoteSnapshot);
+      setPendingPatientSyncCount(loadPatientSyncQueue().length);
+
+      if (showSuccessToast) {
+        toast.success("Patient database synced successfully.");
+      }
+    } catch (error) {
+      console.error("Failed to sync patient database", error);
+      setPendingPatientSyncCount(loadPatientSyncQueue().length);
+    } finally {
+      setIsPatientDatabaseSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydratePatientDatabase = async () => {
+      if (!isFirebaseConfigured) {
+        setIsPatientDatabaseLoading(false);
+        setPendingPatientSyncCount(loadPatientSyncQueue().length);
+        return;
+      }
+
+      try {
+        const remoteSnapshot = await fetchPatientDatabaseSnapshot();
+        if (!isMounted) {
+          return;
+        }
+
+        persistPatientCache(remoteSnapshot);
+      } catch (error) {
+        console.error("Failed to load remote patient database snapshot", error);
+      } finally {
+        if (isMounted) {
+          setIsPatientDatabaseLoading(false);
+          setPendingPatientSyncCount(loadPatientSyncQueue().length);
+        }
+      }
+    };
+
+    hydratePatientDatabase();
+
+    const handleOnline = () => {
+      setPendingPatientSyncCount(loadPatientSyncQueue().length);
+      syncPatientDatabase();
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("online", handleOnline);
+    };
+  }, []);
+
   const handleUndo = () => {
     if (historyIndex > 0) {
       setHistoryIndex(historyIndex - 1);
@@ -2968,8 +3098,182 @@ const Index = () => {
     });
     setTempFollowUpOther('');
     setTempFollowUpNotes('');
+    setEditingPatientContext(null);
+    setForcedPatientsProcedureFilter(null);
+    setAppSection("templates");
     clearAllStorage();
     toast.success("All template data cleared successfully!");
+  };
+
+  const loadRecordIntoTemplates = (record: PatientRecord, createNewEntry = false) => {
+    const restoredReport = normalizeReportPatientInfos(
+      JSON.parse(JSON.stringify(record.reportSnapshot || {})),
+    );
+
+    setCurrentReport(restoredReport);
+    setCurrentTab(getCurrentTabForTemplate(record.templateType) || record.currentTab || "procedure");
+    setCurrentExtractedPatientInfo(createInitialPatientInfoState(record.patientInfo));
+    setEditingPatientContext(
+      createNewEntry
+        ? null
+        : {
+            patientId: record.patientDocId,
+            recordId: record.id,
+          },
+    );
+    setForcedPatientsProcedureFilter(null);
+    setAppSection("templates");
+
+    if (createNewEntry) {
+      toast.success("Loaded previous template as a new entry starting point.");
+    } else {
+      toast.success("Saved patient template loaded.");
+    }
+  };
+
+  const saveCurrentTemplateToPatients = async (
+    saveMode: "update" | "newEntry" | "create" = "create",
+  ) => {
+    const patientInfo = createInitialPatientInfoState(activeTemplatePatientInfo);
+
+    if (!patientInfo.name && !patientInfo.patientId && !patientInfo.dateOfBirth) {
+      toast.error("Add at least patient name, patient ID, or DOB before saving to Patients.");
+      return;
+    }
+
+    const existingRecord =
+      saveMode === "update" && editingPatientContext
+        ? patientDatabaseCache.records.find((record) => record.id === editingPatientContext.recordId) ||
+          null
+        : null;
+
+    const patientDocId =
+      (saveMode === "update" || saveMode === "newEntry") && editingPatientContext
+        ? editingPatientContext.patientId
+        : findMatchingPatientId(patientDatabaseCache.patients, patientInfo) || createNewPatientId();
+
+    const nextRecord = buildPatientRecord({
+      currentTab,
+      existingRecord,
+      patientDocId,
+      reportSnapshot: currentReport,
+      templateType: activeTemplateType,
+    });
+
+    const nextCache = upsertPatientRecordInCache(patientDatabaseCache, nextRecord);
+    const nextPatient =
+      nextCache.patients.find((patient) => patient.id === patientDocId) || null;
+
+    persistPatientCache(nextCache);
+
+    if (nextPatient) {
+      setPendingPatientSyncCount(queuePatientRecordSync(nextPatient, nextRecord));
+    }
+
+    setEditingPatientContext({
+      patientId: patientDocId,
+      recordId: nextRecord.id,
+    });
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      await syncPatientDatabase(false);
+    }
+
+    toast.success(
+      saveMode === "newEntry"
+        ? `${activeTemplateLabel} saved as a new patient entry.`
+        : `${activeTemplateLabel} saved to Patients.`,
+    );
+  };
+
+  const handleOpenSavedRecord = (record: PatientRecord) => {
+    loadRecordIntoTemplates(record, false);
+  };
+
+  const handleSaveCurrentTemplateRecord = () => {
+    saveCurrentTemplateToPatients(isEditingSavedPatientRecord ? "update" : "create");
+  };
+
+  const handleStartNewEntry = (_patient: any, record?: PatientRecord | null) => {
+    if (!record) {
+      setEditingPatientContext(null);
+      setAppSection("templates");
+      toast.success("Ready for a new patient entry.");
+      return;
+    }
+
+    loadRecordIntoTemplates(record, true);
+  };
+
+  const handleExportSavedRecord = async (record: PatientRecord) => {
+    try {
+      await exportSavedRecordPdf(record);
+      toast.success("Saved record PDF generated successfully.");
+    } catch (error) {
+      console.error("Failed to export saved record PDF", error);
+      toast.error("Failed to generate the saved record PDF.");
+    }
+  };
+
+  const handleSetPatientDeletedState = async (patientId: string, deletedAt: string | null) => {
+    const nextCache = applyPatientDeletedState(patientDatabaseCache, patientId, deletedAt);
+    persistPatientCache(nextCache);
+
+    const recordIds = nextCache.records
+      .filter((record) => record.patientDocId === patientId)
+      .map((record) => record.id);
+
+    setPendingPatientSyncCount(queuePatientDeletedStateSync(patientId, deletedAt, recordIds));
+
+    if (
+      editingPatientContext?.patientId === patientId &&
+      deletedAt
+    ) {
+      setEditingPatientContext(null);
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      await syncPatientDatabase(false);
+    }
+
+    toast.success(deletedAt ? "Patient moved to recycle bin." : "Patient restored.");
+  };
+
+  const handlePermanentlyDeletePatients = async (patientIds: string[]) => {
+    if (patientIds.length === 0) {
+      return;
+    }
+
+    const nextCache = removePatientsFromCache(patientDatabaseCache, patientIds);
+    const patientIdSet = new Set(patientIds);
+    const recordIds = patientDatabaseCache.records
+      .filter((record) => patientIdSet.has(record.patientDocId))
+      .map((record) => record.id);
+
+    persistPatientCache(nextCache);
+    setPendingPatientSyncCount(queuePermanentPatientDeleteSync(patientIds, recordIds));
+
+    if (
+      editingPatientContext &&
+      patientIdSet.has(editingPatientContext.patientId)
+    ) {
+      setEditingPatientContext(null);
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      await syncPatientDatabase(false);
+    }
+
+    toast.success(
+      patientIds.length === 1
+        ? "Patient deleted permanently."
+        : "Selected patients deleted permanently.",
+    );
+  };
+
+  const handleOpenPatientsProcedureFilter = (procedureFilter: string) => {
+    setForcedPatientsProcedureFilter(procedureFilter);
+    setAppSection("patients");
   };
 
   // Handle clearing endoscopy data (section-specific or all)
@@ -4119,6 +4423,35 @@ const Index = () => {
                     <CardDescription>
                       Complete patient information and procedure documentation
                     </CardDescription>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        variant={appSection === "templates" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setForcedPatientsProcedureFilter(null);
+                          setAppSection("templates");
+                        }}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Templates
+                      </Button>
+                      <Button
+                        variant={appSection === "patients" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAppSection("patients")}
+                      >
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                        Patients
+                      </Button>
+                      <Button
+                        variant={appSection === "reports" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAppSection("reports")}
+                      >
+                        <FileSearch className="mr-2 h-4 w-4" />
+                        Reports
+                      </Button>
+                    </div>
                   </div>
                   <Button 
                     variant="destructive" 
@@ -4133,7 +4466,9 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent>
-	                <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
+                <div className="space-y-6">
+                  {appSection === "templates" ? (
+                    <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
 	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-7 sm:overflow-visible">
                     <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Endoscopy
@@ -4159,6 +4494,52 @@ const Index = () => {
 	                  </TabsList>
                   
                   <TabsContent value="procedure" className="mt-6 space-y-6">
+                    <Card className="glass-card-light">
+                      <CardHeader>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <CardTitle className="text-2xl font-bold text-gray-800">
+                              Endoscopy - Synoptic Report
+                            </CardTitle>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="glass-button text-xs"
+                              onClick={() => {
+                                setCurrentTab("procedure");
+                                handleExportPDF();
+                              }}
+                              disabled={isGeneratingPDF}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="glass-button text-xs"
+                              onClick={handleSaveCurrentTemplateRecord}
+                            >
+                              <Save className="h-3 w-3 mr-1" />
+                              Save Patient
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="glass-button text-xs"
+                              onClick={() => handleClearData()}
+                              title="Clear all endoscopy data"
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Clear All Data
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </Card>
+
                     {/* Patient Information */}
                     <Card className="glass-card-light">
                       <CardHeader>
@@ -4922,21 +5303,22 @@ const Index = () => {
                               {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
                             </Button>
                             <Button 
-                              variant="destructive" 
+                              variant="outline" 
                               size="sm" 
-                              className="text-xs"
-                              onClick={clearAllEndoscopyData}
-                              title="Clear all endoscopy data"
+                              className="glass-button text-xs"
+                              onClick={handleSaveCurrentTemplateRecord}
                             >
-                              <RotateCcw className="h-3 w-3 mr-1" />
-                              Clear All Data
+                              <Save className="h-3 w-3 mr-1" />
+                              Save Patient
                             </Button>
                             <Button 
                               variant="outline" 
                               size="sm" 
                               className="glass-button text-xs"
                               onClick={() => handleClearData()}
+                              title="Clear all endoscopy data"
                             >
+                              <RotateCcw className="h-3 w-3 mr-1" />
                               Clear All Data
                             </Button>
                           </div>
@@ -4984,6 +5366,15 @@ const Index = () => {
                             >
                               <Download className="w-4 h-4 mr-2" />
                               Print/Export PDF
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="glass-button text-xs"
+                              onClick={handleSaveCurrentTemplateRecord}
+                            >
+                              <Save className="w-4 h-4 mr-2" />
+                              Save Patient
                             </Button>
                             <Button 
                               variant="destructive" 
@@ -6387,17 +6778,33 @@ const Index = () => {
                       </CardContent>
                     </Card>
 
-                    {/* Preview & Export Button */}
-                    <div className="flex justify-center mt-8 mb-12">
+                    <div className="flex flex-wrap justify-center gap-3 mt-8 mb-12">
                       <Button 
-                        className="px-8 py-4 glass-button text-md"
+                        className="px-6 py-3 glass-button text-md"
                         onClick={() => {
                           setCurrentTab('appendectomy');
                           handleExportPDF();
                         }}
                       >
                         <Download className="w-5 h-5 mr-2" />
-                        Preview & Export PDF
+                        Print/Export PDF
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-6 py-3 glass-button text-md"
+                        onClick={handleSaveCurrentTemplateRecord}
+                      >
+                        <Save className="w-5 h-5 mr-2" />
+                        Save Patient
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="px-6 py-3 text-md"
+                        onClick={clearAllAppendectomyData}
+                        title="Clear all appendectomy data"
+                      >
+                        <RotateCcw className="w-5 h-5 mr-2" />
+                        Clear All Data
                       </Button>
                     </div>
                     </div>
@@ -6440,23 +6847,32 @@ const Index = () => {
                             </h1>
                           </div>
                           <div className="flex space-x-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="glass-button text-xs"
-                              onClick={() => {
-                                handleExportPDF('ventralHernia');
-                              }}
-                              disabled={isGeneratingPDF}
-                            >
-                              <Download className="w-4 h-4 mr-2" />
-                              {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="glass-button text-xs"
-                              onClick={clearAllVentralHerniaData}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="glass-button text-xs"
+                                  onClick={() => {
+                                    handleExportPDF('ventralHernia');
+                                  }}
+                                  disabled={isGeneratingPDF}
+                                >
+                                  <Download className="w-4 h-4 mr-2" />
+                                  {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={handleSaveCurrentTemplateRecord}
+                                >
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save Patient
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="glass-button text-xs"
+                                  onClick={clearAllVentralHerniaData}
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
                               Clear All Data
@@ -8870,16 +9286,31 @@ const Index = () => {
                         </CardContent>
                     </Card>
 
-                    {/* Preview & Export Button */}
-                    <div className="flex justify-center mt-8 mb-12">
+                    <div className="flex flex-wrap justify-center gap-3 mt-8 mb-12">
                       <Button 
-                        className="px-8 py-4 glass-button text-md"
+                        className="px-6 py-3 glass-button text-md"
                         onClick={() => {
                           handleExportPDF('ventralHernia');
                         }}
                       >
                         <Download className="w-5 h-5 mr-2" />
-                        Preview & Export PDF
+                        Print/Export PDF
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-6 py-3 glass-button text-md"
+                        onClick={handleSaveCurrentTemplateRecord}
+                      >
+                        <Save className="w-5 h-5 mr-2" />
+                        Save Patient
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-6 py-3 glass-button text-md"
+                        onClick={clearAllVentralHerniaData}
+                      >
+                        <Trash2 className="w-5 h-5 mr-2" />
+                        Clear All Data
                       </Button>
                     </div>
                     </div>
@@ -8941,6 +9372,15 @@ const Index = () => {
                                   <Download className="w-4 h-4 mr-2" />
                                   {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                                 </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={handleSaveCurrentTemplateRecord}
+                                >
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save Patient
+                                </Button>
                                 <Button 
                                   variant="destructive" 
                                   size="sm" 
@@ -8964,6 +9404,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('rectalCancer')}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
                           onUndo={(section) => {
                             undoRectalCancer(section as keyof typeof rectalCancerHistory);
                           }}
@@ -9046,6 +9487,15 @@ const Index = () => {
                                   {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={handleSaveCurrentTemplateRecord}
+                                >
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save Patient
+                                </Button>
+                                <Button
                                   variant="destructive"
                                   size="sm"
                                   className="text-xs"
@@ -9067,6 +9517,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('smallBowel')}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
                           onUndo={(section) => {
                             undoSmallBowel(section as keyof typeof smallBowelHistory);
                           }}
@@ -9146,6 +9597,15 @@ const Index = () => {
                                   {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={handleSaveCurrentTemplateRecord}
+                                >
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save Patient
+                                </Button>
+                                <Button
                                   variant="destructive"
                                   size="sm"
                                   className="text-xs"
@@ -9167,6 +9627,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('cholecystectomy')}
+                                  onSavePatient={handleSaveCurrentTemplateRecord}
                                   isGeneratingPDF={isGeneratingPDF}
                           onUndo={(section) => {
                             undoCholecystectomy(section as keyof typeof cholecystectomyHistory);
@@ -9247,6 +9708,15 @@ const Index = () => {
                                   {isGeneratingPDF ? 'Generating...' : 'Print/Export PDF'}
                                 </Button>
                                 <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="glass-button text-xs"
+                                  onClick={handleSaveCurrentTemplateRecord}
+                                >
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save Patient
+                                </Button>
+                                <Button
                                   variant="destructive"
                                   size="sm"
                                   className="text-xs"
@@ -9268,6 +9738,7 @@ const Index = () => {
 	                          currentExtractedPatientInfo={currentExtractedPatientInfo}
 	                          onCurrentPatientChange={updateCurrentExtractedPatient}
 		                          onExportPDF={() => handleExportPDF('periAnal')}
+                                  onSavePatient={handleSaveCurrentTemplateRecord}
                                   isGeneratingPDF={isGeneratingPDF}
                           onUndo={(section) => {
                             undoPeriAnal(section as keyof typeof periAnalHistory);
@@ -9330,6 +9801,31 @@ const Index = () => {
                     </div>
                   </TabsContent>
 	                </Tabs>
+                  ) : appSection === "patients" ? (
+                    <PatientsTab
+                      patients={patientDatabaseCache.patients}
+                      records={patientDatabaseCache.records}
+                      isLoading={isPatientDatabaseLoading}
+                      isSyncing={isPatientDatabaseSyncing}
+                      pendingQueueCount={pendingPatientSyncCount}
+                      forcedProcedureFilter={forcedPatientsProcedureFilter}
+                      onOpenRecord={handleOpenSavedRecord}
+                      onStartNewEntry={handleStartNewEntry}
+                      onExportRecord={handleExportSavedRecord}
+                      onDeletePatient={(patientId) =>
+                        handleSetPatientDeletedState(patientId, new Date().toISOString())
+                      }
+                      onRestorePatient={(patientId) => handleSetPatientDeletedState(patientId, null)}
+                      onPermanentDeletePatients={handlePermanentlyDeletePatients}
+                    />
+                  ) : (
+                    <ReportsTab
+                      patients={patientDatabaseCache.patients}
+                      records={patientDatabaseCache.records}
+                      onOpenProcedureFilter={handleOpenPatientsProcedureFilter}
+                    />
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

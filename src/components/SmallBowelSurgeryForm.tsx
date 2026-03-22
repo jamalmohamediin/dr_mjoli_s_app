@@ -45,6 +45,7 @@ interface SmallBowelSurgeryFormProps {
   onUndo?: (section: string) => void;
   onRedo?: (section: string) => void;
   onExportPDF?: () => void;
+  onSavePatient?: () => void;
   diagramElement?: React.ReactNode;
 }
 
@@ -128,6 +129,7 @@ export const SmallBowelSurgeryForm = ({
   onUndo,
   onRedo,
   onExportPDF,
+  onSavePatient,
   diagramElement,
 }: SmallBowelSurgeryFormProps) => {
   const smallBowel = currentReport.smallBowel || initialSmallBowelSurgeryState;
@@ -2476,18 +2478,24 @@ export const SmallBowelSurgeryForm = ({
         </CardContent>
       </Card>
 
-      {(onExportPDF || onClearAll) && (
+      {(onExportPDF || onClearAll || onSavePatient) && (
         <div className="flex flex-wrap justify-end gap-3">
+          {onExportPDF && (
+            <Button onClick={onExportPDF}>
+              <Download className="w-4 h-4 mr-2" />
+              Print/Export PDF
+            </Button>
+          )}
+          {onSavePatient && (
+            <Button variant="outline" onClick={onSavePatient}>
+              <FileSearch className="w-4 h-4 mr-2" />
+              Save Patient
+            </Button>
+          )}
           {onClearAll && (
             <Button variant="destructive" onClick={onClearAll}>
               <Trash2 className="w-4 h-4 mr-2" />
               Clear All Data
-            </Button>
-          )}
-          {onExportPDF && (
-            <Button onClick={onExportPDF}>
-              <Download className="w-4 h-4 mr-2" />
-              Preview & Export PDF
             </Button>
           )}
         </div>

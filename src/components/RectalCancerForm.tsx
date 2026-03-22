@@ -23,6 +23,7 @@ interface RectalCancerFormProps {
   onUndo?: (section: string) => void;
   onRedo?: (section: string) => void;
   onExportPDF?: () => void;
+  onSavePatient?: () => void;
   diagramElement?: React.ReactNode;
 }
 
@@ -38,6 +39,7 @@ export const RectalCancerForm = ({
   onUndo,
   onRedo,
   onExportPDF,
+  onSavePatient,
   diagramElement,
 }: RectalCancerFormProps) => {
   const [expanded, setExpanded] = useState({
@@ -2548,7 +2550,7 @@ export const RectalCancerForm = ({
       </Card>
 
       {/* Action Buttons */}
-      {(onExportPDF || onClearAll || onUndo || onRedo) && (
+      {(onExportPDF || onSavePatient || onClearAll || onUndo || onRedo) && (
         <div className="mt-6 flex justify-center gap-4 flex-wrap">
           {onUndo && (
             <Button
@@ -2581,6 +2583,17 @@ export const RectalCancerForm = ({
             >
               <Download className="h-5 w-5" />
               Print/Export PDF
+            </Button>
+          )}
+          {onSavePatient && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => onSavePatient()}
+              className="flex items-center gap-2"
+            >
+              <FileSearch className="h-5 w-5" />
+              Save Patient
             </Button>
           )}
           {onClearAll && (
