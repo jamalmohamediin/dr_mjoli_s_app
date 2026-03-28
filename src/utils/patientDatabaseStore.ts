@@ -1,5 +1,6 @@
 import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import { firestoreDb } from "@/lib/firebase";
+import { isLocalPatientAttachment, stripLocalPatientAttachments } from "@/utils/localPatientAttachmentStore";
 import {
   createEmptyPatientDatabaseCache,
   PatientAttachment,
@@ -142,16 +143,39 @@ export const fetchPatientDatabaseSnapshot = async () => {
     return loadPatientDatabaseCache();
   }
 
+  const localCache = loadPatientDatabaseCache();
   const [patientSnapshot, recordSnapshot] = await Promise.all([
     getDocs(collection(firestoreDb, "patients")),
     getDocs(collection(firestoreDb, "patient_records")),
   ]);
 
   const cache = {
-    patients: patientSnapshot.docs.map((entry) => ({
-      id: entry.id,
-      ...entry.data(),
-    })) as PatientSummary[],
+    patients: patientSnapshot.docs.map((entry) => {
+      const remotePatient = {
+        id: entry.id,
+        ...entry.data(),
+      } as PatientSummary;
+      const localPatient = localCache.patients.find((patient) => patient.id === remotePatient.id);
+      const localOnlyAttachments = (localPatient?.attachments || []).filter((attachment) =>
+        isLocalPatientAttachment(attachment),
+      );
+
+      if (localOnlyAttachments.length === 0) {
+        return remotePatient;
+      }
+
+      const attachmentMap = new Map<string, PatientAttachment>();
+      [...(remotePatient.attachments || []), ...localOnlyAttachments].forEach((attachment) => {
+        attachmentMap.set(attachment.id, attachment);
+      });
+
+      return {
+        ...remotePatient,
+        attachments: Array.from(attachmentMap.values()).sort((left, right) =>
+          right.uploadedAt.localeCompare(left.uploadedAt),
+        ),
+      };
+    }) as PatientSummary[],
     records: recordSnapshot.docs.map((entry) => ({
       id: entry.id,
       ...entry.data(),
@@ -331,7 +355,7 @@ export const queuePatientAttachmentsSync = (
   enqueuePatientSyncItem({
     type: "setPatientAttachments",
     patientId,
-    attachments: toSerializable(attachments),
+    attachments: toSerializable(stripLocalPatientAttachments(attachments)),
   });
 
 export const queuePatientRecordDeleteSync = (

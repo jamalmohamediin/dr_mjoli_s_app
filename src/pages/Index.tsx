@@ -69,7 +69,7 @@ import {
   removePatientsFromCache,
   upsertPatientRecordInCache,
 } from "@/utils/patientRecords";
-import { uploadPatientFiles } from "@/utils/patientMediaStore";
+import { deletePatientFile, uploadPatientFiles } from "@/utils/patientMediaStore";
 import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { createInitialPeriAnalState } from "@/utils/periAnal";
@@ -3885,20 +3885,86 @@ const Index = () => {
         patients: nextPatients,
       });
 
-      setPendingPatientSyncCount(queuePatientAttachmentsSync(patientId, nextAttachments));
+      const hasRemoteAttachments = nextAttachments.some(
+        (attachment) => attachment.source !== "local",
+      );
 
-      if (typeof navigator !== "undefined" && navigator.onLine) {
+      if (hasRemoteAttachments) {
+        setPendingPatientSyncCount(queuePatientAttachmentsSync(patientId, nextAttachments));
+      }
+
+      if (hasRemoteAttachments && typeof navigator !== "undefined" && navigator.onLine) {
         await syncPatientDatabase(false);
       }
 
-      toast.success(
-        uploadedAttachments.length === 1
-          ? "Attachment uploaded successfully."
-          : "Attachments uploaded successfully.",
-      );
+      const usedLocalFallback = uploadedAttachments.some((attachment) => attachment.source === "local");
+
+      if (usedLocalFallback && hasRemoteAttachments) {
+        toast.success("Some attachments were uploaded, and some were saved locally on this device.");
+      } else if (usedLocalFallback) {
+        toast.success("Attachments were saved locally on this device.");
+      } else {
+        toast.success(
+          uploadedAttachments.length === 1
+            ? "Attachment uploaded successfully."
+            : "Attachments uploaded successfully.",
+        );
+      }
     } catch (error) {
       console.error("Failed to upload patient attachments", error);
       toast.error("Failed to upload the selected media/documents.");
+    }
+  };
+
+  const handleDeletePatientAttachment = async (
+    patientId: string,
+    attachmentToDelete: PatientAttachment,
+  ) => {
+    const patient = patientDatabaseCache.patients.find((entry) => entry.id === patientId) || null;
+    if (!patient) {
+      toast.error("Patient could not be found for attachment deletion.");
+      return;
+    }
+
+    const nextAttachments = (patient.attachments || []).filter(
+      (attachment) => attachment.id !== attachmentToDelete.id,
+    );
+
+    const nextPatients = [...patientDatabaseCache.patients]
+      .map((entry) =>
+        entry.id === patientId
+          ? {
+              ...entry,
+              attachments: nextAttachments,
+              updatedAt: new Date().toISOString(),
+            }
+          : entry,
+      )
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+
+    persistPatientCache({
+      ...patientDatabaseCache,
+      patients: nextPatients,
+    });
+
+    const shouldSyncRemoteAttachments =
+      attachmentToDelete.source !== "local" ||
+      nextAttachments.some((attachment) => attachment.source !== "local");
+
+    if (shouldSyncRemoteAttachments) {
+      setPendingPatientSyncCount(queuePatientAttachmentsSync(patientId, nextAttachments));
+    }
+
+    if (shouldSyncRemoteAttachments && typeof navigator !== "undefined" && navigator.onLine) {
+      await syncPatientDatabase(false);
+    }
+
+    try {
+      await deletePatientFile(attachmentToDelete);
+      toast.success("Attachment deleted successfully.");
+    } catch (error) {
+      console.error("Failed to delete stored patient attachment", error);
+      toast.success("Attachment removed from the patient, but storage cleanup could not be confirmed.");
     }
   };
 
@@ -10466,6 +10532,7 @@ const Index = () => {
                       onExportRecord={handleExportSavedRecord}
                       onDeleteRecord={handleDeleteSavedRecord}
                       onUploadPatientAttachments={handleUploadPatientAttachments}
+                      onDeletePatientAttachment={handleDeletePatientAttachment}
                       onDeletePatient={(patientId) =>
                         handleSetPatientDeletedState(patientId, new Date().toISOString())
                       }

@@ -39,6 +39,7 @@ export interface PatientAttachment {
   kind: "image" | "video" | "document";
   sizeBytes: number;
   uploadedAt: string;
+  source?: "firebase" | "local";
 }
 
 export interface PatientSummary {

@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { generateSavedRecordPdfBlob } from "@/utils/exportSavedRecord";
 import {
+  isLocalPatientAttachment,
+  resolveLocalPatientAttachmentUrl,
+} from "@/utils/localPatientAttachmentStore";
+import {
   PatientAttachment,
   PatientRecord,
   PatientSummary,
@@ -24,6 +28,7 @@ interface PatientsTabProps {
   onExportRecord: (record: PatientRecord) => void;
   onDeleteRecord: (record: PatientRecord) => void;
   onUploadPatientAttachments: (patientId: string, files: File[]) => void;
+  onDeletePatientAttachment: (patientId: string, attachment: PatientAttachment) => void;
   onDeletePatient: (patientId: string) => void;
   onRestorePatient: (patientId: string) => void;
   onPermanentDeletePatients: (patientIds: string[]) => void;
@@ -176,11 +181,19 @@ const formatAttachmentSize = (sizeBytes: number) => {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-const renderAttachmentPreview = (attachment: PatientAttachment) => {
+const renderAttachmentPreview = (attachment: PatientAttachment, attachmentUrl: string) => {
+  if (!attachmentUrl) {
+    return (
+      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-sm text-gray-600">
+        Loading Attachment Preview...
+      </div>
+    );
+  }
+
   if (attachment.kind === "image") {
     return (
       <img
-        src={attachment.url}
+        src={attachmentUrl}
         alt={attachment.name}
         className="h-40 w-full rounded-lg object-cover"
       />
@@ -188,7 +201,7 @@ const renderAttachmentPreview = (attachment: PatientAttachment) => {
   }
 
   if (attachment.kind === "video") {
-    return <video className="h-40 w-full rounded-lg bg-black" controls src={attachment.url} />;
+    return <video className="h-40 w-full rounded-lg bg-black" controls src={attachmentUrl} />;
   }
 
   return (
@@ -210,6 +223,7 @@ export const PatientsTab = ({
   onExportRecord,
   onDeleteRecord,
   onUploadPatientAttachments,
+  onDeletePatientAttachment,
   onDeletePatient,
   onRestorePatient,
   onPermanentDeletePatients,
@@ -233,6 +247,10 @@ export const PatientsTab = ({
   const pdfPreviewUrlRef = useRef("");
   const pdfPreviewCacheRef = useRef<Map<string, { url: string; filename: string }>>(new Map());
   const activePreviewGenerationKeyRef = useRef("");
+  const [resolvedLocalAttachmentUrls, setResolvedLocalAttachmentUrls] = useState<Record<string, string>>(
+    {},
+  );
+  const localAttachmentUrlRef = useRef<Record<string, string>>({});
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
   useEffect(() => {
@@ -254,6 +272,22 @@ export const PatientsTab = ({
   );
 
   const procedureOptions = useMemo(() => getUniqueProcedureFilters(records), [records]);
+  const localAttachments = useMemo(
+    () =>
+      patients.flatMap((patient) =>
+        (Array.isArray(patient.attachments) ? patient.attachments : []).filter((attachment) =>
+          isLocalPatientAttachment(attachment),
+        ),
+      ),
+    [patients],
+  );
+  const localAttachmentMap = useMemo(
+    () =>
+      new Map(
+        localAttachments.map((attachment) => [String(attachment.storagePath), attachment]),
+      ),
+    [localAttachments],
+  );
 
   const activePreviewRecord = useMemo(() => {
     if (!expandedPatientId) {
@@ -375,8 +409,61 @@ export const PatientsTab = ({
       });
       pdfPreviewCacheRef.current.clear();
       pdfPreviewUrlRef.current = "";
+      Object.values(localAttachmentUrlRef.current).forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      localAttachmentUrlRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    const activeLocalKeys = new Set(localAttachmentMap.keys());
+    Object.entries(localAttachmentUrlRef.current).forEach(([storagePath, objectUrl]) => {
+      if (!activeLocalKeys.has(storagePath)) {
+        URL.revokeObjectURL(objectUrl);
+        delete localAttachmentUrlRef.current[storagePath];
+      }
+    });
+
+    setResolvedLocalAttachmentUrls({ ...localAttachmentUrlRef.current });
+
+    if (localAttachmentMap.size === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const syncLocalAttachmentUrls = async () => {
+      for (const [storagePath, attachment] of localAttachmentMap.entries()) {
+        if (localAttachmentUrlRef.current[storagePath]) {
+          continue;
+        }
+
+        try {
+          const objectUrl = await resolveLocalPatientAttachmentUrl(attachment);
+          if (!objectUrl) {
+            continue;
+          }
+
+          if (isCancelled) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+
+          localAttachmentUrlRef.current[storagePath] = objectUrl;
+          setResolvedLocalAttachmentUrls({ ...localAttachmentUrlRef.current });
+        } catch (error) {
+          console.error("Failed to resolve local patient attachment preview", error);
+        }
+      }
+    };
+
+    void syncLocalAttachmentUrls();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [localAttachmentMap]);
 
   useEffect(() => {
     if (!isTemplatePreviewOpen || !activePreviewRecord) {
@@ -480,6 +567,11 @@ export const PatientsTab = ({
       };
     });
   };
+
+  const getAttachmentUrl = (attachment: PatientAttachment) =>
+    isLocalPatientAttachment(attachment)
+      ? resolvedLocalAttachmentUrls[String(attachment.storagePath)] || ""
+      : attachment.url;
 
   return (
     <div className="space-y-6">
@@ -944,7 +1036,10 @@ export const PatientsTab = ({
                                       key={attachment.id}
                                       className="space-y-3 rounded-xl border border-white/50 bg-white/70 p-4"
                                     >
-                                      {renderAttachmentPreview(attachment)}
+                                      {renderAttachmentPreview(
+                                        attachment,
+                                        getAttachmentUrl(attachment),
+                                      )}
                                       <div className="space-y-1">
                                         <p className="truncate text-sm font-semibold text-gray-900">
                                           {attachment.name}
@@ -954,26 +1049,59 @@ export const PatientsTab = ({
                                             attachment.kind.slice(1)}{" "}
                                           | {formatAttachmentSize(attachment.sizeBytes)} | Uploaded:{" "}
                                           {formatDisplayDate(attachment.uploadedAt)}
+                                          {isLocalPatientAttachment(attachment)
+                                            ? " | Saved Locally"
+                                            : ""}
                                         </p>
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        <a
-                                          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                                          href={attachment.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                        >
-                                          View
-                                        </a>
-                                        <a
-                                          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                                          href={attachment.url}
-                                          download={attachment.name}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                        >
-                                          Download
-                                        </a>
+                                        {getAttachmentUrl(attachment) ? (
+                                          <>
+                                            <a
+                                              className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                              href={getAttachmentUrl(attachment)}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                            >
+                                              View
+                                            </a>
+                                            <a
+                                              className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                              href={getAttachmentUrl(attachment)}
+                                              download={attachment.name}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                            >
+                                              Download
+                                            </a>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={() =>
+                                                onDeletePatientAttachment(patient.id, attachment)
+                                              }
+                                            >
+                                              <Trash2 className="mr-2 h-4 w-4" />
+                                              Delete
+                                            </Button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span className="inline-flex h-9 items-center rounded-md border border-dashed border-gray-300 px-3 text-sm text-gray-500">
+                                              Preparing Attachment...
+                                            </span>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={() =>
+                                                onDeletePatientAttachment(patient.id, attachment)
+                                              }
+                                            >
+                                              <Trash2 className="mr-2 h-4 w-4" />
+                                              Delete
+                                            </Button>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                   ))}
