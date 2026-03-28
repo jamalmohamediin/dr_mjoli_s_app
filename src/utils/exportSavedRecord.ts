@@ -64,7 +64,7 @@ const buildFinalDiagrams = (reportSnapshot: any): FinalDiagramCapture[] => {
   return diagrams;
 };
 
-export const exportSavedRecordPdf = async (record: PatientRecord) => {
+export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   const reportSnapshot = record.reportSnapshot || {};
   const patientInfo = record.patientInfo || {};
   const patientName = patientInfo.name || "patient";
@@ -74,13 +74,23 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
   const formattedDate = currentFileDate();
 
   if (record.templateType === "procedure") {
-    await generateFinalPDF(
+    const blob = await generateFinalPDF(
       patientName,
       patientId,
       buildFinalDiagrams(reportSnapshot),
       reportSnapshot,
+      undefined,
+      { returnBlob: true },
     );
-    return;
+
+    if (blob instanceof Blob) {
+      return {
+        blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Endoscopy_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate endoscopy PDF");
   }
 
   if (record.templateType === "appendectomy") {
@@ -92,11 +102,10 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     );
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${cleanPatientId}_Appendectomy_Report_${formattedDate}.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Appendectomy_Report_${formattedDate}.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate appendectomy PDF");
@@ -111,11 +120,10 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     );
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${cleanPatientId}_Ventral_Hernia_Repair_Report_${formattedDate}.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Ventral_Hernia_Repair_Report_${formattedDate}.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate ventral hernia PDF");
@@ -131,11 +139,10 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     );
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${formatDOBForFilename(patientInfo.dateOfBirth)}_Colorectal_Resection_Report.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${formatDOBForFilename(patientInfo.dateOfBirth)}_Colorectal_Resection_Report.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate colorectal resection PDF");
@@ -151,11 +158,10 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     );
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${cleanPatientId}_Small_Bowel_Surgery_Report_${formattedDate}.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Small_Bowel_Surgery_Report_${formattedDate}.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate small bowel surgery PDF");
@@ -171,11 +177,10 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     );
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${cleanPatientId}_Cholecystectomy_Report_${formattedDate}.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Cholecystectomy_Report_${formattedDate}.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate cholecystectomy PDF");
@@ -185,15 +190,19 @@ export const exportSavedRecordPdf = async (record: PatientRecord) => {
     const result = await generatePeriAnalPDF(patientName, patientId, reportSnapshot?.periAnal, patientInfo);
 
     if (result.success && result.blob) {
-      downloadBlob(
-        result.blob,
-        `${cleanPatientName}_${cleanPatientId}_Peri_Anal_Report_${formattedDate}.pdf`,
-      );
-      return;
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Peri_Anal_Report_${formattedDate}.pdf`,
+      };
     }
 
     throw new Error(result.error || "Failed to generate peri-anal PDF");
   }
 
   throw new Error(`Unsupported template export: ${record.templateType as TemplateType}`);
+};
+
+export const exportSavedRecordPdf = async (record: PatientRecord) => {
+  const { blob, filename } = await generateSavedRecordPdfBlob(record);
+  downloadBlob(blob, filename);
 };

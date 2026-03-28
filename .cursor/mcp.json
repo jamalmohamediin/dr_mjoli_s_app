@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "url": "https://n8n.naiminvestments.com/mcp-server/http",
+      "headers": {
+        "Authorization": "Bearer ${env:N8N_MCP_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

@@ -11,12 +11,17 @@ export interface FinalDiagramCapture {
   type: 'gastroscopy' | 'colonoscopy';
 }
 
+interface FinalPdfOptions {
+  returnBlob?: boolean;
+}
+
 export const generateFinalPDF = async (
   patientName: string,
   patientId: string,
   diagrams?: FinalDiagramCapture[],
   reportData?: any,
-  uploads?: { gastroscopy?: File[]; colonoscopy?: File[] }
+  uploads?: { gastroscopy?: File[]; colonoscopy?: File[] },
+  options?: FinalPdfOptions,
 ) => {
   try {
     console.log('🔥 === GENERATING FINAL PDF (FINAL VERSION - ALL FIXES COMPLETED) ===');
@@ -872,9 +877,13 @@ export const generateFinalPDF = async (
     
     const filename = `${cleanPatientName}_${cleanPatientId}_Endoscopy_Report_${dateFormatted}.pdf`;
     
+    if (options?.returnBlob) {
+      return pdf.output('blob');
+    }
+
     console.log('=== SAVING FINAL PDF ===');
     pdf.save(filename);
-    
+
     return true;
   } catch (error) {
     console.error('Error in FINAL PDF generator:', error);

@@ -1,16 +1,16 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ReportPreview } from "@/components/ReportPreview";
-import { AppendectomyReportPreview } from "@/components/AppendectomyReportPreview";
-import { VentralHerniaReportPreview } from "@/components/VentralHerniaReportPreview";
-import { RectalCancerReportPreview } from "@/components/RectalCancerReportPreview";
-import { SmallBowelSurgeryReportPreview } from "@/components/SmallBowelSurgeryReportPreview";
-import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
-import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
-import { PatientRecord, PatientSummary, TemplateType, getTemplateLabel } from "@/utils/patientRecords";
+import { generateSavedRecordPdfBlob } from "@/utils/exportSavedRecord";
+import {
+  PatientAttachment,
+  PatientRecord,
+  PatientSummary,
+  TemplateType,
+  getTemplateLabel,
+} from "@/utils/patientRecords";
 
 interface PatientsTabProps {
   patients: PatientSummary[];
@@ -22,13 +22,26 @@ interface PatientsTabProps {
   onOpenRecord: (record: PatientRecord) => void;
   onStartNewEntry: (patient: PatientSummary, record?: PatientRecord | null) => void;
   onExportRecord: (record: PatientRecord) => void;
+  onDeleteRecord: (record: PatientRecord) => void;
+  onUploadPatientAttachments: (patientId: string, files: File[]) => void;
   onDeletePatient: (patientId: string) => void;
   onRestorePatient: (patientId: string) => void;
   onPermanentDeletePatients: (patientIds: string[]) => void;
 }
 
 type DateFilter = "all" | "today" | "week" | "month" | "date";
-type PatientPanelKey = "morePatientDetails" | "savedRecords" | "templatePreview";
+type PatientPanelKey =
+  | "morePatientDetails"
+  | "mediaAndDocuments"
+  | "savedRecords"
+  | "templatePreview";
+
+interface PdfPreviewState {
+  recordKey: string;
+  recordId: string;
+  url: string;
+  filename: string;
+}
 
 const TEMPLATE_TYPES: TemplateType[] = [
   "procedure",
@@ -140,34 +153,49 @@ const formatGenderValue = (value: string) => {
 
 const createInitialPatientPanelState = () => ({
   morePatientDetails: false,
+  mediaAndDocuments: false,
   savedRecords: false,
   templatePreview: false,
 });
 
-const renderRecordPreview = (record: PatientRecord | null) => {
-  if (!record) {
-    return <p className="text-sm text-gray-600">No saved template preview available.</p>;
+const formatAttachmentSize = (sizeBytes: number) => {
+  const nextSize = Number(sizeBytes || 0);
+  if (!nextSize) {
+    return "0 B";
   }
 
-  const report = record.reportSnapshot || {};
+  const units = ["B", "KB", "MB", "GB"];
+  let value = nextSize;
+  let unitIndex = 0;
 
-  switch (record.templateType) {
-    case "appendectomy":
-      return <AppendectomyReportPreview report={report} />;
-    case "ventralHernia":
-      return <VentralHerniaReportPreview report={report} />;
-    case "rectalCancer":
-      return <RectalCancerReportPreview report={report} />;
-    case "smallBowel":
-      return <SmallBowelSurgeryReportPreview report={report} />;
-    case "cholecystectomy":
-      return <CholecystectomyReportPreview report={report} />;
-    case "periAnal":
-      return <PeriAnalReportPreview report={report} />;
-    case "procedure":
-    default:
-      return <ReportPreview report={report} />;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
   }
+
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const renderAttachmentPreview = (attachment: PatientAttachment) => {
+  if (attachment.kind === "image") {
+    return (
+      <img
+        src={attachment.url}
+        alt={attachment.name}
+        className="h-40 w-full rounded-lg object-cover"
+      />
+    );
+  }
+
+  if (attachment.kind === "video") {
+    return <video className="h-40 w-full rounded-lg bg-black" controls src={attachment.url} />;
+  }
+
+  return (
+    <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-sm text-gray-600">
+      Document Preview Not Available
+    </div>
+  );
 };
 
 export const PatientsTab = ({
@@ -180,6 +208,8 @@ export const PatientsTab = ({
   onOpenRecord,
   onStartNewEntry,
   onExportRecord,
+  onDeleteRecord,
+  onUploadPatientAttachments,
   onDeletePatient,
   onRestorePatient,
   onPermanentDeletePatients,
@@ -197,6 +227,12 @@ export const PatientsTab = ({
   const [previewRecordIdsByPatient, setPreviewRecordIdsByPatient] = useState<Record<string, string>>(
     {},
   );
+  const [pdfPreviewState, setPdfPreviewState] = useState<PdfPreviewState | null>(null);
+  const [isPdfPreviewLoading, setIsPdfPreviewLoading] = useState(false);
+  const [pdfPreviewError, setPdfPreviewError] = useState("");
+  const pdfPreviewUrlRef = useRef("");
+  const pdfPreviewCacheRef = useRef<Map<string, { url: string; filename: string }>>(new Map());
+  const activePreviewGenerationKeyRef = useRef("");
   const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
   useEffect(() => {
@@ -218,6 +254,30 @@ export const PatientsTab = ({
   );
 
   const procedureOptions = useMemo(() => getUniqueProcedureFilters(records), [records]);
+
+  const activePreviewRecord = useMemo(() => {
+    if (!expandedPatientId) {
+      return null;
+    }
+
+    const expandedPatientRecords = getVisiblePatientRecords(records, expandedPatientId, showRecycleBin);
+    if (expandedPatientRecords.length === 0) {
+      return null;
+    }
+
+    const selectedPreviewRecordId = previewRecordIdsByPatient[expandedPatientId];
+    return (
+      expandedPatientRecords.find((record) => record.id === selectedPreviewRecordId) ||
+      expandedPatientRecords.find((record) => record.id === expandedPatientRecords[0]?.id) ||
+      null
+    );
+  }, [expandedPatientId, previewRecordIdsByPatient, records, showRecycleBin]);
+
+  const isTemplatePreviewOpen = expandedPatientId
+    ? Boolean(
+        (expandedPatientPanels[expandedPatientId] || createInitialPatientPanelState()).templatePreview,
+      )
+    : false;
 
   const visiblePatients = useMemo(
     () =>
@@ -307,6 +367,93 @@ export const PatientsTab = ({
       previousIds.filter((patientId) => visibleIdSet.has(patientId)),
     );
   }, [showRecycleBin, visiblePatients]);
+
+  useEffect(() => {
+    return () => {
+      pdfPreviewCacheRef.current.forEach((entry) => {
+        URL.revokeObjectURL(entry.url);
+      });
+      pdfPreviewCacheRef.current.clear();
+      pdfPreviewUrlRef.current = "";
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTemplatePreviewOpen || !activePreviewRecord) {
+      setIsPdfPreviewLoading(false);
+      setPdfPreviewError("");
+      activePreviewGenerationKeyRef.current = "";
+      return;
+    }
+
+    const recordKey = `${activePreviewRecord.id}:${activePreviewRecord.updatedAt}`;
+    if (pdfPreviewState?.recordKey === recordKey) {
+      return;
+    }
+
+     const cachedPreview = pdfPreviewCacheRef.current.get(recordKey);
+     if (cachedPreview) {
+       pdfPreviewUrlRef.current = cachedPreview.url;
+       setPdfPreviewState({
+         recordKey,
+         recordId: activePreviewRecord.id,
+         url: cachedPreview.url,
+         filename: cachedPreview.filename,
+       });
+       setIsPdfPreviewLoading(false);
+       setPdfPreviewError("");
+       return;
+     }
+
+    if (activePreviewGenerationKeyRef.current === recordKey) {
+      return;
+    }
+
+    let isCancelled = false;
+    activePreviewGenerationKeyRef.current = recordKey;
+
+    setIsPdfPreviewLoading(true);
+    setPdfPreviewError("");
+
+    generateSavedRecordPdfBlob(activePreviewRecord)
+      .then(({ blob, filename }) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const nextObjectUrl = URL.createObjectURL(blob);
+        pdfPreviewCacheRef.current.set(recordKey, {
+          url: nextObjectUrl,
+          filename,
+        });
+        pdfPreviewUrlRef.current = nextObjectUrl;
+        setPdfPreviewState({
+          recordKey,
+          recordId: activePreviewRecord.id,
+          url: nextObjectUrl,
+          filename,
+        });
+      })
+      .catch((error) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setPdfPreviewError(error instanceof Error ? error.message : "Failed to load PDF preview.");
+      })
+      .finally(() => {
+        if (activePreviewGenerationKeyRef.current === recordKey) {
+          activePreviewGenerationKeyRef.current = "";
+        }
+        if (!isCancelled) {
+          setIsPdfPreviewLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activePreviewRecord, isTemplatePreviewOpen, pdfPreviewState?.recordKey]);
 
   const deletedPatientIds = useMemo(
     () => visiblePatients.map((patient) => patient.id),
@@ -475,6 +622,9 @@ export const PatientsTab = ({
                     (record) => record.id === previewRecordIdsByPatient[patient.id],
                   ) ||
                   latestRecord;
+                const patientAttachments = Array.isArray(patient.attachments)
+                  ? patient.attachments
+                  : [];
                 const operationsSummary = Array.from(
                   new Set(
                     patientRecords
@@ -631,6 +781,35 @@ export const PatientsTab = ({
                               >
                                 Open Template
                               </Button>
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <input
+                                  id={`patient-attachments-${patient.id}`}
+                                  className="hidden"
+                                  type="file"
+                                  multiple
+                                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                                  onChange={(event) => {
+                                    const selectedFiles = Array.from(event.target.files || []);
+                                    if (selectedFiles.length > 0) {
+                                      onUploadPatientAttachments(patient.id, selectedFiles);
+                                    }
+                                    event.currentTarget.value = "";
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    const element = document.getElementById(
+                                      `patient-attachments-${patient.id}`,
+                                    ) as HTMLInputElement | null;
+                                    element?.click();
+                                  }}
+                                >
+                                  <Upload className="mr-2 h-4 w-4" />
+                                  Upload Media/Documents
+                                </Button>
+                              </div>
                               <Button
                                 size="sm"
                                 onClick={(event) => {
@@ -737,6 +916,73 @@ export const PatientsTab = ({
                           ) : null}
                         </div>
 
+                        <div className="rounded-xl bg-white/70 p-4">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between text-left"
+                            onClick={() => togglePatientPanel(patient.id, "mediaAndDocuments")}
+                          >
+                            <span className="text-sm font-semibold text-gray-900">
+                              Media & Documents
+                            </span>
+                            {activePanels.mediaAndDocuments ? (
+                              <ChevronUp className="h-4 w-4 text-gray-500" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-gray-500" />
+                            )}
+                          </button>
+                          {activePanels.mediaAndDocuments ? (
+                            <div className="pt-4">
+                              {patientAttachments.length === 0 ? (
+                                <p className="text-sm text-gray-600">
+                                  No media or documents uploaded for this patient yet.
+                                </p>
+                              ) : (
+                                <div className="grid gap-4 lg:grid-cols-2">
+                                  {patientAttachments.map((attachment) => (
+                                    <div
+                                      key={attachment.id}
+                                      className="space-y-3 rounded-xl border border-white/50 bg-white/70 p-4"
+                                    >
+                                      {renderAttachmentPreview(attachment)}
+                                      <div className="space-y-1">
+                                        <p className="truncate text-sm font-semibold text-gray-900">
+                                          {attachment.name}
+                                        </p>
+                                        <p className="text-xs text-gray-600">
+                                          {attachment.kind.charAt(0).toUpperCase() +
+                                            attachment.kind.slice(1)}{" "}
+                                          | {formatAttachmentSize(attachment.sizeBytes)} | Uploaded:{" "}
+                                          {formatDisplayDate(attachment.uploadedAt)}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        <a
+                                          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                          href={attachment.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          View
+                                        </a>
+                                        <a
+                                          className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                          href={attachment.url}
+                                          download={attachment.name}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          Download
+                                        </a>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+
                         {!showRecycleBin ? (
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -813,6 +1059,13 @@ export const PatientsTab = ({
                                         </Button>
                                         <Button
                                           size="sm"
+                                          variant="destructive"
+                                          onClick={() => onDeleteRecord(record)}
+                                        >
+                                          Delete
+                                        </Button>
+                                        <Button
+                                          size="sm"
                                           variant="outline"
                                           onClick={() => onStartNewEntry(patient, record)}
                                         >
@@ -847,8 +1100,40 @@ export const PatientsTab = ({
                               )}
                             </button>
                             {activePanels.templatePreview ? (
-                              <div className="overflow-x-auto rounded-xl border border-white/60 bg-white p-4 mt-4">
-                                {renderRecordPreview(previewRecord)}
+                              <div className="mt-4 space-y-3 rounded-xl border border-white/60 bg-white p-4">
+                                {isPdfPreviewLoading ? (
+                                  <p className="text-sm text-gray-600">Loading exact PDF preview...</p>
+                                ) : pdfPreviewError ? (
+                                  <p className="text-sm text-red-600">{pdfPreviewError}</p>
+                                ) : previewRecord && pdfPreviewState?.url ? (
+                                  <>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+                                      <span>
+                                        Showing exact exported PDF layout for{" "}
+                                        <span className="font-medium text-gray-800">
+                                          {previewRecord.templateLabel}
+                                        </span>
+                                      </span>
+                                      <a
+                                        className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        href={pdfPreviewState.url}
+                                        download={pdfPreviewState.filename}
+                                      >
+                                        Download This Preview
+                                      </a>
+                                    </div>
+                                    <iframe
+                                      key={pdfPreviewState.url}
+                                      className="h-[1200px] w-full rounded-lg border border-gray-200 bg-white"
+                                      src={pdfPreviewState.url}
+                                      title="Template PDF Preview"
+                                    />
+                                  </>
+                                ) : (
+                                  <p className="text-sm text-gray-600">
+                                    No saved template preview available.
+                                  </p>
+                                )}
                               </div>
                             ) : null}
                           </div>

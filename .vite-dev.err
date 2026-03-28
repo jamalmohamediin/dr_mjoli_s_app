@@ -1,0 +1,8 @@
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+(node:37820) Warning: Label 'JIT TOTAL' already exists for console.time()
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37820) Warning: Label 'Reading changed files' already exists for console.time()
+(node:37820) Warning: No such label 'Reading changed files' for console.timeEnd()
+(node:37820) Warning: No such label 'JIT TOTAL' for console.timeEnd()

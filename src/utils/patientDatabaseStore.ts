@@ -2,6 +2,7 @@ import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore
 import { firestoreDb } from "@/lib/firebase";
 import {
   createEmptyPatientDatabaseCache,
+  PatientAttachment,
   PatientDatabaseCache,
   PatientRecord,
   PatientSummary,
@@ -33,6 +34,20 @@ type SyncQueueItem =
       createdAt: string;
       patientIds: string[];
       recordIds: string[];
+    }
+  | {
+      id: string;
+      type: "setPatientAttachments";
+      createdAt: string;
+      patientId: string;
+      attachments: PatientAttachment[];
+    }
+  | {
+      id: string;
+      type: "deletePatientRecord";
+      createdAt: string;
+      patient: PatientSummary;
+      recordId: string;
     };
 
 const parseStoredJson = <T,>(key: string, fallback: T): T => {
@@ -90,8 +105,28 @@ const savePatientSyncQueue = (queue: SyncQueueItem[]) => {
 
 export const enqueuePatientSyncItem = (item: Omit<SyncQueueItem, "id" | "createdAt">) => {
   const queue = loadPatientSyncQueue();
+  const dedupedQueue = queue.filter((queuedItem) => {
+    if (item.type === "upsertPatientRecord" && queuedItem.type === "upsertPatientRecord") {
+      return queuedItem.record.id !== item.record.id;
+    }
+
+    if (item.type === "setPatientAttachments" && queuedItem.type === "setPatientAttachments") {
+      return queuedItem.patientId !== item.patientId;
+    }
+
+    if (item.type === "setPatientDeletedState" && queuedItem.type === "setPatientDeletedState") {
+      return queuedItem.patientId !== item.patientId;
+    }
+
+    if (item.type === "deletePatientRecord" && queuedItem.type === "deletePatientRecord") {
+      return queuedItem.recordId !== item.recordId;
+    }
+
+    return true;
+  });
+
   const nextQueue = [
-    ...queue,
+    ...dedupedQueue,
     {
       ...item,
       id: createQueueId(),
@@ -193,6 +228,40 @@ const syncPermanentPatientDelete = async (patientIds: string[], recordIds: strin
   await batch.commit();
 };
 
+const syncPatientAttachments = async (
+  patientId: string,
+  attachments: PatientAttachment[],
+) => {
+  if (!firestoreDb) {
+    throw new Error("Firestore is not configured");
+  }
+
+  await setDoc(
+    doc(firestoreDb, "patients", patientId),
+    {
+      attachments: toSerializable(attachments),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+};
+
+const syncDeletePatientRecord = async (
+  patient: PatientSummary,
+  recordId: string,
+) => {
+  if (!firestoreDb) {
+    throw new Error("Firestore is not configured");
+  }
+
+  const batch = writeBatch(firestoreDb);
+  batch.set(doc(firestoreDb, "patients", patient.id), toSerializable(patient), {
+    merge: true,
+  });
+  batch.delete(doc(firestoreDb, "patient_records", recordId));
+  await batch.commit();
+};
+
 export const processPatientSyncQueue = async () => {
   if (!firestoreDb || (typeof navigator !== "undefined" && !navigator.onLine)) {
     return { processed: 0, failed: loadPatientSyncQueue().length };
@@ -210,6 +279,10 @@ export const processPatientSyncQueue = async () => {
         await syncPatientDeletedState(item.patientId, item.deletedAt, item.recordIds);
       } else if (item.type === "permanentlyDeletePatients") {
         await syncPermanentPatientDelete(item.patientIds, item.recordIds);
+      } else if (item.type === "setPatientAttachments") {
+        await syncPatientAttachments(item.patientId, item.attachments);
+      } else if (item.type === "deletePatientRecord") {
+        await syncDeletePatientRecord(item.patient, item.recordId);
       }
       processed += 1;
     } catch (error) {
@@ -249,6 +322,26 @@ export const queuePermanentPatientDeleteSync = (
     type: "permanentlyDeletePatients",
     patientIds,
     recordIds,
+  });
+
+export const queuePatientAttachmentsSync = (
+  patientId: string,
+  attachments: PatientAttachment[],
+) =>
+  enqueuePatientSyncItem({
+    type: "setPatientAttachments",
+    patientId,
+    attachments: toSerializable(attachments),
+  });
+
+export const queuePatientRecordDeleteSync = (
+  patient: PatientSummary,
+  recordId: string,
+) =>
+  enqueuePatientSyncItem({
+    type: "deletePatientRecord",
+    patient: toSerializable(patient),
+    recordId,
   });
 
 export const resetPatientDatabaseCache = () => {

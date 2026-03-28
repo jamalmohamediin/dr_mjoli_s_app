@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="title desc">
+  <title id="title">Lithotomy Position View</title>
+  <desc id="desc">Lithotomy position peri-anal diagram for interactive markings.</desc>
+  <rect width="900" height="640" fill="#ffffff"/>
+  <text x="450" y="62" fill="#151515" font-family="Arial, Helvetica, sans-serif" font-size="40" text-anchor="middle">
+    Lithotomy Position View
+  </text>
+
+  <g opacity="0.18" stroke="#d2d2d2" stroke-width="1">
+    <line x1="0" y1="170" x2="900" y2="170"/>
+    <line x1="0" y1="410" x2="900" y2="410"/>
+    <line x1="300" y1="0" x2="300" y2="640"/>
+    <line x1="600" y1="0" x2="600" y2="640"/>
+  </g>
+
+  <g transform="translate(56 110)">
+    <path d="M118 69C176 44 240 42 299 65C339 81 372 104 394 134C349 149 309 170 273 202C226 243 198 292 174 345C145 328 118 309 93 283C50 239 31 189 39 141C47 108 74 88 118 69Z" fill="#faecd8"/>
+    <path d="M670 69C612 44 548 42 489 65C449 81 416 104 394 134C439 149 479 170 515 202C562 243 590 292 614 345C643 328 670 309 695 283C738 239 757 189 749 141C741 108 714 88 670 69Z" fill="#faecd8"/>
+    <path d="M198 119C226 98 260 87 302 87C348 87 379 99 394 119C364 143 344 176 338 223C331 279 352 336 394 390C436 336 457 279 450 223C444 176 424 143 394 119C409 99 440 87 486 87C528 87 562 98 590 119C566 157 554 202 556 255C558 310 575 358 611 409C561 439 497 455 394 456C291 455 227 439 177 409C213 358 230 310 232 255C234 202 222 157 198 119Z" fill="#f7dfcb"/>
+    <path d="M332 144C348 129 370 120 394 120C418 120 440 129 456 144C467 155 472 171 472 192C472 226 459 253 440 277C429 292 415 306 394 321C373 306 359 292 348 277C329 253 316 226 316 192C316 171 321 155 332 144Z" fill="#d89d85"/>
+    <path d="M361 171C370 162 381 158 394 158C407 158 418 162 427 171C433 177 436 185 436 197C436 216 428 231 415 245C409 252 401 260 394 265C387 260 379 252 373 245C360 231 352 216 352 197C352 185 355 177 361 171Z" fill="#6a3f39"/>
+    <path d="M302 166C315 148 326 137 341 128" fill="none" stroke="#7c6559" stroke-linecap="round" stroke-width="4"/>
+    <path d="M486 166C473 148 462 137 447 128" fill="none" stroke="#7c6559" stroke-linecap="round" stroke-width="4"/>
+    <path d="M394 89V120" fill="none" stroke="#7c6559" stroke-linecap="round" stroke-width="4"/>
+    <path d="M394 320V408" fill="none" stroke="#7c6559" stroke-linecap="round" stroke-width="4"/>
+    <path d="M220 240H308" fill="none" stroke="#8d776a" stroke-dasharray="16 12" stroke-linecap="round" stroke-width="4"/>
+    <path d="M480 240H568" fill="none" stroke="#8d776a" stroke-dasharray="16 12" stroke-linecap="round" stroke-width="4"/>
+  </g>
+
+  <g fill="#ffffff" stroke="#222222" stroke-width="3">
+    <circle cx="308" cy="210" r="28"/>
+    <circle cx="300" cy="338" r="28"/>
+    <circle cx="316" cy="464" r="28"/>
+    <circle cx="450" cy="514" r="28"/>
+    <circle cx="596" cy="210" r="28"/>
+    <circle cx="604" cy="338" r="28"/>
+    <circle cx="586" cy="464" r="28"/>
+    <circle cx="282" cy="120" r="28"/>
+    <circle cx="618" cy="120" r="28"/>
+  </g>
+  <g fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" text-anchor="middle">
+    <text x="308" y="222">1</text>
+    <text x="300" y="350">9</text>
+    <text x="316" y="476">6</text>
+    <text x="450" y="526">6</text>
+    <text x="596" y="222">9</text>
+    <text x="604" y="350">7</text>
+    <text x="586" y="476">8</text>
+    <text x="282" y="132">11</text>
+    <text x="618" y="132">11</text>
+  </g>
+</svg>

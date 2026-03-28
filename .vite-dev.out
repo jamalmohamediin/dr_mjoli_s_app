@@ -1,0 +1,350 @@
+Re-optimizing dependencies because lockfile has changed
+
+  [32m[1mVITE[22m v5.4.19[39m  [2mready in [0m[1m776[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m8080[22m/[39m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Setting up new context...
+Finding changed files: 10.953ms
+Reading changed files: 645.196ms
+Sorting candidates: 10.751ms
+Generate rules: 239.863ms
+Build stylesheet: 3.336ms
+Potential classes:  15598
+Active contexts:  1
+JIT TOTAL: 1.107s
+
+
+[2m1:11:47 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 17.727ms
+Reading changed files: 9.873ms
+Sorting candidates: 0.026ms
+Generate rules: 0.224ms
+Build stylesheet: 0.004ms
+Potential classes:  58
+Active contexts:  1
+JIT TOTAL: 64.835ms
+
+
+[2m1:11:59 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 8.168ms
+Reading changed files: 158.531ms
+Sorting candidates: 9.44ms
+Generate rules: 12.121ms
+Build stylesheet: 0.006ms
+Potential classes:  3801
+Active contexts:  1
+JIT TOTAL: 220.912ms
+
+
+[2m1:12:10 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 10.665ms
+Reading changed files: 109.633ms
+Sorting candidates: 2.85ms
+Generate rules: 4.745ms
+Build stylesheet: 0.002ms
+Potential classes:  3802
+Active contexts:  1
+JIT TOTAL: 156.469ms
+
+
+[2m1:12:21 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 8.833ms
+Reading changed files: 126.046ms
+Sorting candidates: 3.498ms
+Generate rules: 5.102ms
+Build stylesheet: 0.003ms
+Potential classes:  3805
+Active contexts:  1
+JIT TOTAL: 170.907ms
+
+
+[2m1:12:31 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 7.464ms
+Reading changed files: 116.668ms
+Sorting candidates: 2.266ms
+Generate rules: 3.034ms
+Build stylesheet: 0.002ms
+Potential classes:  3805
+Active contexts:  1
+JIT TOTAL: 147.519ms
+
+
+[2m1:12:44 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 18.762ms
+Reading changed files: 4.791ms
+Sorting candidates: 0.208ms
+Generate rules: 0.497ms
+Build stylesheet: 0.002ms
+Potential classes:  245
+Active contexts:  1
+JIT TOTAL: 57.474ms
+
+
+[2m1:24:19 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/clear-cache.html[22m
+[2m1:24:19 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/index.html[22m
+[2m1:24:19 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/clear-cache.html[22m
+[2m1:24:19 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/index.html[22m
+[2m1:34:50 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 55.447ms
+Reading changed files: 65.258ms
+Sorting candidates: 1.47ms
+Generate rules: 2.286ms
+Build stylesheet: 0.005ms
+Potential classes:  962
+Active contexts:  1
+JIT TOTAL: 222.55ms
+
+
+[2m1:35:19 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 51.825ms
+Reading changed files: 8.605ms
+Sorting candidates: 0.352ms
+Generate rules: 0.693ms
+Build stylesheet: 0.005ms
+Potential classes:  238
+Active contexts:  1
+JIT TOTAL: 159.941ms
+
+
+[2m1:35:45 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 33.592ms
+Reading changed files: 150.457ms
+Sorting candidates: 1.324ms
+Generate rules: 2.169ms
+Build stylesheet: 0.006ms
+Potential classes:  755
+Active contexts:  1
+JIT TOTAL: 245.835ms
+
+
+[2m1:36:03 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 47.139ms
+Reading changed files: 158.711ms
+Sorting candidates: 1.409ms
+Generate rules: 2.312ms
+Build stylesheet: 0.007ms
+Potential classes:  765
+Active contexts:  1
+JIT TOTAL: 296.769ms
+
+
+[2m1:36:22 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 50.253ms
+Reading changed files: 107.046ms
+Sorting candidates: 1.737ms
+Generate rules: 2.843ms
+Build stylesheet: 0.009ms
+Potential classes:  804
+Active contexts:  1
+JIT TOTAL: 235.461ms
+
+
+[2m1:36:43 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 39.328ms
+Reading changed files: 86.201ms
+Sorting candidates: 1.638ms
+Generate rules: 2.392ms
+Build stylesheet: 0.005ms
+Potential classes:  804
+Active contexts:  1
+JIT TOTAL: 205.524ms
+
+
+[2m1:36:57 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 39.813ms
+Reading changed files: 90.617ms
+Sorting candidates: 1.399ms
+Generate rules: 1.964ms
+Build stylesheet: 0.005ms
+Potential classes:  804
+Active contexts:  1
+JIT TOTAL: 197.456ms
+
+
+[2m1:37:15 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 37.792ms
+Reading changed files: 61.823ms
+Sorting candidates: 1.369ms
+Generate rules: 3.884ms
+Build stylesheet: 9.705ms
+Potential classes:  823
+Active contexts:  1
+JIT TOTAL: 176.648ms
+
+
+[2m4:16:45 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 8.286ms
+Reading changed files: 22.968ms
+Sorting candidates: 0.365ms
+Generate rules: 2.374ms
+Build stylesheet: 0.002ms
+Potential classes:  825
+Active contexts:  1
+JIT TOTAL: 59.861ms
+
+
+[2m4:17:15 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 20.083ms
+Reading changed files: 30.345ms
+Sorting candidates: 0.324ms
+Generate rules: 0.528ms
+Build stylesheet: 0.001ms
+Potential classes:  820
+Active contexts:  1
+JIT TOTAL: 69.487ms
+
+
+[2m6:30:15 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 9.144ms
+Reading changed files: 9.277ms
+Sorting candidates: 0.084ms
+Generate rules: 0.334ms
+Build stylesheet: 0.001ms
+Potential classes:  177
+Active contexts:  1
+JIT TOTAL: 34.839ms
+
+
+[2m6:30:29 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 5.116ms
+Reading changed files: 217.064ms
+Sorting candidates: 2.14ms
+Generate rules: 4.239ms
+Build stylesheet: 0.002ms
+Potential classes:  3818
+Active contexts:  1
+JIT TOTAL: 240.649ms
+
+
+[2m6:30:41 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 5.775ms
+Reading changed files: 112.913ms
+Sorting candidates: 2.037ms
+Generate rules: 2.721ms
+Build stylesheet: 0.001ms
+Potential classes:  3818
+Active contexts:  1
+JIT TOTAL: 135.118ms
+
+
+[2m6:30:54 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 5.014ms
+Reading changed files: 140.827ms
+Sorting candidates: 1.822ms
+Generate rules: 2.419ms
+Build stylesheet: 0.001ms
+Potential classes:  3818
+Active contexts:  1
+JIT TOTAL: 160.71ms
+
+
+[2m6:45:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx, /src/components/reports/ReportsTab.tsx, /src/components/patients/PatientsTab.tsx[22m
+[2m6:45:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/Index.tsx[22m
+[2m6:45:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+[2m6:45:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 7.223ms
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 11.553ms
+Reading changed files: 326.478ms
+Sorting candidates: 2.355ms
+Generate rules: 3.779ms
+Build stylesheet: 0.002ms
+Potential classes:  4594
+Active contexts:  1
+JIT TOTAL: 364.287ms
+
+
+Sorting candidates: 2.227ms
+Generate rules: 3.017ms
+Build stylesheet: 0.001ms
+Potential classes:  4594
+Active contexts:  1
+
+
+[2m7:15:44 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/patients/PatientsTab.tsx, /src/index.css[22m
+[2m7:15:44 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Index.tsx, /src/index.css[22m
+
+
+Source path: d:/Naim Tech/Clients/Dr. Mjoli/App/src/index.css
+Finding changed files: 7.54ms
+Reading changed files: 103.602ms
+Sorting candidates: 2.602ms
+Generate rules: 3.471ms
+Build stylesheet: 0.001ms
+Potential classes:  4332
+Active contexts:  1
+JIT TOTAL: 134.392ms
+
+
+[2m7:41:04 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/clear-cache.html[22m
+[2m7:41:04 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/index.html[22m
+[2m7:41:04 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/clear-cache.html[22m
+[2m7:41:04 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2m.yoyo/snapshot/index.html[22m

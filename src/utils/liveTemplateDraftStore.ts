@@ -21,6 +21,18 @@ export interface LiveTemplateDraftSnapshot {
   updatedBySessionId: string;
 }
 
+export const createLiveTemplateDraftSignature = (payload: Record<string, any>) => {
+  const serializedPayload = JSON.stringify(payload || {});
+  let hash = 2166136261;
+
+  for (let index = 0; index < serializedPayload.length; index += 1) {
+    hash ^= serializedPayload.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `${serializedPayload.length}:${(hash >>> 0).toString(16)}`;
+};
+
 const getLiveTemplateDraftRef = () =>
   firestoreDb
     ? doc(

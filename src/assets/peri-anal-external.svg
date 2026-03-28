@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="title desc">
+  <title id="title">External Perianal Skin View</title>
+  <desc id="desc">External perianal skin diagram for interactive peri-anal markings.</desc>
+  <rect width="900" height="640" fill="#ffffff"/>
+  <text x="450" y="62" fill="#151515" font-family="Arial, Helvetica, sans-serif" font-size="40" text-anchor="middle">
+    External Perianal Skin View
+  </text>
+
+  <g opacity="0.18" stroke="#d2d2d2" stroke-width="1">
+    <line x1="0" y1="170" x2="900" y2="170"/>
+    <line x1="0" y1="410" x2="900" y2="410"/>
+    <line x1="275" y1="0" x2="275" y2="640"/>
+    <line x1="625" y1="0" x2="625" y2="640"/>
+  </g>
+
+  <g transform="translate(38 110)">
+    <ellipse cx="210" cy="214" rx="230" ry="188" fill="#fbf3ea"/>
+    <ellipse cx="614" cy="214" rx="230" ry="188" fill="#fbf3ea"/>
+    <path d="M0 136C33 98 84 75 138 74C164 73 185 78 209 92C149 142 129 199 130 316C86 311 45 282 15 244C-3 220 -10 174 0 136Z" fill="#f8e7d3"/>
+    <path d="M824 136C791 98 740 75 686 74C660 73 639 78 615 92C675 142 695 199 694 316C738 311 779 282 809 244C827 220 834 174 824 136Z" fill="#f8e7d3"/>
+    <path d="M122 79C183 65 238 70 299 102C364 137 390 197 390 248V356C286 349 175 325 112 269C74 235 55 183 65 143C72 113 90 90 122 79Z" fill="#faecd9"/>
+    <path d="M702 79C641 65 586 70 525 102C460 137 434 197 434 248V356C538 349 649 325 712 269C750 235 769 183 759 143C752 113 734 90 702 79Z" fill="#faecd9"/>
+
+    <path d="M352 170C379 148 444 148 471 170C488 183 497 200 497 225C497 252 484 270 463 284C449 294 431 301 411 301C392 301 374 294 360 284C339 270 326 252 326 225C326 200 335 183 352 170Z" fill="#f2c7ad"/>
+    <path d="M379 197C390 184 402 178 411 178C421 178 432 184 442 197C454 212 457 229 451 243C443 260 431 274 411 287C391 274 379 260 371 243C365 229 368 212 379 197Z" fill="#9b6558"/>
+    <path d="M392 211C398 204 405 201 411 201C418 201 425 204 430 211C437 221 439 231 435 240C430 252 423 261 411 271C399 261 392 252 387 240C383 231 385 221 392 211Z" fill="#5a312c"/>
+
+    <g fill="none" stroke="#6f564a" stroke-linecap="round" stroke-width="3">
+      <path d="M339 187C323 171 309 168 294 168"/>
+      <path d="M336 205C314 195 299 195 284 197"/>
+      <path d="M333 225C313 224 298 228 282 238"/>
+      <path d="M340 248C320 254 307 264 297 281"/>
+      <path d="M353 163C347 145 346 132 349 117"/>
+      <path d="M469 187C485 171 499 168 514 168"/>
+      <path d="M472 205C494 195 509 195 524 197"/>
+      <path d="M475 225C495 224 510 228 526 238"/>
+      <path d="M468 248C488 254 501 264 511 281"/>
+      <path d="M455 163C461 145 462 132 459 117"/>
+    </g>
+
+    <g fill="none" stroke="#9b7d6e" stroke-linecap="round" stroke-width="2" opacity="0.75">
+      <path d="M396 306C386 324 381 342 382 363"/>
+      <path d="M426 306C436 324 441 342 440 363"/>
+    </g>
+  </g>
+
+  <g fill="#ffffff" stroke="#222222" stroke-width="3">
+    <circle cx="318" cy="170" r="28"/>
+    <circle cx="304" cy="268" r="28"/>
+    <circle cx="310" cy="394" r="28"/>
+    <circle cx="328" cy="490" r="28"/>
+    <circle cx="582" cy="170" r="28"/>
+    <circle cx="598" cy="268" r="28"/>
+    <circle cx="590" cy="394" r="28"/>
+    <circle cx="574" cy="490" r="28"/>
+  </g>
+  <g fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" text-anchor="middle">
+    <text x="318" y="182">1</text>
+    <text x="304" y="280">1</text>
+    <text x="310" y="406">8</text>
+    <text x="328" y="502">3</text>
+    <text x="582" y="182">1</text>
+    <text x="598" y="280">7</text>
+    <text x="590" y="406">8</text>
+    <text x="574" y="502">4</text>
+  </g>
+</svg>

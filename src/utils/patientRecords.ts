@@ -30,6 +30,17 @@ export interface PatientRecord {
   reportSnapshot: any;
 }
 
+export interface PatientAttachment {
+  id: string;
+  name: string;
+  url: string;
+  storagePath: string;
+  mimeType: string;
+  kind: "image" | "video" | "document";
+  sizeBytes: number;
+  uploadedAt: string;
+}
+
 export interface PatientSummary {
   id: string;
   name: string;
@@ -58,6 +69,7 @@ export interface PatientSummary {
   latestRecordDate: string;
   totalRecords: number;
   procedureCounts: Record<string, number>;
+  attachments: PatientAttachment[];
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -273,6 +285,35 @@ export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: a
   const normalizedDob = text(info.dateOfBirth);
   const normalizedPatientId = text(info.patientId).toLowerCase();
 
+  const byNameAndDob =
+    normalizedName && normalizedDob
+      ? patients.find(
+          (patient) =>
+            !patient.deletedAt &&
+            text(patient.name).toLowerCase() === normalizedName &&
+            text(patient.dateOfBirth) === normalizedDob,
+        )
+      : null;
+
+  if (byNameAndDob) {
+    return byNameAndDob.id;
+  }
+
+  const byNameAndIdAndDob =
+    normalizedName && normalizedPatientId && normalizedDob
+      ? patients.find(
+          (patient) =>
+            !patient.deletedAt &&
+            text(patient.name).toLowerCase() === normalizedName &&
+            text(patient.patientId).toLowerCase() === normalizedPatientId &&
+            text(patient.dateOfBirth) === normalizedDob,
+        )
+      : null;
+
+  if (byNameAndIdAndDob) {
+    return byNameAndIdAndDob.id;
+  }
+
   const byPatientIdAndDob =
     normalizedPatientId && normalizedDob
       ? patients.find(
@@ -295,36 +336,7 @@ export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: a
       )
     : null;
 
-  if (byPatientId) {
-    return byPatientId.id;
-  }
-
-  const byNameAndIdAndDob =
-    normalizedName && normalizedPatientId && normalizedDob
-      ? patients.find(
-          (patient) =>
-            !patient.deletedAt &&
-            text(patient.name).toLowerCase() === normalizedName &&
-            text(patient.patientId).toLowerCase() === normalizedPatientId &&
-            text(patient.dateOfBirth) === normalizedDob,
-        )
-      : null;
-
-  if (byNameAndIdAndDob) {
-    return byNameAndIdAndDob.id;
-  }
-
-  const byNameAndDob =
-    normalizedName && normalizedDob
-      ? patients.find(
-          (patient) =>
-            !patient.deletedAt &&
-            text(patient.name).toLowerCase() === normalizedName &&
-            text(patient.dateOfBirth) === normalizedDob,
-        )
-      : null;
-
-  return byNameAndDob?.id || null;
+  return byPatientId?.id || null;
 };
 
 export const buildPatientRecord = ({
@@ -426,6 +438,7 @@ export const buildPatientSummary = ({
     latestRecordDate: latestRecord?.recordDate || existingPatient?.latestRecordDate || "",
     totalRecords: visibleRecords.length,
     procedureCounts,
+    attachments: existingPatient?.attachments || [],
     createdAt:
       existingPatient?.createdAt || latestRecord?.createdAt || new Date().toISOString(),
     updatedAt:
@@ -454,6 +467,58 @@ export const upsertPatientRecordInCache = (
   });
   const nextPatients = sortPatients([
     ...cache.patients.filter((patient) => patient.id !== record.patientDocId),
+    nextPatient,
+  ]);
+
+  return {
+    patients: nextPatients,
+    records: nextRecords,
+  };
+};
+
+export const removePatientRecordFromCache = (
+  cache: PatientDatabaseCache,
+  recordId: string,
+) => {
+  const existingRecord = cache.records.find((record) => record.id === recordId) || null;
+  if (!existingRecord) {
+    return cache;
+  }
+
+  const nextRecords = sortRecords(
+    cache.records.filter((record) => record.id !== recordId),
+  );
+  const existingPatient =
+    cache.patients.find((patient) => patient.id === existingRecord.patientDocId) || null;
+
+  if (!existingPatient) {
+    return {
+      patients: cache.patients,
+      records: nextRecords,
+    };
+  }
+
+  const remainingVisibleRecords = nextRecords.filter(
+    (record) => record.patientDocId === existingRecord.patientDocId && !record.deletedAt,
+  );
+  const nextPatient = buildPatientSummary({
+    existingPatient:
+      remainingVisibleRecords.length === 0
+        ? {
+            ...existingPatient,
+            latestTemplateType: "procedure",
+            latestTemplateLabel: "",
+            latestRecordId: "",
+            latestRecordDate: "",
+            updatedAt: new Date().toISOString(),
+          }
+        : existingPatient,
+    patientDocId: existingRecord.patientDocId,
+    records: nextRecords,
+  });
+
+  const nextPatients = sortPatients([
+    ...cache.patients.filter((patient) => patient.id !== existingRecord.patientDocId),
     nextPatient,
   ]);
 
@@ -514,3 +579,5 @@ export const removePatientsFromCache = (
 };
 
 export const createNewPatientId = () => createId("patient");
+
+export const createNewPatientRecordId = () => createId("record");

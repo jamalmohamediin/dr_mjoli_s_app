@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="title desc">
+  <title id="title">Anal Clock Diagram</title>
+  <desc id="desc">Anal clock diagram for interactive peri-anal markings.</desc>
+  <rect width="900" height="640" fill="#ffffff"/>
+  <text x="450" y="62" fill="#151515" font-family="Arial, Helvetica, sans-serif" font-size="40" text-anchor="middle">
+    Anal Clock Diagram
+  </text>
+
+  <g opacity="0.18" stroke="#d2d2d2" stroke-width="1">
+    <line x1="0" y1="170" x2="900" y2="170"/>
+    <line x1="0" y1="410" x2="900" y2="410"/>
+    <line x1="300" y1="0" x2="300" y2="640"/>
+    <line x1="600" y1="0" x2="600" y2="640"/>
+  </g>
+
+  <g transform="translate(450 338)">
+    <circle cx="0" cy="0" r="210" fill="none" stroke="#222222" stroke-width="4"/>
+    <circle cx="0" cy="0" r="128" fill="none" stroke="#222222" stroke-dasharray="54 30" stroke-linecap="round" stroke-width="4"/>
+    <circle cx="0" cy="0" r="66" fill="none" stroke="#333333" stroke-dasharray="18 14" stroke-linecap="round" stroke-width="4"/>
+    <circle cx="0" cy="0" r="24" fill="none" stroke="#222222" stroke-width="4"/>
+
+    <g fill="none" stroke="#222222" stroke-linecap="round" stroke-width="4">
+      <line x1="0" y1="-160" x2="0" y2="-178"/>
+      <line x1="0" y1="160" x2="0" y2="178"/>
+      <line x1="-160" y1="0" x2="-178" y2="0"/>
+      <line x1="160" y1="0" x2="178" y2="0"/>
+      <line x1="-106" y1="-106" x2="-119" y2="-119"/>
+      <line x1="106" y1="-106" x2="119" y2="-119"/>
+      <line x1="-106" y1="106" x2="-119" y2="119"/>
+      <line x1="106" y1="106" x2="119" y2="119"/>
+    </g>
+  </g>
+
+  <g fill="#111111" font-family="Arial, Helvetica, sans-serif" font-size="44">
+    <text x="450" y="156" text-anchor="middle">12</text>
+    <text x="450" y="558" text-anchor="middle">6</text>
+    <text x="226" y="350" text-anchor="middle">9</text>
+    <text x="674" y="350" text-anchor="middle">3</text>
+  </g>
+  <g fill="#222222" font-family="Arial, Helvetica, sans-serif" font-size="32">
+    <text x="128" y="350">Anterior</text>
+    <text x="730" y="350">Right</text>
+  </g>
+</svg>
