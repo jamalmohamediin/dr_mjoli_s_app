@@ -60,6 +60,20 @@ const createThumbnailDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const getStickerExtractionErrorMessage = (message: string) => {
+  const normalizedMessage = String(message || "").trim();
+
+  if (!normalizedMessage) {
+    return "Sticker extraction failed.";
+  }
+
+  if (normalizedMessage === "Bad request - please check your parameters") {
+    return "Gemini request failed in n8n. Check the Gemini API key and API access.";
+  }
+
+  return normalizedMessage;
+};
+
 export const PatientInfoFields = ({
   patientInfo,
   onFieldChange,
@@ -214,10 +228,11 @@ export const PatientInfoFields = ({
 
       toast.success("Patient sticker extracted successfully.");
     } catch (error: any) {
-      const message =
+      const message = getStickerExtractionErrorMessage(
         error?.name === "AbortError"
           ? "Sticker extraction timed out."
-          : error?.message || "Sticker extraction failed.";
+          : error?.message || "Sticker extraction failed.",
+      );
 
       applyUpdates({
         stickerMode: true,

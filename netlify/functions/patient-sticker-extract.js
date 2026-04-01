@@ -87,6 +87,23 @@ exports.handler = async (event) => {
     const isJsonResponse =
       responseContentType.includes("application/json") ||
       responseContentType.startsWith("text/");
+    const responseText = isJsonResponse ? responseBuffer.toString("utf8") : "";
+
+    if (response.ok && !responseText.trim()) {
+      return {
+        statusCode: 502,
+        headers: {
+          "content-type": "application/json",
+          "access-control-allow-origin": "*",
+        },
+        body: JSON.stringify({
+          success: false,
+          error:
+            "Patient sticker extraction upstream returned an empty response.",
+          upstreamStatus: response.status,
+        }),
+      };
+    }
 
     return {
       statusCode: response.status,
@@ -94,9 +111,7 @@ exports.handler = async (event) => {
         "content-type": responseContentType,
         "access-control-allow-origin": "*",
       },
-      body: isJsonResponse
-        ? responseBuffer.toString("utf8")
-        : responseBuffer.toString("base64"),
+      body: isJsonResponse ? responseText : responseBuffer.toString("base64"),
       isBase64Encoded: !isJsonResponse,
     };
   } catch (error) {

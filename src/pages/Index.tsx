@@ -93,6 +93,7 @@ import {
   subscribeToLatestExtractedPatientDraft,
 } from "@/utils/patientExtractionDraftStore";
 import {
+  clearQueuedLiveTemplateDraftSync,
   createLiveTemplateDraftSignature,
   createLiveTemplateDraftSnapshot,
   getLiveTemplateDraftSessionId,
@@ -117,6 +118,8 @@ const hasMeaningfulPatientInfoData = (patientInfo: any): boolean =>
 
     return Boolean(value);
   });
+
+const LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS = 8000;
 
 const cloneStringArray = (value: any, fallback: string[] = []) =>
   Array.isArray(value) && value.length > 0 ? [...value] : [...fallback];
@@ -737,6 +740,8 @@ const Index = () => {
   const workingSessionUpdatedAtRef = useRef("");
   const liveTemplateDraftSignatureRef = useRef("");
   const applyingLiveTemplateDraftRef = useRef(false);
+  const hasPendingLocalLiveTemplateChangesRef = useRef(false);
+  const latestLocalLiveTemplateEditAtRef = useRef("");
   const liveTemplateDraftSessionId = useMemo(() => getLiveTemplateDraftSessionId(), []);
   const lastLiveTemplateDraftAuthorSessionIdRef = useRef(liveTemplateDraftSessionId);
   const patientListAutosaveSignatureRef = useRef("");
@@ -1298,10 +1303,24 @@ const Index = () => {
     currentReport: sanitizeLiveTemplateDraftValue(currentReport),
   });
 
+  const hasRecentLocalLiveTemplateEdit = () => {
+    if (!latestLocalLiveTemplateEditAtRef.current) {
+      return false;
+    }
+
+    const lastEditAt = Date.parse(latestLocalLiveTemplateEditAtRef.current);
+    if (Number.isNaN(lastEditAt)) {
+      return false;
+    }
+
+    return Date.now() - lastEditAt < LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS;
+  };
+
   const applyLiveTemplateDraftPayload = (payload: Record<string, any>) => {
     const restoredReport = normalizeReportPatientInfos(payload?.currentReport || currentReport);
 
     applyingLiveTemplateDraftRef.current = true;
+    hasPendingLocalLiveTemplateChangesRef.current = false;
 
     setCurrentReport(restoredReport);
     setAppSection(
@@ -2056,6 +2075,32 @@ const Index = () => {
   }, [currentReport, autoSaveEndoscopy, enablePersistence]);
 
   useEffect(() => {
+    if (
+      !enablePersistence ||
+      !isFirebaseConfigured ||
+      appSection !== "templates" ||
+      !hasHydratedWorkingSessionRef.current ||
+      applyingLiveTemplateDraftRef.current
+    ) {
+      return;
+    }
+
+    const localEditAtIso = new Date().toISOString();
+    latestLocalLiveTemplateEditAtRef.current = localEditAtIso;
+    workingSessionUpdatedAtRef.current = localEditAtIso;
+    hasPendingLocalLiveTemplateChangesRef.current = true;
+  }, [
+    appSection,
+    currentExtractedPatientInfo,
+    currentReport,
+    currentTab,
+    editingPatientContext,
+    enablePersistence,
+    forcedPatientsProcedureFilter,
+    isFirebaseConfigured,
+  ]);
+
+  useEffect(() => {
     if (!enablePersistence || !hasHydratedWorkingSessionRef.current) {
       return;
     }
@@ -2114,6 +2159,9 @@ const Index = () => {
       try {
         await processQueuedLiveTemplateDraftSync();
         liveTemplateDraftSignatureRef.current = pendingDraft.payloadSignature;
+        hasPendingLocalLiveTemplateChangesRef.current = false;
+        latestLocalLiveTemplateEditAtRef.current =
+          pendingDraft.updatedAtIso || latestLocalLiveTemplateEditAtRef.current;
       } catch (error) {
         console.error("Failed to sync live template draft", error);
       }
@@ -2145,6 +2193,9 @@ const Index = () => {
         liveTemplateDraftSignatureRef.current = remoteDraft.payloadSignature;
         workingSessionUpdatedAtRef.current =
           remoteDraft.updatedAtIso || workingSessionUpdatedAtRef.current;
+        hasPendingLocalLiveTemplateChangesRef.current = false;
+        latestLocalLiveTemplateEditAtRef.current =
+          remoteDraft.updatedAtIso || latestLocalLiveTemplateEditAtRef.current;
         return;
       }
 
@@ -2153,6 +2204,23 @@ const Index = () => {
         pendingDraft &&
         pendingDraft.payloadSignature !== remoteDraft.payloadSignature &&
         pendingDraft.updatedAtIso >= remoteDraft.updatedAtIso
+      ) {
+        return;
+      }
+
+      if (
+        hasRecentLocalLiveTemplateEdit() &&
+        typeof document !== "undefined" &&
+        document.hasFocus()
+      ) {
+        return;
+      }
+
+      if (
+        hasPendingLocalLiveTemplateChangesRef.current &&
+        latestLocalLiveTemplateEditAtRef.current &&
+        (!remoteDraft.updatedAtIso ||
+          latestLocalLiveTemplateEditAtRef.current >= remoteDraft.updatedAtIso)
       ) {
         return;
       }
@@ -2199,6 +2267,10 @@ const Index = () => {
       return;
     }
 
+    latestLocalLiveTemplateEditAtRef.current =
+      latestLocalLiveTemplateEditAtRef.current || new Date().toISOString();
+    hasPendingLocalLiveTemplateChangesRef.current = true;
+
     const timeoutId = window.setTimeout(() => {
       const snapshot = createLiveTemplateDraftSnapshot(liveDraftPayload, payloadSignature);
       lastLiveTemplateDraftAuthorSessionIdRef.current = snapshot.updatedBySessionId;
@@ -2209,6 +2281,8 @@ const Index = () => {
         void processQueuedLiveTemplateDraftSync()
           .then(() => {
             liveTemplateDraftSignatureRef.current = payloadSignature;
+            hasPendingLocalLiveTemplateChangesRef.current = false;
+            latestLocalLiveTemplateEditAtRef.current = snapshot.updatedAtIso;
           })
           .catch((error) => {
             console.error("Failed to sync live template draft", error);
@@ -3546,6 +3620,10 @@ const Index = () => {
   };
 
   const handleClearAllTemplatesData = () => {
+    clearQueuedLiveTemplateDraftSync();
+    liveTemplateDraftSignatureRef.current = "";
+    hasPendingLocalLiveTemplateChangesRef.current = true;
+    latestLocalLiveTemplateEditAtRef.current = new Date().toISOString();
     clearAllEndoscopyData(false);
     clearAllAppendectomyData(false);
     clearAllVentralHerniaData(false);
@@ -3607,6 +3685,7 @@ const Index = () => {
     const restoredReport = normalizeReportPatientInfos(
       JSON.parse(JSON.stringify(record.reportSnapshot || {})),
     );
+    const localEditAtIso = new Date().toISOString();
 
     setCurrentReport(restoredReport);
     setCurrentTab(getCurrentTabForTemplate(record.templateType) || record.currentTab || "procedure");
@@ -3621,6 +3700,9 @@ const Index = () => {
     );
     setForcedPatientsProcedureFilter(null);
     setAppSection("templates");
+    workingSessionUpdatedAtRef.current = localEditAtIso;
+    latestLocalLiveTemplateEditAtRef.current = localEditAtIso;
+    hasPendingLocalLiveTemplateChangesRef.current = true;
 
     if (createNewEntry) {
       toast.success("Loaded previous template as a new entry starting point.");
@@ -3635,13 +3717,23 @@ const Index = () => {
       silent?: boolean;
       requireNameAndDob?: boolean;
       syncImmediately?: boolean;
+      patientInfoOverride?: Record<string, any> | null;
+      reportSnapshotOverride?: Record<string, any> | null;
+      templateTypeOverride?: typeof activeTemplateType;
+      currentTabOverride?: string | null;
       targetContext?: {
         patientId: string;
         recordId: string;
       } | null;
     } = {},
   ) => {
-    const patientInfo = createInitialPatientInfoState(activeTemplatePatientInfo);
+    const templateTypeForSave = options.templateTypeOverride || activeTemplateType;
+    const currentTabForSave =
+      options.currentTabOverride || getCurrentTabForTemplate(templateTypeForSave) || currentTab;
+    const reportSnapshotForSave = options.reportSnapshotOverride || currentReport;
+    const patientInfo = createInitialPatientInfoState(
+      options.patientInfoOverride || getTemplatePatientInfo(reportSnapshotForSave, templateTypeForSave),
+    );
     const trimmedName = String(patientInfo.name || "").trim();
     const trimmedDob = String(patientInfo.dateOfBirth || "").trim();
     const trimmedPatientId = String(patientInfo.patientId || "").trim();
@@ -3670,7 +3762,7 @@ const Index = () => {
         : findMatchingPatientId(patientDatabaseCache.patients, patientInfo) || createNewPatientId();
 
     const nextRecord = buildPatientRecord({
-      currentTab,
+      currentTab: currentTabForSave,
       existingRecord:
         existingRecord ||
         (resolvedContext
@@ -3681,8 +3773,8 @@ const Index = () => {
             } as PatientRecord)
           : null),
       patientDocId,
-      reportSnapshot: currentReport,
-      templateType: activeTemplateType,
+      reportSnapshot: reportSnapshotForSave,
+      templateType: templateTypeForSave,
     });
 
     const nextCache = upsertPatientRecordInCache(patientDatabaseCache, nextRecord);
@@ -3714,8 +3806,8 @@ const Index = () => {
     if (!options.silent) {
       toast.success(
         saveMode === "newEntry"
-          ? `${activeTemplateLabel} saved as a new patient entry.`
-          : `${activeTemplateLabel} saved to Patients.`,
+          ? `${getTemplateLabel(templateTypeForSave)} saved as a new patient entry.`
+          : `${getTemplateLabel(templateTypeForSave)} saved to Patients.`,
       );
     }
 
@@ -4542,7 +4634,11 @@ const Index = () => {
     setIsGeneratingPDF(true);
     
     try {
-      const exportPatientInfo = createInitialPatientInfoState(activeTemplatePatientInfo);
+      const exportSection = section || currentTab;
+      const exportTemplateType = getTemplateTypeFromTab(exportSection);
+      const exportPatientInfo = createInitialPatientInfoState(
+        getTemplatePatientInfo(currentReport, exportTemplateType),
+      );
       if (
         String(exportPatientInfo.name || "").trim() &&
         String(exportPatientInfo.dateOfBirth || "").trim()
@@ -4558,6 +4654,10 @@ const Index = () => {
             silent: true,
             requireNameAndDob: true,
             syncImmediately: true,
+            patientInfoOverride: exportPatientInfo,
+            reportSnapshotOverride: currentReport,
+            templateTypeOverride: exportTemplateType,
+            currentTabOverride: exportSection,
             targetContext,
           },
         );
@@ -4565,9 +4665,6 @@ const Index = () => {
 
       // Show user that PDF generation is starting
       toast.info("Starting PDF generation... Please allow downloads if prompted.");
-      
-      // Use the specific section if provided, otherwise use current tab
-      const exportSection = section || currentTab;
       
       // Check if we're in appendectomy tab - if so, export the live report content
       if (exportSection === "appendectomy") {

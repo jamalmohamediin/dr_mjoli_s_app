@@ -28,3 +28,13 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+
+# n8n / Netlify local debugging artifacts
+scripts/n8n-workflow-backups/
+deployed-live-*.txt
+deployed-live-*.json
+live-*.txt
+live-*.json
+n8n-*.txt
+n8n-*.json
+test-sticker-response.json
