@@ -1,0 +1,34 @@
+{
+  "defaultTarget": "dr-mjoli-app",
+  "targets": {
+    "dr-mjoli-app": {
+      "cwd": ".",
+      "playwrightCli": "node_modules/playwright/cli.js",
+      "runs": {
+        "smoke": [
+          "test",
+          "--project=chromium",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "visible": [
+          "test",
+          "--project=chromium-headed",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "debug": [
+          "test",
+          "--project=chromium-headed",
+          "--debug",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "ui": [
+          "test",
+          "--ui"
+        ]
+      }
+    }
+  }
+}

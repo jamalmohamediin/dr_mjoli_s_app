@@ -81,6 +81,10 @@ export const ConditionalDiagramDisplay = ({
     "Rectal Cancer Surgery": appendectomyImage,
     "Small Bowel Surgery": appendectomyImage,
     "Cholecystectomy": appendectomyImage,
+    "Inguinal Hernia Repair": appendectomyImage,
+    "Transanal Minimally Invasive Surgery": appendectomyImage,
+    "Open General Surgery": appendectomyImage,
+    "Open Abdominal Surgery": appendectomyImage,
     "Peri-Anal": periAnalDiagramImages[DEFAULT_PERI_ANAL_DIAGRAM_VARIANT],
   };
 

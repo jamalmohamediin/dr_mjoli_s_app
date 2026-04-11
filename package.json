@@ -8,7 +8,13 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --project=chromium-headed --workers=1",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --project=chromium-headed --debug --workers=1",
+    "bot:telegram:playwright": "node scripts/telegram-playwright-bot.mjs",
+    "bot:telegram:playwright:global": "node scripts/telegram-playwright-bot.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -66,6 +72,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",

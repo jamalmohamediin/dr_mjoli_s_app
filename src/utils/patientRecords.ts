@@ -5,12 +5,18 @@ import {
 
 export type TemplateType =
   | "procedure"
+  | "gastroscopy"
+  | "colonoscopy"
   | "appendectomy"
   | "ventralHernia"
   | "rectalCancer"
   | "smallBowel"
   | "cholecystectomy"
-  | "periAnal";
+  | "periAnal"
+  | "inguinalHernia"
+  | "transanalMinimallyInvasiveSurgery"
+  | "openGeneralSurgery"
+  | "openAbdominalSurgery";
 
 export interface PatientRecord {
   id: string;
@@ -84,26 +90,40 @@ export interface PatientDatabaseCache {
 
 const TEMPLATE_LABELS: Record<TemplateType, string> = {
   procedure: "Endoscopy",
+  gastroscopy: "Gastroscopy",
+  colonoscopy: "Colonoscopy",
   appendectomy: "Appendicectomy",
   ventralHernia: "Ventral Hernia Repair",
   rectalCancer: "Colorectal Resection",
   smallBowel: "Small Bowel Surgery",
   cholecystectomy: "Cholecystectomy",
   periAnal: "Peri-Anal",
+  inguinalHernia: "Inguinal Hernia Repair",
+  transanalMinimallyInvasiveSurgery: "Transanal Minimally Invasive Surgery",
+  openGeneralSurgery: "Open General Surgery - Narrative",
+  openAbdominalSurgery: "Open Abdominal Surgery - Narrative",
 };
 
 const TEMPLATE_TAB_MAP: Record<TemplateType, string> = {
   procedure: "procedure",
+  gastroscopy: "gastroscopy",
+  colonoscopy: "colonoscopy",
   appendectomy: "appendectomy",
   ventralHernia: "hernia",
   rectalCancer: "rectal",
   smallBowel: "smallBowel",
   cholecystectomy: "cholecystectomy",
   periAnal: "periAnal",
+  inguinalHernia: "inguinalHernia",
+  transanalMinimallyInvasiveSurgery: "transanalMinimallyInvasiveSurgery",
+  openGeneralSurgery: "openGeneralSurgery",
+  openAbdominalSurgery: "openAbdominalSurgery",
 };
 
 const TAB_TEMPLATE_MAP: Record<string, TemplateType> = {
   procedure: "procedure",
+  gastroscopy: "gastroscopy",
+  colonoscopy: "colonoscopy",
   appendectomy: "appendectomy",
   hernia: "ventralHernia",
   ventralHernia: "ventralHernia",
@@ -112,6 +132,10 @@ const TAB_TEMPLATE_MAP: Record<string, TemplateType> = {
   smallBowel: "smallBowel",
   cholecystectomy: "cholecystectomy",
   periAnal: "periAnal",
+  inguinalHernia: "inguinalHernia",
+  transanalMinimallyInvasiveSurgery: "transanalMinimallyInvasiveSurgery",
+  openGeneralSurgery: "openGeneralSurgery",
+  openAbdominalSurgery: "openAbdominalSurgery",
 };
 
 const PATIENT_IDENTITY_FIELDS = [
@@ -195,6 +219,10 @@ export const getTemplateLabel = (templateType: TemplateType) =>
 
 export const getTemplatePatientInfo = (reportSnapshot: any, templateType: TemplateType) => {
   switch (templateType) {
+    case "gastroscopy":
+      return reportSnapshot?.gastroscopy?.patientInfo || {};
+    case "colonoscopy":
+      return reportSnapshot?.colonoscopy?.patientInfo || {};
     case "appendectomy":
       return reportSnapshot?.appendectomy?.patientInfo || {};
     case "ventralHernia":
@@ -207,6 +235,14 @@ export const getTemplatePatientInfo = (reportSnapshot: any, templateType: Templa
       return reportSnapshot?.cholecystectomy?.patientInfo || {};
     case "periAnal":
       return reportSnapshot?.periAnal?.patientInfo || {};
+    case "inguinalHernia":
+      return reportSnapshot?.inguinalHernia?.patientInfo || {};
+    case "transanalMinimallyInvasiveSurgery":
+      return reportSnapshot?.transanalMinimallyInvasiveSurgery?.patientInfo || {};
+    case "openGeneralSurgery":
+      return reportSnapshot?.openGeneralSurgery?.patientInfo || {};
+    case "openAbdominalSurgery":
+      return reportSnapshot?.openAbdominalSurgery?.patientInfo || {};
     case "procedure":
     default:
       return reportSnapshot?.patientInfo || {};
@@ -215,6 +251,10 @@ export const getTemplatePatientInfo = (reportSnapshot: any, templateType: Templa
 
 const getTemplateOperationDescription = (reportSnapshot: any, templateType: TemplateType) => {
   switch (templateType) {
+    case "gastroscopy":
+      return text(reportSnapshot?.gastroscopy?.additionalInfo?.conclusion);
+    case "colonoscopy":
+      return text(reportSnapshot?.colonoscopy?.additionalInfo?.conclusion);
     case "appendectomy":
       return text(reportSnapshot?.appendectomy?.procedure?.operationDescription);
     case "ventralHernia":
@@ -233,6 +273,14 @@ const getTemplateOperationDescription = (reportSnapshot: any, templateType: Temp
         text(reportSnapshot?.periAnal?.preoperative?.operationDescription) ||
         text(reportSnapshot?.periAnal?.procedureFindings?.additionalNotes)
       );
+    case "inguinalHernia":
+      return text(reportSnapshot?.inguinalHernia?.procedure?.description);
+    case "transanalMinimallyInvasiveSurgery":
+      return text(reportSnapshot?.transanalMinimallyInvasiveSurgery?.operativeFindings?.findings);
+    case "openGeneralSurgery":
+      return text(reportSnapshot?.openGeneralSurgery?.narrative?.operationDone);
+    case "openAbdominalSurgery":
+      return text(reportSnapshot?.openAbdominalSurgery?.narrative?.operationDone);
     case "procedure":
     default:
       return (reportSnapshot?.selectedProcedures || []).join(", ");

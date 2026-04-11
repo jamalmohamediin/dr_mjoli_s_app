@@ -260,6 +260,28 @@ export const generateCholecystectomyPDF = async (
       .filter(Boolean)
       .join(" | ");
 
+    const extentOfCholecystectomyText = joinSelections(
+      toArray(proc?.extentOfCholecystectomy),
+      proc?.extentOfCholecystectomyOther
+    );
+    const subtotalControlText = joinSelections(
+      toArray(proc?.methodOfSubtotalControl),
+      proc?.methodOfSubtotalControlOther
+    );
+    const criticalViewSafetyConfirmationText = joinSelections(
+      toArray(proc?.criticalViewSafetyConfirmation),
+      proc?.criticalViewSafetyConfirmationOther
+    );
+    const hemostasisText = joinSelections(toArray(proc?.hemostasis), proc?.hemostasisOther);
+    const peritonealLavageText = joinSelections(
+      toArray(proc?.peritonealLavage),
+      proc?.peritonealLavageOther
+    );
+    const typeOfStonesText = joinSelections(
+      toArray(intra?.typeOfStones),
+      intra?.typeOfStonesOther
+    );
+
     sec("PATIENT INFORMATION");
     patientSubsection("Patient Details");
     row3(
@@ -324,6 +346,11 @@ export const generateCholecystectomyPDF = async (
       `Gallbladder Appearance: ${joinSelections(toArray(intra?.gallbladderAppearance), intra?.gallbladderAppearanceOther)}`,
       `Adhesions to Gallbladder: ${txt(intra?.adhesionsToGallbladder)}`
     );
+    row2(
+      `Stones Present: ${txt(intra?.stonesPresent)}`,
+      `Type of Stones: ${typeOfStonesText}`
+    );
+    rowFull(`Size of Stones: ${txt(intra?.sizeOfStones)}`);
     y += 2;
 
     const leftXCh = col1X;
@@ -356,13 +383,18 @@ export const generateCholecystectomyPDF = async (
 
     addLeftCh("Surgical Approach", toArray(proc?.approach).join(", "));
     addLeftCh("Reason for Conversion", joinSelections(toArray(proc?.reasonForConversion), proc?.reasonForConversionOther));
+    addLeftCh("Number of Ports Inserted", txt(proc?.numberOfPortsInserted));
     addLeftCh("Subtotal Cholecystectomy", txt(proc?.subtotalCholecystectomy));
     addLeftCh("Reason for Subtotal Cholecystectomy", joinSelections(toArray(proc?.subtotalReason), proc?.subtotalReasonOther));
+    addLeftCh("Adhesiolysis", txt(proc?.adhesiolysis));
+    addLeftCh("Extent of Cholecystectomy", extentOfCholecystectomyText);
+    addLeftCh("Method of Subtotal Cholecystectomy Control", subtotalControlText);
     addLeftCh("Gall Bladder Decompression Required", txt(proc?.gallbladderDecompressionRequired));
+    addLeftCh("Critical View of Safety Confirmation", criticalViewSafetyConfirmationText);
     addLeftCh("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
     addLeftCh("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
     addLeftCh("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
-    addLeftCh("Critical View of Safety - Two Structures Entering Gall Bladder Confirmed", txt(proc?.twoStructuresConfirmed));
+    addLeftCh("Critical View of Safety - Two Structures Entering Gallbladder Confirmed", txt(proc?.twoStructuresConfirmed));
 
     let ryCh = blockTopCh + 2;
     const { diagramBottomY } = drawRectalStylePortsAndIncisions({
@@ -391,6 +423,7 @@ export const generateCholecystectomyPDF = async (
         proc?.gallbladderDissectedFromLiverBedOther
       )}`
     );
+    rowFull(`Hemostasis: ${hemostasisText}`);
     rowFull(`Bile Spillage: ${txt(proc?.bileSpillage)}`);
     rowFull(`Stones Spillage: ${txt(proc?.stonesSpillage)}`);
     rowFull(`Additional Procedures: ${additionalProceduresText}`);
@@ -401,6 +434,8 @@ export const generateCholecystectomyPDF = async (
         proc?.gallbladderRetrievalOther
       )}`
     );
+    rowFull(`Use Of Specimen Bag: ${txt(proc?.useOfSpecimenBag)}`);
+    rowFull(`Peritoneal Lavage: ${peritonealLavageText}`);
 
     sec("CLOSURE");
     rowFull(`Drain Insertion: ${txt(proc?.drainInsertion)}`);
@@ -437,8 +472,9 @@ export const generateCholecystectomyPDF = async (
     );
 
     sec("SPECIMEN");
-    rowFull("Specimen: Gall Bladder");
-    rowFull(`Specimen Sent to Laboratory: ${txt(closure?.gallbladderSentForHistology)}`);
+    rowFull("Specimen: Gallbladder");
+    rowFull(`Use Of Specimen Bag: ${txt(closure?.useOfSpecimenBag)}`);
+    rowFull(`Gallbladder Sent For Histology: ${txt(closure?.gallbladderSentForHistology)}`);
     rowFull(`Specify Laboratory Sent to: ${txt(closure?.laboratoryName)}`);
 
     sec("ADDITIONAL NOTES");

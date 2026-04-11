@@ -6,6 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Upload, Camera, Video, X, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  openNativeFilePicker,
+  VISUALLY_HIDDEN_FILE_INPUT_CLASS,
+} from "@/utils/fileInputs";
 
 interface MediaUploadProps {
   onUpdate: (data: any) => void;
@@ -24,7 +28,26 @@ interface MediaFile {
 export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const updateParent = (files: MediaFile[]) => {
+    onUpdate(files.map(f => ({
+      id: f.id,
+      name: f.name,
+      type: f.type,
+      size: f.size,
+      description: f.description
+    })));
+  };
+
+  const appendFiles = (newFiles: MediaFile[]) => {
+    setMediaFiles((prev) => {
+      const updatedFiles = [...prev, ...newFiles];
+      updateParent(updatedFiles);
+      return updatedFiles;
+    });
+  };
 
   const handleFileUpload = (files: FileList | null) => {
     if (!files) return;
@@ -65,8 +88,7 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           mediaFile.preview = e.target?.result as string;
-          setMediaFiles(prev => [...prev, mediaFile]);
-          updateParent([...mediaFiles, mediaFile]);
+          appendFiles([mediaFile]);
         };
         reader.readAsDataURL(file);
       } else {
@@ -75,24 +97,16 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
     });
 
     if (newFiles.length > 0) {
-      setMediaFiles(prev => [...prev, ...newFiles]);
-      updateParent([...mediaFiles, ...newFiles]);
+      appendFiles(newFiles);
     }
 
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const updateParent = (files: MediaFile[]) => {
-    onUpdate(files.map(f => ({
-      id: f.id,
-      name: f.name,
-      type: f.type,
-      size: f.size,
-      description: f.description
-    })));
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = '';
+    }
   };
 
   const removeFile = (id: string) => {
@@ -143,11 +157,21 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
           
           <div className="flex gap-2 justify-center">
             <Button
-              onClick={() => fileInputRef.current?.click()}
+              type="button"
+              onClick={() => openNativeFilePicker(fileInputRef.current)}
               className="flex items-center gap-2"
             >
               <Upload className="h-4 w-4" />
               Choose Files
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openNativeFilePicker(cameraInputRef.current)}
+              className="flex items-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Take Photo
             </Button>
           </div>
           
@@ -157,7 +181,19 @@ export const MediaUpload = ({ onUpdate }: MediaUploadProps) => {
             multiple
             accept="image/*,video/*"
             onChange={(e) => handleFileUpload(e.target.files)}
-            className="hidden"
+            className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => handleFileUpload(e.target.files)}
+            className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
+            tabIndex={-1}
+            aria-hidden="true"
           />
         </div>
 

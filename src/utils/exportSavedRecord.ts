@@ -1,10 +1,15 @@
 import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
 import { generateCholecystectomyPDF } from "@/utils/cholecystectomyPdfGenerator";
+import { generateColonoscopyPDF } from "@/utils/colonoscopyPdfGenerator";
 import { formatDOBForFilename } from "@/utils/dateFormatter";
 import { FinalDiagramCapture, generateFinalPDF } from "@/utils/finalPdfGenerator";
+import { generateGastroscopyPDF } from "@/utils/gastroscopyPdfGenerator";
+import { generateInguinalHerniaPDF } from "@/utils/inguinalHerniaPdfGenerator";
+import { generateNarrativeSurgeryPDF } from "@/utils/narrativeSurgeryPdfGenerator";
 import { generatePeriAnalPDF } from "@/utils/periAnalPdfGenerator";
 import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
 import { generateSmallBowelSurgeryPDF } from "@/utils/smallBowelSurgeryPdfGenerator";
+import { generateTransanalMinimallyInvasiveSurgeryPDF } from "@/utils/transanalMinimallyInvasiveSurgeryPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { PatientRecord, TemplateType } from "@/utils/patientRecords";
 
@@ -111,6 +116,38 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
     throw new Error(result.error || "Failed to generate appendectomy PDF");
   }
 
+  if (record.templateType === "gastroscopy") {
+    const result = await generateGastroscopyPDF(
+      reportSnapshot?.gastroscopy,
+      reportSnapshot?.gastroscopy?.patientInfo || patientInfo,
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Gastroscopy_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate gastroscopy PDF");
+  }
+
+  if (record.templateType === "colonoscopy") {
+    const result = await generateColonoscopyPDF(
+      reportSnapshot?.colonoscopy,
+      reportSnapshot?.colonoscopy?.patientInfo || patientInfo,
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Colonoscopy_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate colonoscopy PDF");
+  }
+
   if (record.templateType === "ventralHernia") {
     const result = await generateVentralHerniaPDF(
       patientName,
@@ -197,6 +234,74 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
     }
 
     throw new Error(result.error || "Failed to generate peri-anal PDF");
+  }
+
+  if (record.templateType === "inguinalHernia") {
+    const result = await generateInguinalHerniaPDF(
+      reportSnapshot?.inguinalHernia,
+      reportSnapshot?.inguinalHernia?.patientInfo || patientInfo,
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Inguinal_Hernia_Repair_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate inguinal hernia PDF");
+  }
+
+  if (record.templateType === "transanalMinimallyInvasiveSurgery") {
+    const result = await generateTransanalMinimallyInvasiveSurgeryPDF(
+      reportSnapshot?.transanalMinimallyInvasiveSurgery,
+      reportSnapshot?.transanalMinimallyInvasiveSurgery?.patientInfo || patientInfo,
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_TMIS_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate TMIS PDF");
+  }
+
+  if (record.templateType === "openGeneralSurgery") {
+    const result = await generateNarrativeSurgeryPDF(
+      "OPEN GENERAL SURGERY NARRATIVE REPORT",
+      reportSnapshot?.openGeneralSurgery,
+      reportSnapshot?.openGeneralSurgery?.patientInfo || patientInfo,
+      "general",
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Open_General_Surgery_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate open general surgery PDF");
+  }
+
+  if (record.templateType === "openAbdominalSurgery") {
+    const result = await generateNarrativeSurgeryPDF(
+      "OPEN ABDOMINAL SURGERY NARRATIVE REPORT",
+      reportSnapshot?.openAbdominalSurgery,
+      reportSnapshot?.openAbdominalSurgery?.patientInfo || patientInfo,
+      "abdominal",
+    );
+
+    if (result.success && result.blob) {
+      return {
+        blob: result.blob,
+        filename: `${cleanPatientName}_${cleanPatientId}_Open_Abdominal_Surgery_Report_${formattedDate}.pdf`,
+      };
+    }
+
+    throw new Error("Failed to generate open abdominal surgery PDF");
   }
 
   throw new Error(`Unsupported template export: ${record.templateType as TemplateType}`);

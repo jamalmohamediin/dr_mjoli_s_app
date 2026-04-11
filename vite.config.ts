@@ -14,12 +14,12 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "127.0.0.1",
-      port: 8080,
+      port: 8081,
       strictPort: true,
       hmr: {
         host: "localhost",
-        port: 8080,
-        clientPort: 8080,
+        port: 8081,
+        clientPort: 8081,
         protocol: "ws",
       },
       proxy: patientStickerProxyUrl

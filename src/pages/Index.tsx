@@ -1,17 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { FileText, Stethoscope, User, Download, Save, Trash2, ChevronDown, ChevronUp, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw } from "lucide-react";
+import { FileText, Stethoscope, User, Download, Save, Trash2, ChevronDown, ChevronUp, ClipboardList, FileSearch, Undo2, Redo2, RotateCcw, Database } from "lucide-react";
 import { PatientInfoForm } from "@/components/PatientInfoForm";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { ProcedureInfoForm } from "@/components/ProcedureInfoForm";
 import { ProcedureTypeSelection } from "@/components/ProcedureTypeSelection";
 import { ConditionalDiagramDisplay } from "@/components/ConditionalDiagramDisplay";
+import {
+  generateInguinalHerniaMockData,
+  generateGastroscopyMockData,
+  generateColonoscopyMockData,
+  generateCholecystectomyMockData,
+  generateTAMISMockData,
+  generateOpenAbdominalMockData,
+  generateOpenGeneralMockData
+} from "@/utils/mockDataGenerator";
 import { ReportPreview } from "@/components/ReportPreview";
 import { VentralHerniaReportPreview } from "@/components/VentralHerniaReportPreview";
 import { AppendectomyReportPreview } from "@/components/AppendectomyReportPreview";
@@ -23,6 +33,16 @@ import { CholecystectomyForm } from "@/components/CholecystectomyForm";
 import { CholecystectomyReportPreview } from "@/components/CholecystectomyReportPreview";
 import { PeriAnalForm } from "@/components/PeriAnalForm";
 import { PeriAnalReportPreview } from "@/components/PeriAnalReportPreview";
+import { GastroscopyForm } from "@/components/GastroscopyForm";
+import { GastroscopyReportPreview } from "@/components/GastroscopyReportPreview";
+import { ColonoscopyForm } from "@/components/ColonoscopyForm";
+import { ColonoscopyReportPreview } from "@/components/ColonoscopyReportPreview";
+import { InguinalHerniaRepairForm } from "@/components/InguinalHerniaRepairForm";
+import { InguinalHerniaRepairReportPreview } from "@/components/InguinalHerniaRepairReportPreview";
+import { TransanalMinimallyInvasiveSurgeryForm } from "@/components/TransanalMinimallyInvasiveSurgeryForm";
+import { TransanalMinimallyInvasiveSurgeryReportPreview } from "@/components/TransanalMinimallyInvasiveSurgeryReportPreview";
+import { NarrativeSurgeryForm } from "@/components/NarrativeSurgeryForm";
+import { NarrativeSurgeryReportPreview } from "@/components/NarrativeSurgeryReportPreview";
 import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
@@ -34,7 +54,12 @@ import { generateAppendectomyPDF } from "@/utils/appendectomyPdfGenerator";
 import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
 import { generateSmallBowelSurgeryPDF } from "@/utils/smallBowelSurgeryPdfGenerator";
 import { generateCholecystectomyPDF } from "@/utils/cholecystectomyPdfGenerator";
+import { generateGastroscopyPDF } from "@/utils/gastroscopyPdfGenerator";
+import { generateColonoscopyPDF } from "@/utils/colonoscopyPdfGenerator";
 import { generatePeriAnalPDF } from "@/utils/periAnalPdfGenerator";
+import { generateInguinalHerniaPDF } from "@/utils/inguinalHerniaPdfGenerator";
+import { generateTransanalMinimallyInvasiveSurgeryPDF } from "@/utils/transanalMinimallyInvasiveSurgeryPdfGenerator";
+import { generateNarrativeSurgeryPDF } from "@/utils/narrativeSurgeryPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
@@ -73,6 +98,11 @@ import { deletePatientFile, uploadPatientFiles } from "@/utils/patientMediaStore
 import { createInitialSmallBowelSurgeryState } from "@/utils/smallBowelSurgery";
 import { createInitialCholecystectomyState } from "@/utils/cholecystectomy";
 import { createInitialPeriAnalState } from "@/utils/periAnal";
+import { createInitialGastroscopyState } from "@/utils/gastroscopy";
+import { createInitialColonoscopyState } from "@/utils/colonoscopy";
+import { createInitialInguinalHerniaState } from "@/utils/inguinalHernia";
+import { createInitialTransanalMinimallyInvasiveSurgeryState } from "@/utils/transanalMinimallyInvasiveSurgery";
+import { createInitialNarrativeSurgeryState } from "@/utils/narrativeSurgery";
 import {
   createInitialPeriAnalDiagramMarkings,
   DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
@@ -235,6 +265,18 @@ const createInitialVentralHerniaState = (source: any = {}) => ({
 const normalizeReportPatientInfos = (report: any) => ({
   ...report,
   patientInfo: createInitialPatientInfoState(report?.patientInfo),
+  gastroscopy: report?.gastroscopy
+    ? {
+        ...report.gastroscopy,
+        patientInfo: createInitialPatientInfoState(report.gastroscopy?.patientInfo),
+      }
+    : report?.gastroscopy,
+  colonoscopy: report?.colonoscopy
+    ? {
+        ...report.colonoscopy,
+        patientInfo: createInitialPatientInfoState(report.colonoscopy?.patientInfo),
+      }
+    : report?.colonoscopy,
   appendectomy: report?.appendectomy
     ? {
         ...report.appendectomy,
@@ -268,6 +310,32 @@ const normalizeReportPatientInfos = (report: any) => ({
         patientInfo: createInitialPatientInfoState(report.periAnal?.patientInfo),
       }
     : report?.periAnal,
+  inguinalHernia: report?.inguinalHernia
+    ? {
+        ...report.inguinalHernia,
+        patientInfo: createInitialPatientInfoState(report.inguinalHernia?.patientInfo),
+      }
+    : report?.inguinalHernia,
+  transanalMinimallyInvasiveSurgery: report?.transanalMinimallyInvasiveSurgery
+    ? {
+        ...report.transanalMinimallyInvasiveSurgery,
+        patientInfo: createInitialPatientInfoState(
+          report.transanalMinimallyInvasiveSurgery?.patientInfo,
+        ),
+      }
+    : report?.transanalMinimallyInvasiveSurgery,
+  openGeneralSurgery: report?.openGeneralSurgery
+    ? {
+        ...report.openGeneralSurgery,
+        patientInfo: createInitialPatientInfoState(report.openGeneralSurgery?.patientInfo),
+      }
+    : report?.openGeneralSurgery,
+  openAbdominalSurgery: report?.openAbdominalSurgery
+    ? {
+        ...report.openAbdominalSurgery,
+        patientInfo: createInitialPatientInfoState(report.openAbdominalSurgery?.patientInfo),
+      }
+    : report?.openAbdominalSurgery,
 });
 
 const DIAGRAM_MARKINGS_RESET_MIGRATION_KEY = "diagram_markings_reset_v1";
@@ -293,6 +361,26 @@ const sanitizeStoredDiagramData = (report: any) => ({
     : report?.colonoscopyFindings,
   gastroscopyCanvasData: "",
   colonoscopyCanvasData: "",
+  gastroscopy: report?.gastroscopy
+    ? {
+        ...report.gastroscopy,
+        diagram: {
+          ...(report.gastroscopy?.diagram || {}),
+          findings: [],
+          canvasImageData: "",
+        },
+      }
+    : report?.gastroscopy,
+  colonoscopy: report?.colonoscopy
+    ? {
+        ...report.colonoscopy,
+        diagram: {
+          ...(report.colonoscopy?.diagram || {}),
+          findings: [],
+          canvasImageData: "",
+        },
+      }
+    : report?.colonoscopy,
   appendectomy: report?.appendectomy
     ? {
         ...report.appendectomy,
@@ -344,17 +432,55 @@ const sanitizeStoredDiagramData = (report: any) => ({
         },
       }
     : report?.periAnal,
+  inguinalHernia: report?.inguinalHernia
+    ? {
+        ...report.inguinalHernia,
+        procedureFindings: clearStoredProcedureDiagramFindings(
+          report.inguinalHernia?.procedureFindings,
+        ),
+      }
+    : report?.inguinalHernia,
+  transanalMinimallyInvasiveSurgery: report?.transanalMinimallyInvasiveSurgery
+    ? {
+        ...report.transanalMinimallyInvasiveSurgery,
+        procedureFindings: clearStoredProcedureDiagramFindings(
+          report.transanalMinimallyInvasiveSurgery?.procedureFindings,
+        ),
+      }
+    : report?.transanalMinimallyInvasiveSurgery,
+  openGeneralSurgery: report?.openGeneralSurgery
+    ? {
+        ...report.openGeneralSurgery,
+        procedureFindings: clearStoredProcedureDiagramFindings(
+          report.openGeneralSurgery?.procedureFindings,
+        ),
+      }
+    : report?.openGeneralSurgery,
+  openAbdominalSurgery: report?.openAbdominalSurgery
+    ? {
+        ...report.openAbdominalSurgery,
+        procedureFindings: clearStoredProcedureDiagramFindings(
+          report.openAbdominalSurgery?.procedureFindings,
+        ),
+      }
+    : report?.openAbdominalSurgery,
 });
 
 const getCurrentExtractedPatientInfoFromReport = (report: any) => {
   const candidates = [
     report?.patientInfo,
+    report?.gastroscopy?.patientInfo,
+    report?.colonoscopy?.patientInfo,
     report?.appendectomy?.patientInfo,
     report?.ventralHernia?.patientInfo,
     report?.rectalCancer?.patientInfo,
     report?.smallBowel?.patientInfo,
     report?.cholecystectomy?.patientInfo,
     report?.periAnal?.patientInfo,
+    report?.inguinalHernia?.patientInfo,
+    report?.transanalMinimallyInvasiveSurgery?.patientInfo,
+    report?.openGeneralSurgery?.patientInfo,
+    report?.openAbdominalSurgery?.patientInfo,
   ];
 
   const match = candidates.find((candidate) => hasExtractedPatientStickerData(candidate));
@@ -389,12 +515,18 @@ const WORKING_SESSION_STORAGE_KEY = "working_session_state_v1";
 const VALID_APP_SECTIONS = new Set(["templates", "patients", "reports"]);
 const VALID_TEMPLATE_TABS = new Set([
   "procedure",
+  "gastroscopy",
+  "colonoscopy",
   "appendectomy",
   "hernia",
   "rectal",
   "smallBowel",
   "cholecystectomy",
   "periAnal",
+  "inguinalHernia",
+  "transanalMinimallyInvasiveSurgery",
+  "openGeneralSurgery",
+  "openAbdominalSurgery",
 ]);
 
 interface WorkingSessionState {
@@ -495,6 +627,8 @@ const Index = () => {
       surgeonSignatureText: '',
       dateTime: ''
     },
+    gastroscopy: createInitialGastroscopyState(),
+    colonoscopy: createInitialColonoscopyState(),
     appendectomy: {
       patientInfo: createInitialPatientInfoState(),
       preoperative: {
@@ -727,7 +861,11 @@ const Index = () => {
 	    },
 	      smallBowel: createInitialSmallBowelSurgeryState(),
 	      cholecystectomy: createInitialCholecystectomyState(),
-	      periAnal: createInitialPeriAnalState()
+	      periAnal: createInitialPeriAnalState(),
+        inguinalHernia: createInitialInguinalHerniaState(),
+        transanalMinimallyInvasiveSurgery: createInitialTransanalMinimallyInvasiveSurgeryState(),
+        openGeneralSurgery: createInitialNarrativeSurgeryState("general"),
+        openAbdominalSurgery: createInitialNarrativeSurgeryState("abdominal"),
 		  });
   const [currentExtractedPatientInfo, setCurrentExtractedPatientInfo] = useState(
     createInitialPatientInfoState(),
@@ -1470,7 +1608,7 @@ const Index = () => {
         } else if (section === 'procedureTypes') {
           updated.gastroscopyFindings = previousState.gastroscopyFindings || { findings: [] };
           updated.colonoscopyFindings = previousState.colonoscopyFindings || { findings: [] };
-          updated.procedureFindings = previousState.procedureFindings || { findings: '', additionalNotes: '' };
+          updated.procedureFindings = previousState.procedureFindings || { findings: '', additionalNotes: '' }
         } else if (section === 'specimen') {
           updated.specimen = JSON.parse(JSON.stringify(previousState));
         }
@@ -1509,7 +1647,7 @@ const Index = () => {
         } else if (section === 'procedureTypes') {
           updated.gastroscopyFindings = nextState.gastroscopyFindings || { findings: [] };
           updated.colonoscopyFindings = nextState.colonoscopyFindings || { findings: [] };
-          updated.procedureFindings = nextState.procedureFindings || { findings: '', additionalNotes: '' };
+          updated.procedureFindings = nextState.procedureFindings || { findings: '', additionalNotes: '' }
         } else if (section === 'specimen') {
           updated.specimen = JSON.parse(JSON.stringify(nextState));
         }
@@ -1769,6 +1907,14 @@ const Index = () => {
         const restoredReport = normalizeReportPatientInfos({
           ...currentReport,
           ...restoredSavedData,
+          gastroscopy: {
+            ...currentReport.gastroscopy,
+            ...(restoredSavedData.gastroscopy || {}),
+          },
+          colonoscopy: {
+            ...currentReport.colonoscopy,
+            ...(restoredSavedData.colonoscopy || {}),
+          },
           appendectomy: {
             ...currentReport.appendectomy,
             ...(restoredSavedData.appendectomy || {}),
@@ -1792,6 +1938,22 @@ const Index = () => {
           periAnal: {
             ...currentReport.periAnal,
             ...(restoredSavedData.periAnal || {}),
+          },
+          inguinalHernia: {
+            ...currentReport.inguinalHernia,
+            ...(restoredSavedData.inguinalHernia || {}),
+          },
+          transanalMinimallyInvasiveSurgery: {
+            ...currentReport.transanalMinimallyInvasiveSurgery,
+            ...(restoredSavedData.transanalMinimallyInvasiveSurgery || {}),
+          },
+          openGeneralSurgery: {
+            ...currentReport.openGeneralSurgery,
+            ...(restoredSavedData.openGeneralSurgery || {}),
+          },
+          openAbdominalSurgery: {
+            ...currentReport.openAbdominalSurgery,
+            ...(restoredSavedData.openAbdominalSurgery || {}),
           },
         });
 
@@ -2034,6 +2196,12 @@ const Index = () => {
     const smallBowel = data.smallBowel || {};
     const cholecystectomy = data.cholecystectomy || {};
     const periAnal = data.periAnal || {};
+    const gastroscopyTemplate = data.gastroscopy || {};
+    const colonoscopyTemplate = data.colonoscopy || {};
+    const inguinalHernia = data.inguinalHernia || {};
+    const tmis = data.transanalMinimallyInvasiveSurgery || {};
+    const openGeneralSurgery = data.openGeneralSurgery || {};
+    const openAbdominalSurgery = data.openAbdominalSurgery || {};
     const gastroscopyFindings = data.gastroscopyFindings || {};
     const colonoscopyFindings = data.colonoscopyFindings || {};
     
@@ -2045,10 +2213,16 @@ const Index = () => {
     const hasSmallBowelData = hasMeaningfulPatientInfoData(smallBowel.patientInfo) || smallBowel.preoperative?.surgeons?.some((s: string) => s.trim()) || smallBowel.procedure?.approach?.length > 0;
     const hasCholeData = hasMeaningfulPatientInfoData(cholecystectomy.patientInfo) || cholecystectomy.preoperative?.surgeons?.some((s: string) => s.trim()) || cholecystectomy.procedure?.approach?.length > 0;
     const hasPeriAnalData = hasMeaningfulPatientInfoData(periAnal.patientInfo) || periAnal.preoperative?.surgeons?.some((s: string) => s.trim()) || periAnal.findings?.selectedFindings?.length > 0;
+    const hasGastroscopyTemplateData = hasMeaningfulPatientInfoData(gastroscopyTemplate.patientInfo) || gastroscopyTemplate.preoperative?.endoscopists?.some((s: string) => s.trim()) || gastroscopyTemplate.diagram?.findings?.length > 0;
+    const hasColonoscopyTemplateData = hasMeaningfulPatientInfoData(colonoscopyTemplate.patientInfo) || colonoscopyTemplate.preoperative?.endoscopists?.some((s: string) => s.trim()) || colonoscopyTemplate.diagram?.findings?.length > 0;
+    const hasInguinalHerniaData = hasMeaningfulPatientInfoData(inguinalHernia.patientInfo) || inguinalHernia.preoperative?.indication?.length > 0 || inguinalHernia.procedure?.description?.trim?.();
+    const hasTmisData = hasMeaningfulPatientInfoData(tmis.patientInfo) || tmis.preoperative?.surgeons?.some((s: string) => s.trim()) || tmis.operativeFindings?.findings?.trim?.();
+    const hasOpenGeneralSurgeryData = hasMeaningfulPatientInfoData(openGeneralSurgery.patientInfo) || openGeneralSurgery.preoperative?.surgeons?.some((s: string) => s.trim()) || openGeneralSurgery.narrative?.operationDone?.trim?.();
+    const hasOpenAbdominalSurgeryData = hasMeaningfulPatientInfoData(openAbdominalSurgery.patientInfo) || openAbdominalSurgery.preoperative?.surgeons?.some((s: string) => s.trim()) || openAbdominalSurgery.narrative?.operationDone?.trim?.();
     const hasEndoscopyData = gastroscopyFindings.findings?.length > 0 || colonoscopyFindings.findings?.length > 0 || data.selectedProcedures?.length > 0;
     const hasNotes = data.notes?.trim() || data.conclusion?.trim();
     
-    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasSmallBowelData || hasCholeData || hasPeriAnalData || hasEndoscopyData || hasNotes;
+    return hasPatientData || hasRectalData || hasVentralData || hasAppendectomyData || hasSmallBowelData || hasCholeData || hasPeriAnalData || hasGastroscopyTemplateData || hasColonoscopyTemplateData || hasInguinalHerniaData || hasTmisData || hasOpenGeneralSurgeryData || hasOpenAbdominalSurgeryData || hasEndoscopyData || hasNotes;
   };
 
   // Appendectomy data is now handled by the main data loading above
@@ -2097,7 +2271,6 @@ const Index = () => {
     editingPatientContext,
     enablePersistence,
     forcedPatientsProcedureFilter,
-    isFirebaseConfigured,
   ]);
 
   useEffect(() => {
@@ -2399,2823 +2572,53 @@ const Index = () => {
     };
   }, [hasUserInteracted]);
   
-  // Helper functions for automatic calculations
-  const calculateBMI = (weight: string, height: string): string => {
-    const weightNum = parseFloat(weight);
-    const heightNum = parseFloat(height);
-    
-    if (isNaN(weightNum) || isNaN(heightNum) || weightNum <= 0 || heightNum <= 0) {
-      return '';
-    }
-    
-    // Convert height from cm to meters
-    const heightInMeters = heightNum / 100;
-    const bmi = weightNum / (heightInMeters * heightInMeters);
-    
-    return bmi.toFixed(1);
-  };
-
-  const calculateAge = (dateOfBirth: string): string => {
-    if (!dateOfBirth) return '';
-    
-    const birthDate = new Date(dateOfBirth);
-    const today = new Date();
-    
-    if (isNaN(birthDate.getTime())) {
-      return '';
-    }
-    
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    // Adjust age if birthday hasn't occurred this year
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    
-    return age.toString();
-  };
-
-  const followUpOptions = [
-    'Barium Swallow',
-    'Barium Enema', 
-    'Operation',
-    'CT Scan',
-    'MRI',
-    'Blood Tests',
-    'Repeat Endoscopy',
-    'Histology Results',
-    'Other'
-  ];
-
-  const toggleExpand = (section: string) => {
-    setExpanded({...expanded, [section]: !expanded[section]});
-    if (!expanded[section]) {
-      setActiveSection(section);
-    }
-  };
-
-  const updateReport = (section: keyof typeof currentReport, data: any) => {
-    console.log(`[Index updateReport] section: ${section}`, data);
-    
-    // Handle findings data
-    if (section === 'gastroscopyFindings') {
-      setCurrentReport(prev => ({
-        ...prev,
-        gastroscopyFindings: data,
-        gastroscopyCanvasData: data.canvasImageData || prev.gastroscopyCanvasData
-      }));
-    } else if (section === 'colonoscopyFindings') {
-      setCurrentReport(prev => ({
-        ...prev,
-        colonoscopyFindings: data,
-        colonoscopyCanvasData: data.canvasImageData || prev.colonoscopyCanvasData
-      }));
-    } else if (section === 'selectedProcedures') {
-      // When procedures change, clear findings data that are no longer relevant
-      setCurrentReport(prev => {
-        const newSelectedProcedures = data;
-        const newState = { ...prev, selectedProcedures: newSelectedProcedures };
-        
-        // Check if gastroscopy is still selected
-        const hasGastroscopyProcedure = newSelectedProcedures.some((proc: string) => 
-          proc === "Gastroscopy" || 
-          proc === "Gastroscopy + Colonoscopy" ||
-          proc.includes("PEG Tube") ||
-          proc.includes("ERCP") ||
-          proc.includes("EUS") ||
-          proc.includes("EMR") ||
-          proc.includes("ESD") ||
-          proc.includes("POEM") ||
-          proc.includes("G-POEM") ||
-          proc.includes("Variceal Banding") ||
-          proc.includes("Manometry") ||
-          proc.includes("pH Monitoring") ||
-          proc.includes("Foreign Body Removal")
-        );
-        
-        // Check if colonoscopy is still selected
-        const hasColonoscopyProcedure = newSelectedProcedures.some((proc: string) => 
-          proc === "Colonoscopy" || 
-          proc === "Gastroscopy + Colonoscopy" ||
-          proc.includes("Polypectomy") ||
-          proc.includes("APC") ||
-          proc.includes("EMR (Colon)") ||
-          proc.includes("ESD (Colon)") ||
-          proc.includes("Stricture Dilation (Colon)") ||
-          proc.includes("Stent Placement (Colonic")
-        );
-        
-        // Clear gastroscopy data if no gastroscopy procedures selected
-        if (!hasGastroscopyProcedure) {
-          newState.gastroscopyFindings = { findings: [] };
-          newState.gastroscopyCanvasData = '';
-        }
-        
-        // Clear colonoscopy data if no colonoscopy procedures selected
-        if (!hasColonoscopyProcedure) {
-          newState.colonoscopyFindings = { findings: [] };
-          newState.colonoscopyCanvasData = '';
-        }
-        
-        // Clear procedure findings if no procedures are selected at all, 
-        // or if only main procedures (Gastroscopy/Colonoscopy) are selected without add-ons
-        const mainProceduresOnly = newSelectedProcedures.every(proc => 
-          proc === "Gastroscopy" || proc === "Colonoscopy" || proc === "Gastroscopy + Colonoscopy"
-        );
-        
-        if (newSelectedProcedures.length === 0 || (mainProceduresOnly && newSelectedProcedures.length > 0)) {
-          // Only clear if there are no add-on procedures that would require procedure findings
-          const hasAddOnProcedures = newSelectedProcedures.some(proc => 
-            !["Gastroscopy", "Colonoscopy", "Gastroscopy + Colonoscopy"].includes(proc)
-          );
-          
-          if (!hasAddOnProcedures) {
-            newState.procedureFindings = {
-              findings: '',
-              additionalNotes: ''
-            };
-          }
-        }
-        
-        return newState;
-      });
-    } else {
-      setCurrentReport(prev => {
-        const next = {
-          ...prev,
-          [section]: section === 'media'
-            ? data
-            : section === 'conclusion'
-              ? data
-              : typeof data === 'object' && data !== null
-                ? { ...prev[section], ...data }
-                : data
-        } as typeof prev;
-
-        if (section === 'patientInfo') {
-          next.patientInfo = createInitialPatientInfoState(next.patientInfo);
-        }
-
-        setTimeout(() => {
-          addToHistory(next);
-          
-          // Also track endoscopy section history for section-specific undo/redo
-          if (section === 'patientInfo') {
-            setEndoscopyHistory(prevHistory => {
-              const newHistory = [...(prevHistory.patientInfo || []), next.patientInfo];
-              setEndoscopyHistoryIndex(prev => ({
-                ...prev,
-                patientInfo: newHistory.length - 1
-              }));
-              return {
-                ...prevHistory,
-                patientInfo: newHistory
-              };
-            });
-          } else if (section === 'selectedProcedures' || section === 'gastroscopyCanvasData' || section === 'colonoscopyCanvasData') {
-            const procedureData = {
-              selectedProcedures: next.selectedProcedures || [],
-              procedure: next.procedure || {},
-              gastroscopyCanvasData: next.gastroscopyCanvasData || '',
-              colonoscopyCanvasData: next.colonoscopyCanvasData || ''
-            };
-            setEndoscopyHistory(prevHistory => {
-              const newHistory = [...(prevHistory.procedureInfo || []), procedureData];
-              setEndoscopyHistoryIndex(prev => ({
-                ...prev,
-                procedureInfo: newHistory.length - 1
-              }));
-              return {
-                ...prevHistory,
-                procedureInfo: newHistory
-              };
-            });
-          } else if (section === 'gastroscopyFindings' || section === 'colonoscopyFindings' || section === 'procedureFindings') {
-            const findingsData = {
-              gastroscopyFindings: next.gastroscopyFindings || { findings: [] },
-              colonoscopyFindings: next.colonoscopyFindings || { findings: [] },
-              procedureFindings: next.procedureFindings || { findings: '', additionalNotes: '' }
-            };
-            setEndoscopyHistory(prevHistory => {
-              const newHistory = [...(prevHistory.procedureTypes || []), findingsData];
-              setEndoscopyHistoryIndex(prev => ({
-                ...prev,
-                procedureTypes: newHistory.length - 1
-              }));
-              return {
-                ...prevHistory,
-                procedureTypes: newHistory
-              };
-            });
-          } else if (section === 'specimen') {
-            setEndoscopyHistory(prevHistory => {
-              const newHistory = [...(prevHistory.specimen || []), next.specimen];
-              setEndoscopyHistoryIndex(prev => ({
-                ...prev,
-                specimen: newHistory.length - 1
-              }));
-              return {
-                ...prevHistory,
-                specimen: newHistory
-              };
-            });
-          }
-        }, 0);
-        return next;
-      });
-    }
-  };
-
-  // Create auto-save function with longer debouncing to reduce interference
-  const autoSaveAppendectomy = useMemo(
-    () => createAutoSave("appendectomy_data", 10000),
-    [],
-  );
-
-  // Update appendectomy specific data
-  const updateAppendectomy = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const newAppendectomy = {
-        ...prev.appendectomy,
-        [section]: {
-          ...prev.appendectomy[section],
-          [field]: value
-        }
-      };
-
-      // Auto-calculate BMI if weight or height changes
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newAppendectomy.patientInfo.weight;
-        const height = field === 'height' ? value : newAppendectomy.patientInfo.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newAppendectomy.patientInfo.bmi = bmi;
-        }
-      }
-
-      // Auto-calculate age if date of birth changes
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newAppendectomy.patientInfo.age = age;
-        }
-      }
-
-      const newReport = {
-        ...prev,
-        appendectomy: newAppendectomy
-      };
-
-      // Auto-save the updated data with debouncing (if persistence enabled)
-      if (enablePersistence) {
-        autoSaveAppendectomy(newReport.appendectomy);
-      }
-
-      return newReport;
-    });
-
-    // Add to history for undo/redo functionality
-    setAppendectomyHistory(prevHistory => {
-      const newHistory = { ...prevHistory };
-      const currentIndex = appendectomyHistoryIndex[section as keyof typeof appendectomyHistoryIndex];
-      
-      // Remove any history after current index (when user makes new change after undo)
-      newHistory[section as keyof typeof newHistory] = newHistory[section as keyof typeof newHistory]?.slice(0, currentIndex + 1) || [];
-      
-      // Add new state to history
-      const newSectionData = {
-        ...currentReport.appendectomy[section as keyof typeof currentReport.appendectomy],
-        [field]: value
-      };
-      newHistory[section as keyof typeof newHistory].push(newSectionData);
-      
-      // Keep only last 20 history entries per section
-      if (newHistory[section as keyof typeof newHistory]?.length > 20) {
-        newHistory[section as keyof typeof newHistory] = newHistory[section as keyof typeof newHistory].slice(-20);
-      }
-
-      // Update history index with the new history length
-      setAppendectomyHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        [section]: (newHistory[section as keyof typeof newHistory]?.length || 1) - 1
-      }));
-      
-      return newHistory;
-    });
-  };
-
-  // Appendectomy undo/redo/clear functions
-  const undoAppendectomy = (section: keyof typeof appendectomyHistory) => {
-    const currentIndex = appendectomyHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = appendectomyHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        appendectomy: {
-          ...prev.appendectomy,
-          [section]: previousState
-        }
-      }));
-      
-      setAppendectomyHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} changes undone`);
-    } else {
-      toast.info(`No more actions to undo for ${section}`);
-    }
-  };
-
-  const redoAppendectomy = (section: keyof typeof appendectomyHistory) => {
-    const currentIndex = appendectomyHistoryIndex[section];
-    const maxIndex = (appendectomyHistory[section] || []).length - 1;
-    
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = appendectomyHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        appendectomy: {
-          ...prev.appendectomy,
-          [section]: nextState
-        }
-      }));
-      
-      setAppendectomyHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} changes redone`);
-    } else {
-      toast.info(`No more actions to redo for ${section}`);
-    }
-  };
-
-  const clearAppendectomy = (section: keyof typeof appendectomyHistory) => {
-    const initialState = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      intraoperative: {
-        appendixAppearance: [],
-        abscess: '',
-        peritonitis: [],
-        otherFindings: ''
-      },
-      procedure: {
-        approach: [],
-        reasonForConversion: '',
-        operationDescription: '',
-        incisionType: [],
-        incisionOther: '',
-        trocarPlacement: '',
-        divisionMethod: [],
-        divisionOther: '',
-        mesenteryControl: [],
-        mesenteryOther: '',
-        lavage: '',
-        drainPlacement: '',
-        drainLocation: ''
-      },
-      closure: {
-        fascialClosure: '',
-        skinClosure: [],
-        skinOther: '',
-        complications: '',
-        complicationDetails: '',
-        pathology: '',
-        otherSpecimens: '',
-        specimenDetails: '',
-        surgeonSignature: '',
-        dateTime: ''
-      }
-    };
-
-    setCurrentReport(prev => ({
-      ...prev,
-      appendectomy: {
-        ...prev.appendectomy,
-        [section]: initialState[section]
-      }
-    }));
-
-    // Add cleared state to history
-    setAppendectomyHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialState[section]]
-    }));
-
-    setAppendectomyHistoryIndex(prev => ({
-      ...prev,
-      [section]: (appendectomyHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  // Ventral Hernia undo/redo/clear functions
-  const undoVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
-    const currentIndex = ventralHerniaHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = ventralHerniaHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        ventralHernia: {
-          ...prev.ventralHernia,
-          [section]: previousState
-        }
-      }));
-      
-      setVentralHerniaHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} undo successful`);
-    }
-  };
-
-  const redoVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
-    const currentIndex = ventralHerniaHistoryIndex[section];
-    const maxIndex = (ventralHerniaHistory[section] || []).length - 1;
-    
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = ventralHerniaHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        ventralHernia: {
-          ...prev.ventralHernia,
-          [section]: nextState
-        }
-      }));
-      
-      setVentralHerniaHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} redo successful`);
-    }
-  };
-
-  const clearVentralHernia = (section: keyof typeof ventralHerniaHistory) => {
-    const initialState = createInitialVentralHerniaState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      ventralHernia: {
-        ...prev.ventralHernia,
-        [section]: initialState[section]
-      }
-    }));
-
-    // Add cleared state to history
-    setVentralHerniaHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialState[section]]
-    }));
-
-    setVentralHerniaHistoryIndex(prev => ({
-      ...prev,
-      [section]: (ventralHerniaHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  // Rectal Cancer undo/redo/clear functions
-  const undoRectalCancer = (section: keyof typeof rectalCancerHistory) => {
-    const currentIndex = rectalCancerHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = rectalCancerHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        rectalCancer: {
-          ...prev.rectalCancer,
-          [section]: previousState
-        }
-      }));
-      
-      setRectalCancerHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} undo successful`);
-    }
-  };
-
-  const redoRectalCancer = (section: keyof typeof rectalCancerHistory) => {
-    const currentIndex = rectalCancerHistoryIndex[section];
-    const maxIndex = (rectalCancerHistory[section] || []).length - 1;
-    
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = rectalCancerHistory[section][newIndex];
-      
-      setCurrentReport(prev => ({
-        ...prev,
-        rectalCancer: {
-          ...prev.rectalCancer,
-          [section]: nextState
-        }
-      }));
-      
-      setRectalCancerHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-      
-      toast.success(`${section} redo successful`);
-    }
-  };
-
-  const clearRectalCancer = (section: keyof typeof rectalCancerHistory) => {
-    const initialState = {
-      patientInfo: createInitialPatientInfoState(),
-      operationType: {
-        type: [],
-        typeOther: '',
-        operationFindings: '',
-        operationFindingsOptions: [],
-        operationFindingsOther: '',
-        neoadjuvantTreatment: '',
-        neoadjuvantDetails: ''
-      },
-      surgicalApproach: {
-        primaryApproach: [],
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: ''
-      },
-      mobilizationAndResection: {
-        extentOfMobilization: [],
-        extentOfMobilizationOther: '',
-        vesselLigation: [],
-        vesselLigationOther: '',
-        imvLigation: '',
-        hemostasisTechnique: [],
-        hemostasisTechniqueOther: '',
-        lymphNodeDissection: '',
-        lymphNodeDissectionOther: '',
-        proximalTransection: [],
-        proximalTransectionOther: '',
-        distalTransection: [],
-        distalTransectionOther: '',
-        analCanalTransection: [],
-        analCanalTransectionOther: '',
-        enBlocResection: [],
-        enBlocResectionOther: '',
-        mobilization: [],
-        mobilizationOther: '',
-        mesorectalExcision: [],
-        mesorectalExcisionOther: '',
-        distanceFromAnalVerge: ''
-      },
-      reconstruction: {
-        reconstructionType: [],
-        anastomosisDetails: {},
-        stomaDetails: {},
-        reconstructionOther: ''
-      },
-      operativeEvents: {
-        intraoperativeComplications: [],
-        intraoperativeComplicationsOther: '',
-        drainInsertion: '',
-        drainDetails: '',
-        specimenExtraction: '',
-        extractionSite: '',
-        additionalProcedures: []
-      },
-      closure: {
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: ''
-      },
-      procedureDetails: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        additionalNotes: '',
-        postOperativeManagement: ''
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
-
-    setCurrentReport(prev => ({
-      ...prev,
-      rectalCancer: {
-        ...prev.rectalCancer,
-        [section]: initialState[section]
-      }
-    }));
-
-    // Add cleared state to history
-    setRectalCancerHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialState[section]]
-    }));
-
-    setRectalCancerHistoryIndex(prev => ({
-      ...prev,
-      [section]: (rectalCancerHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  const clearAllRectalCancerData = (showToast = true) => {
-    const initialRectalCancer = {
-      patientInfo: createInitialPatientInfoState(),
-      operationType: {
-        type: [],
-        typeOther: '',
-        operationFindings: '',
-        operationFindingsOptions: [],
-        operationFindingsOther: '',
-        neoadjuvantTreatment: '',
-        neoadjuvantDetails: ''
-      },
-      surgicalApproach: {
-        primaryApproach: [],
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: ''
-      },
-      mobilizationAndResection: {
-        extentOfMobilization: [],
-        extentOfMobilizationOther: '',
-        vesselLigation: [],
-        vesselLigationOther: '',
-        imvLigation: '',
-        hemostasisTechnique: [],
-        hemostasisTechniqueOther: '',
-        lymphNodeDissection: '',
-        lymphNodeDissectionOther: '',
-        proximalTransection: [],
-        proximalTransectionOther: '',
-        distalTransection: [],
-        distalTransectionOther: '',
-        analCanalTransection: [],
-        analCanalTransectionOther: '',
-        enBlocResection: [],
-        enBlocResectionOther: '',
-        mobilization: [],
-        mobilizationOther: '',
-        mesorectalExcision: [],
-        mesorectalExcisionOther: '',
-        distanceFromAnalVerge: ''
-      },
-      reconstruction: {
-        reconstructionType: [],
-        anastomosisDetails: {},
-        stomaDetails: {},
-        reconstructionOther: ''
-      },
-      operativeEvents: {
-        intraoperativeComplications: [],
-        intraoperativeComplicationsOther: '',
-        drainInsertion: '',
-        drainDetails: '',
-        specimenExtraction: '',
-        extractionSite: '',
-        additionalProcedures: []
-      },
-      closure: {
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: ''
-      },
-      procedureDetails: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        additionalNotes: '',
-        postOperativeManagement: ''
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
-
-    setCurrentReport(prev => ({
-      ...prev,
-      rectalCancer: initialRectalCancer
-    }));
-
-    // Reset all history to initial states
-    setRectalCancerHistory({
-      patientInfo: [initialRectalCancer.patientInfo],
-      operationType: [initialRectalCancer.operationType],
-      surgicalApproach: [initialRectalCancer.surgicalApproach],
-      mobilizationAndResection: [initialRectalCancer.mobilizationAndResection],
-      reconstruction: [initialRectalCancer.reconstruction],
-      operativeEvents: [initialRectalCancer.operativeEvents],
-      closure: [initialRectalCancer.closure],
-      procedureDetails: [initialRectalCancer.procedureDetails],
-      procedureFindings: [initialRectalCancer.procedureFindings]
-    });
-
-    setRectalCancerHistoryIndex({
-      patientInfo: 0,
-      operationType: 0,
-      surgicalApproach: 0,
-      mobilizationAndResection: 0,
-      reconstruction: 0,
-      operativeEvents: 0,
-      closure: 0,
-      procedureDetails: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success("All rectal cancer data cleared successfully!");
-    }
-  };
-
-  const undoSmallBowel = (section: keyof typeof smallBowelHistory) => {
-    const currentIndex = smallBowelHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = smallBowelHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        smallBowel: {
-          ...prev.smallBowel,
-          [section]: previousState
-        }
-      }));
-
-      setSmallBowelHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} undo successful`);
-    }
-  };
-
-  const redoSmallBowel = (section: keyof typeof smallBowelHistory) => {
-    const currentIndex = smallBowelHistoryIndex[section];
-    const maxIndex = (smallBowelHistory[section] || []).length - 1;
-
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = smallBowelHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        smallBowel: {
-          ...prev.smallBowel,
-          [section]: nextState
-        }
-      }));
-
-      setSmallBowelHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} redo successful`);
-    }
-  };
-
-  const clearSmallBowel = (section: keyof typeof smallBowelHistory) => {
-    const initialSmallBowel = createInitialSmallBowelSurgeryState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      smallBowel: {
-        ...prev.smallBowel,
-        [section]: initialSmallBowel[section]
-      }
-    }));
-
-    setSmallBowelHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialSmallBowel[section]]
-    }));
-
-    setSmallBowelHistoryIndex(prev => ({
-      ...prev,
-      [section]: (smallBowelHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  const clearAllSmallBowelData = (showToast = true) => {
-    const initialSmallBowel = createInitialSmallBowelSurgeryState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      smallBowel: initialSmallBowel
-    }));
-
-    setSmallBowelHistory({
-      patientInfo: [initialSmallBowel.patientInfo],
-      preoperative: [initialSmallBowel.preoperative],
-      operativeFindings: [initialSmallBowel.operativeFindings],
-      procedure: [initialSmallBowel.procedure],
-      reconstruction: [initialSmallBowel.reconstruction],
-      operativeEvents: [initialSmallBowel.operativeEvents],
-      closure: [initialSmallBowel.closure],
-      additionalInfo: [initialSmallBowel.additionalInfo],
-      procedureFindings: [initialSmallBowel.procedureFindings]
-    });
-
-    setSmallBowelHistoryIndex({
-      patientInfo: 0,
-      preoperative: 0,
-      operativeFindings: 0,
-      procedure: 0,
-      reconstruction: 0,
-      operativeEvents: 0,
-      closure: 0,
-      additionalInfo: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success("All small bowel surgery data cleared successfully!");
-    }
-  };
-
-  const undoCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
-    const currentIndex = cholecystectomyHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = cholecystectomyHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        cholecystectomy: {
-          ...prev.cholecystectomy,
-          [section]: previousState
-        }
-      }));
-
-      setCholecystectomyHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} undo successful`);
-    }
-  };
-
-  const redoCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
-    const currentIndex = cholecystectomyHistoryIndex[section];
-    const maxIndex = (cholecystectomyHistory[section] || []).length - 1;
-
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = cholecystectomyHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        cholecystectomy: {
-          ...prev.cholecystectomy,
-          [section]: nextState
-        }
-      }));
-
-      setCholecystectomyHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} redo successful`);
-    }
-  };
-
-  const clearCholecystectomy = (section: keyof typeof cholecystectomyHistory) => {
-    const initialCholecystectomy = createInitialCholecystectomyState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      cholecystectomy: {
-        ...prev.cholecystectomy,
-        [section]: initialCholecystectomy[section]
-      }
-    }));
-
-    setCholecystectomyHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialCholecystectomy[section]]
-    }));
-
-    setCholecystectomyHistoryIndex(prev => ({
-      ...prev,
-      [section]: (cholecystectomyHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  const clearAllCholecystectomyData = (showToast = true) => {
-    const initialCholecystectomy = createInitialCholecystectomyState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      cholecystectomy: initialCholecystectomy
-    }));
-
-    setCholecystectomyHistory({
-      patientInfo: [initialCholecystectomy.patientInfo],
-      preoperative: [initialCholecystectomy.preoperative],
-      intraoperative: [initialCholecystectomy.intraoperative],
-      procedure: [initialCholecystectomy.procedure],
-      closure: [initialCholecystectomy.closure],
-      additionalInfo: [initialCholecystectomy.additionalInfo],
-      procedureFindings: [initialCholecystectomy.procedureFindings]
-    });
-
-    setCholecystectomyHistoryIndex({
-      patientInfo: 0,
-      preoperative: 0,
-      intraoperative: 0,
-      procedure: 0,
-      closure: 0,
-      additionalInfo: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success("All cholecystectomy data cleared successfully!");
-    }
-  };
-
-  const undoPeriAnal = (section: keyof typeof periAnalHistory) => {
-    const currentIndex = periAnalHistoryIndex[section];
-    if (currentIndex > 0) {
-      const newIndex = currentIndex - 1;
-      const previousState = periAnalHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        periAnal: {
-          ...prev.periAnal,
-          [section]: previousState
-        }
-      }));
-
-      setPeriAnalHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} undo successful`);
-    }
-  };
-
-  const redoPeriAnal = (section: keyof typeof periAnalHistory) => {
-    const currentIndex = periAnalHistoryIndex[section];
-    const maxIndex = (periAnalHistory[section] || []).length - 1;
-
-    if (currentIndex < maxIndex) {
-      const newIndex = currentIndex + 1;
-      const nextState = periAnalHistory[section][newIndex];
-
-      setCurrentReport(prev => ({
-        ...prev,
-        periAnal: {
-          ...prev.periAnal,
-          [section]: nextState
-        }
-      }));
-
-      setPeriAnalHistoryIndex(prev => ({
-        ...prev,
-        [section]: newIndex
-      }));
-
-      toast.success(`${section} redo successful`);
-    }
-  };
-
-  const clearPeriAnal = (section: keyof typeof periAnalHistory) => {
-    const initialPeriAnal = createInitialPeriAnalState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      periAnal: {
-        ...prev.periAnal,
-        [section]: initialPeriAnal[section]
-      }
-    }));
-
-    setPeriAnalHistory(prevHistory => ({
-      ...prevHistory,
-      [section]: [...(prevHistory[section] || []), initialPeriAnal[section]]
-    }));
-
-    setPeriAnalHistoryIndex(prev => ({
-      ...prev,
-      [section]: (periAnalHistory[section] || []).length
-    }));
-
-    toast.success(`${section} section cleared`);
-  };
-
-  const clearAllPeriAnalData = (showToast = true) => {
-    const initialPeriAnal = createInitialPeriAnalState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      periAnal: initialPeriAnal
-    }));
-
-    setPeriAnalHistory({
-      patientInfo: [initialPeriAnal.patientInfo],
-      preoperative: [initialPeriAnal.preoperative],
-      findings: [initialPeriAnal.findings],
-      woundManagement: [initialPeriAnal.woundManagement],
-      complications: [initialPeriAnal.complications],
-      postOperativePlan: [initialPeriAnal.postOperativePlan],
-      specimen: [initialPeriAnal.specimen],
-      additionalInfo: [initialPeriAnal.additionalInfo],
-      procedureFindings: [initialPeriAnal.procedureFindings]
-    });
-
-    setPeriAnalHistoryIndex({
-      patientInfo: 0,
-      preoperative: 0,
-      findings: 0,
-      woundManagement: 0,
-      complications: 0,
-      postOperativePlan: 0,
-      specimen: 0,
-      additionalInfo: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success("All peri-anal data cleared successfully!");
-    }
-  };
-
-  const clearAllAppendectomyData = (showToast = true) => {
-    const initialAppendectomy = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: [''],
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      intraoperative: {
-        appendixAppearance: [],
-        abscess: '',
-        peritonitis: [],
-        otherFindings: ''
-      },
-      procedure: {
-        approach: [],
-        reasonForConversion: '',
-        operationDescription: '',
-        incisionType: [],
-        incisionOther: '',
-        trocarPlacement: '',
-        divisionMethod: [],
-        divisionOther: '',
-        mesenteryControl: [],
-        mesenteryOther: '',
-        lavage: '',
-        drainPlacement: '',
-        drainLocation: ''
-      },
-      closure: {
-        fascialClosure: '',
-        skinClosure: [],
-        skinOther: '',
-        complications: '',
-        complicationDetails: '',
-        pathology: '',
-        otherSpecimens: '',
-        specimenDetails: '',
-        surgeonSignature: '',
-        dateTime: ''
-      }
-      ,
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
-
-    setCurrentReport(prev => ({
-      ...prev,
-      appendectomy: initialAppendectomy
-    }));
-
-    // Reset history
-    setAppendectomyHistory({
-      patientInfo: [initialAppendectomy.patientInfo],
-      preoperative: [initialAppendectomy.preoperative],
-      intraoperative: [initialAppendectomy.intraoperative],
-      procedure: [initialAppendectomy.procedure],
-      closure: [initialAppendectomy.closure],
-      procedureFindings: [initialAppendectomy.procedureFindings]
-    });
-
-    setAppendectomyHistoryIndex({
-      patientInfo: 0,
-      preoperative: 0,
-      intraoperative: 0,
-      procedure: 0,
-      closure: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success('All appendectomy data cleared');
-    }
-  };
-
-  const clearAllVentralHerniaData = (showToast = true) => {
-    const initialVentralHernia = createInitialVentralHerniaState();
-
-    setCurrentReport(prev => ({
-      ...prev,
-      ventralHernia: initialVentralHernia
-    }));
-
-    // Reset all history to initial states
-    setVentralHerniaHistory({
-      patientInfo: [initialVentralHernia.patientInfo],
-      preoperative: [initialVentralHernia.preoperative],
-      operative: [initialVentralHernia.operative],
-      procedure: [initialVentralHernia.procedure],
-      procedureFindings: [initialVentralHernia.procedureFindings]
-    });
-
-    setVentralHerniaHistoryIndex({
-      patientInfo: 0,
-      preoperative: 0,
-      operative: 0,
-      procedure: 0,
-      procedureFindings: 0
-    });
-
-    clearCurrentExtractedPatient();
-    if (showToast) {
-      toast.success("All ventral hernia data cleared successfully!");
-    }
-  };
-
-  const handleClearAllTemplatesData = () => {
-    clearQueuedLiveTemplateDraftSync();
-    liveTemplateDraftSignatureRef.current = "";
-    hasPendingLocalLiveTemplateChangesRef.current = true;
-    latestLocalLiveTemplateEditAtRef.current = new Date().toISOString();
-    clearAllEndoscopyData(false);
-    clearAllAppendectomyData(false);
-    clearAllVentralHerniaData(false);
-    clearAllRectalCancerData(false);
-    clearAllSmallBowelData(false);
-    clearAllCholecystectomyData(false);
-    clearAllPeriAnalData(false);
-
-    setHistory([]);
-    setHistoryIndex(-1);
-    setCurrentTab("procedure");
-    setActiveSection("section1");
-    setExpanded({
-      section1: true,
-      section2: true,
-      section3: false,
-      section4: false,
-      section5: false,
-    });
-    setHerniaActiveSection("section1");
-    setHerniaExpanded({
-      section1: true,
-      section2: true,
-      section3: false,
-      section4: false,
-      section5: false,
-    });
-    setHerniaPrimaryClosure(false);
-    setHerniaMeshRepair(false);
-    setRectalActiveSection("section1");
-    setRectalExpanded({
-      section1: true,
-      section2: false,
-      section3: false,
-      section4: false,
-      section5: false,
-    });
-    setTempConclusion('');
-    setIsEditingConclusion(false);
-    setIsEditingFollowUp(false);
-    setIsFollowUpOpen(false);
-    setIsEditingProcedureFindings(false);
-    setTempFollowUp({
-      enabled: false,
-      options: [],
-      other: '',
-      notes: ''
-    });
-    setTempFollowUpOther('');
-    setTempFollowUpNotes('');
-    setEditingPatientContext(null);
-    setForcedPatientsProcedureFilter(null);
-    setAppSection("templates");
-    clearAllStorage();
-    toast.success("All template data cleared successfully!");
-  };
-
-  const loadRecordIntoTemplates = (record: PatientRecord, createNewEntry = false) => {
-    const restoredReport = normalizeReportPatientInfos(
-      JSON.parse(JSON.stringify(record.reportSnapshot || {})),
-    );
-    const localEditAtIso = new Date().toISOString();
-
-    setCurrentReport(restoredReport);
-    setCurrentTab(getCurrentTabForTemplate(record.templateType) || record.currentTab || "procedure");
-    setCurrentExtractedPatientInfo(createInitialPatientInfoState(record.patientInfo));
-    setEditingPatientContext(
-      createNewEntry
-        ? null
-        : {
-            patientId: record.patientDocId,
-            recordId: record.id,
-          },
-    );
-    setForcedPatientsProcedureFilter(null);
-    setAppSection("templates");
-    workingSessionUpdatedAtRef.current = localEditAtIso;
-    latestLocalLiveTemplateEditAtRef.current = localEditAtIso;
-    hasPendingLocalLiveTemplateChangesRef.current = true;
-
-    if (createNewEntry) {
-      toast.success("Loaded previous template as a new entry starting point.");
-    } else {
-      toast.success("Saved patient template loaded.");
-    }
-  };
-
-  const saveCurrentTemplateToPatients = async (
-    saveMode: "update" | "newEntry" | "create" = "create",
-    options: {
-      silent?: boolean;
-      requireNameAndDob?: boolean;
-      syncImmediately?: boolean;
-      patientInfoOverride?: Record<string, any> | null;
-      reportSnapshotOverride?: Record<string, any> | null;
-      templateTypeOverride?: typeof activeTemplateType;
-      currentTabOverride?: string | null;
-      targetContext?: {
-        patientId: string;
-        recordId: string;
-      } | null;
-    } = {},
-  ) => {
-    const templateTypeForSave = options.templateTypeOverride || activeTemplateType;
-    const currentTabForSave =
-      options.currentTabOverride || getCurrentTabForTemplate(templateTypeForSave) || currentTab;
-    const reportSnapshotForSave = options.reportSnapshotOverride || currentReport;
-    const patientInfo = createInitialPatientInfoState(
-      options.patientInfoOverride || getTemplatePatientInfo(reportSnapshotForSave, templateTypeForSave),
-    );
-    const trimmedName = String(patientInfo.name || "").trim();
-    const trimmedDob = String(patientInfo.dateOfBirth || "").trim();
-    const trimmedPatientId = String(patientInfo.patientId || "").trim();
-
-    if (options.requireNameAndDob && (!trimmedName || !trimmedDob)) {
-      return null;
-    }
-
-    if (!trimmedName && !trimmedPatientId && !trimmedDob) {
-      if (!options.silent) {
-        toast.error("Add at least patient name, patient ID, or DOB before saving to Patients.");
-      }
-      return null;
-    }
-
-    const resolvedContext = options.targetContext || editingPatientContext || null;
-    const existingRecord =
-      (saveMode === "update" || resolvedContext) && resolvedContext
-        ? patientDatabaseCache.records.find((record) => record.id === resolvedContext.recordId) ||
-          null
-        : null;
-
-    const patientDocId =
-      (saveMode === "update" || saveMode === "newEntry" || resolvedContext) && resolvedContext
-        ? resolvedContext.patientId
-        : findMatchingPatientId(patientDatabaseCache.patients, patientInfo) || createNewPatientId();
-
-    const nextRecord = buildPatientRecord({
-      currentTab: currentTabForSave,
-      existingRecord:
-        existingRecord ||
-        (resolvedContext
-          ? ({
-              id: resolvedContext.recordId,
-              createdAt: new Date().toISOString(),
-              deletedAt: null,
-            } as PatientRecord)
-          : null),
-      patientDocId,
-      reportSnapshot: reportSnapshotForSave,
-      templateType: templateTypeForSave,
-    });
-
-    const nextCache = upsertPatientRecordInCache(patientDatabaseCache, nextRecord);
-    const nextPatient =
-      nextCache.patients.find((patient) => patient.id === patientDocId) || null;
-
-    persistPatientCache(nextCache);
-
-    if (nextPatient) {
-      setPendingPatientSyncCount(queuePatientRecordSync(nextPatient, nextRecord));
-    }
-
-    const nextEditingContext = {
-      patientId: patientDocId,
-      recordId: nextRecord.id,
-    };
-
-    pendingPatientAutosaveContextRef.current = nextEditingContext;
-    setEditingPatientContext(nextEditingContext);
-
-    if (
-      (options.syncImmediately || !options.silent) &&
-      typeof navigator !== "undefined" &&
-      navigator.onLine
-    ) {
-      await syncPatientDatabase(false);
-    }
-
-    if (!options.silent) {
-      toast.success(
-        saveMode === "newEntry"
-          ? `${getTemplateLabel(templateTypeForSave)} saved as a new patient entry.`
-          : `${getTemplateLabel(templateTypeForSave)} saved to Patients.`,
-      );
-    }
-
-    return {
-      patient: nextPatient,
-      record: nextRecord,
-      context: nextEditingContext,
-    };
-  };
-
-  const handleOpenSavedRecord = (record: PatientRecord) => {
-    loadRecordIntoTemplates(record, false);
-  };
-
-  const handleSaveCurrentTemplateRecord = () => {
-    saveCurrentTemplateToPatients(isEditingSavedPatientRecord ? "update" : "create");
-  };
-
-  const handleStartNewEntry = (_patient: any, record?: PatientRecord | null) => {
-    if (!record) {
-      setEditingPatientContext(null);
-      setAppSection("templates");
-      toast.success("Ready for a new patient entry.");
-      return;
-    }
-
-    loadRecordIntoTemplates(record, true);
-  };
-
-  const handleExportSavedRecord = async (record: PatientRecord) => {
-    try {
-      await exportSavedRecordPdf(record);
-      toast.success("Saved record PDF generated successfully.");
-    } catch (error) {
-      console.error("Failed to export saved record PDF", error);
-      toast.error("Failed to generate the saved record PDF.");
-    }
-  };
-
-  const handleDeleteSavedRecord = async (record: PatientRecord) => {
-    const recordLabel = record.templateLabel || "saved record";
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Delete this ${recordLabel} entry from Saved Records?`)
-    ) {
-      return;
-    }
-
-    const nextCache = removePatientRecordFromCache(patientDatabaseCache, record.id);
-    const nextPatient =
-      nextCache.patients.find((patient) => patient.id === record.patientDocId) || null;
-
-    persistPatientCache(nextCache);
-
-    if (nextPatient) {
-      setPendingPatientSyncCount(queuePatientRecordDeleteSync(nextPatient, record.id));
-    }
-
-    if (editingPatientContext?.recordId === record.id) {
-      setEditingPatientContext(null);
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      await syncPatientDatabase(false);
-    }
-
-    toast.success("Saved record deleted.");
-  };
-
-  const handleSetPatientDeletedState = async (patientId: string, deletedAt: string | null) => {
-    const nextCache = applyPatientDeletedState(patientDatabaseCache, patientId, deletedAt);
-    persistPatientCache(nextCache);
-
-    const recordIds = nextCache.records
-      .filter((record) => record.patientDocId === patientId)
-      .map((record) => record.id);
-
-    setPendingPatientSyncCount(queuePatientDeletedStateSync(patientId, deletedAt, recordIds));
-
-    if (
-      editingPatientContext?.patientId === patientId &&
-      deletedAt
-    ) {
-      setEditingPatientContext(null);
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      await syncPatientDatabase(false);
-    }
-
-    toast.success(deletedAt ? "Patient moved to recycle bin." : "Patient restored.");
-  };
-
-  const handlePermanentlyDeletePatients = async (patientIds: string[]) => {
-    if (patientIds.length === 0) {
-      return;
-    }
-
-    const nextCache = removePatientsFromCache(patientDatabaseCache, patientIds);
-    const patientIdSet = new Set(patientIds);
-    const recordIds = patientDatabaseCache.records
-      .filter((record) => patientIdSet.has(record.patientDocId))
-      .map((record) => record.id);
-
-    persistPatientCache(nextCache);
-    setPendingPatientSyncCount(queuePermanentPatientDeleteSync(patientIds, recordIds));
-
-    if (
-      editingPatientContext &&
-      patientIdSet.has(editingPatientContext.patientId)
-    ) {
-      setEditingPatientContext(null);
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      await syncPatientDatabase(false);
-    }
-
-    toast.success(
-      patientIds.length === 1
-        ? "Patient deleted permanently."
-        : "Selected patients deleted permanently.",
-    );
-  };
-
-  const handleUploadPatientAttachments = async (patientId: string, files: File[]) => {
-    if (!files.length) {
-      return;
-    }
-
-    const patient = patientDatabaseCache.patients.find((entry) => entry.id === patientId) || null;
-    if (!patient) {
-      toast.error("Patient could not be found for upload.");
-      return;
-    }
-
-    try {
-      const uploadedAttachments = await uploadPatientFiles(patientId, files);
-      const attachmentMap = new Map<string, PatientAttachment>();
-
-      (patient.attachments || []).forEach((attachment) => {
-        attachmentMap.set(attachment.id, attachment);
-      });
-
-      uploadedAttachments.forEach((attachment) => {
-        attachmentMap.set(attachment.id, attachment);
-      });
-
-      const nextAttachments = Array.from(attachmentMap.values()).sort((left, right) =>
-        right.uploadedAt.localeCompare(left.uploadedAt),
-      );
-
-      const nextPatients = [...patientDatabaseCache.patients]
-        .map((entry) =>
-          entry.id === patientId
-            ? {
-                ...entry,
-                attachments: nextAttachments,
-                updatedAt: new Date().toISOString(),
-              }
-            : entry,
-        )
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-
-      persistPatientCache({
-        ...patientDatabaseCache,
-        patients: nextPatients,
-      });
-
-      const hasRemoteAttachments = nextAttachments.some(
-        (attachment) => attachment.source !== "local",
-      );
-
-      if (hasRemoteAttachments) {
-        setPendingPatientSyncCount(queuePatientAttachmentsSync(patientId, nextAttachments));
-      }
-
-      if (hasRemoteAttachments && typeof navigator !== "undefined" && navigator.onLine) {
-        await syncPatientDatabase(false);
-      }
-
-      const usedLocalFallback = uploadedAttachments.some((attachment) => attachment.source === "local");
-
-      if (usedLocalFallback && hasRemoteAttachments) {
-        toast.success("Some attachments were uploaded, and some were saved locally on this device.");
-      } else if (usedLocalFallback) {
-        toast.success("Attachments were saved locally on this device.");
-      } else {
-        toast.success(
-          uploadedAttachments.length === 1
-            ? "Attachment uploaded successfully."
-            : "Attachments uploaded successfully.",
-        );
-      }
-    } catch (error) {
-      console.error("Failed to upload patient attachments", error);
-      toast.error("Failed to upload the selected media/documents.");
-    }
-  };
-
-  const handleDeletePatientAttachment = async (
-    patientId: string,
-    attachmentToDelete: PatientAttachment,
-  ) => {
-    const patient = patientDatabaseCache.patients.find((entry) => entry.id === patientId) || null;
-    if (!patient) {
-      toast.error("Patient could not be found for attachment deletion.");
-      return;
-    }
-
-    const nextAttachments = (patient.attachments || []).filter(
-      (attachment) => attachment.id !== attachmentToDelete.id,
-    );
-
-    const nextPatients = [...patientDatabaseCache.patients]
-      .map((entry) =>
-        entry.id === patientId
-          ? {
-              ...entry,
-              attachments: nextAttachments,
-              updatedAt: new Date().toISOString(),
-            }
-          : entry,
-      )
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-
-    persistPatientCache({
-      ...patientDatabaseCache,
-      patients: nextPatients,
-    });
-
-    const shouldSyncRemoteAttachments =
-      attachmentToDelete.source !== "local" ||
-      nextAttachments.some((attachment) => attachment.source !== "local");
-
-    if (shouldSyncRemoteAttachments) {
-      setPendingPatientSyncCount(queuePatientAttachmentsSync(patientId, nextAttachments));
-    }
-
-    if (shouldSyncRemoteAttachments && typeof navigator !== "undefined" && navigator.onLine) {
-      await syncPatientDatabase(false);
-    }
-
-    try {
-      await deletePatientFile(attachmentToDelete);
-      toast.success("Attachment deleted successfully.");
-    } catch (error) {
-      console.error("Failed to delete stored patient attachment", error);
-      toast.success("Attachment removed from the patient, but storage cleanup could not be confirmed.");
-    }
-  };
-
-  const handleOpenPatientsProcedureFilter = (procedureFilter: string) => {
-    setForcedPatientsProcedureFilter(procedureFilter);
-    setAppSection("patients");
-  };
-
-  // Handle clearing endoscopy data (section-specific or all)
-  const handleClearData = (section?: string) => {
-    if (section) {
-      // Clear specific section
-      switch (section) {
-        case 'patientInfo':
-          setCurrentReport(prev => ({
-            ...prev,
-            patientInfo: createInitialPatientInfoState()
-          }));
-          clearCurrentExtractedPatient();
-          toast.success('Patient information cleared');
-          break;
-        
-        case 'procedureInfo':
-          setCurrentReport(prev => ({
-            ...prev,
-            procedureFindings: {
-              findings: '',
-              additionalNotes: ''
-            }
-          }));
-          toast.success('Procedure information cleared');
-          break;
-        
-        case 'procedureTypes':
-          setCurrentReport(prev => ({
-            ...prev,
-            selectedProcedures: []
-          }));
-          toast.success('Procedure types cleared');
-          break;
-        
-        case 'specimen':
-          setCurrentReport(prev => ({
-            ...prev,
-            specimen: {
-              sentForPathology: '',
-              laboratoryName: '',
-              otherSpecimensTaken: '',
-              otherSpecimensDetails: ''
-            }
-          }));
-          toast.success('Specimen information cleared');
-          break;
-        
-        case 'gastroscopyFindings':
-          setCurrentReport(prev => ({
-            ...prev,
-            gastroscopyFindings: { findings: [] },
-            gastroscopyCanvasData: ''
-          }));
-          toast.success('Gastroscopy findings cleared');
-          break;
-        
-        case 'colonoscopyFindings':
-          setCurrentReport(prev => ({
-            ...prev,
-            colonoscopyFindings: { findings: [] },
-            colonoscopyCanvasData: ''
-          }));
-          toast.success('Colonoscopy findings cleared');
-          break;
-        
-        case 'conclusion':
-          setCurrentReport(prev => ({
-            ...prev,
-            conclusion: ''
-          }));
-          toast.success('Conclusion cleared');
-          break;
-        
-        case 'followUp':
-          setCurrentReport(prev => ({
-            ...prev,
-            followUp: {
-              enabled: false,
-              options: [],
-              other: '',
-              notes: '',
-              postOperativeManagement: ''
-            }
-          }));
-          toast.success('Follow-up information cleared');
-          break;
-        
-        case 'signature':
-          setCurrentReport(prev => ({
-            ...prev,
-            signature: {
-              surgeonSignature: '',
-              surgeonSignatureText: '',
-              dateTime: ''
-            }
-          }));
-          toast.success('Signature cleared');
-          break;
-        
-        default:
-          toast.error('Unknown section');
-          break;
-      }
-    } else {
-      clearAllEndoscopyData();
-    }
-  };
-
-  // Update ventral hernia specific data
-  const updateVentralHernia = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const newVentralHernia = {
-        ...prev.ventralHernia,
-        [section]: {
-          ...prev.ventralHernia?.[section],
-          [field]: value
-        }
-      };
-
-      // Auto-calculate BMI if weight or height changes
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newVentralHernia.patientInfo?.weight;
-        const height = field === 'height' ? value : newVentralHernia.patientInfo?.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newVentralHernia.patientInfo.bmi = bmi;
-        }
-      }
-
-      // Auto-calculate age if date of birth changes
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newVentralHernia.patientInfo.age = age;
-        }
-      }
-
-      // Add to history for undo/redo functionality
-      setVentralHerniaHistory(prevHistory => ({
-        ...prevHistory,
-        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newVentralHernia[section]]
-      }));
-
-      setVentralHerniaHistoryIndex(prev => ({
-        ...prev,
-        [section]: (ventralHerniaHistory[section as keyof typeof ventralHerniaHistory] || []).length
-      }));
-
-      return {
-        ...prev,
-        ventralHernia: newVentralHernia
-      };
-    });
-  };
-
-  // Update rectal cancer specific data
-  const updateRectalCancer = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const newRectalCancer = {
-        ...prev.rectalCancer,
-        [section]: {
-          ...prev.rectalCancer?.[section],
-          [field]: value
-        }
-      };
-
-      // Auto-calculate BMI if weight or height changes (if patient info exists)
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newRectalCancer.patientInfo?.weight;
-        const height = field === 'height' ? value : newRectalCancer.patientInfo?.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newRectalCancer.patientInfo.bmi = bmi;
-        }
-      }
-
-      // Auto-calculate age if date of birth changes (if patient info exists)
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newRectalCancer.patientInfo.age = age;
-        }
-      }
-
-      // Add to history for undo/redo functionality
-      setRectalCancerHistory(prevHistory => ({
-        ...prevHistory,
-        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newRectalCancer[section]]
-      }));
-
-      setRectalCancerHistoryIndex(prev => ({
-        ...prev,
-        [section]: (rectalCancerHistory[section as keyof typeof rectalCancerHistory] || []).length
-      }));
-
-      return {
-        ...prev,
-        rectalCancer: newRectalCancer
-      };
-    });
-  };
-
-  const updateSmallBowel = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const newSmallBowel = {
-        ...prev.smallBowel,
-        [section]: {
-          ...prev.smallBowel?.[section],
-          [field]: value
-        }
-      };
-
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newSmallBowel.patientInfo?.weight;
-        const height = field === 'height' ? value : newSmallBowel.patientInfo?.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newSmallBowel.patientInfo.bmi = bmi;
-        }
-      }
-
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newSmallBowel.patientInfo.age = age;
-        }
-      }
-
-      setSmallBowelHistory(prevHistory => ({
-        ...prevHistory,
-        [section]: [...(prevHistory[section as keyof typeof prevHistory] || []), newSmallBowel[section]]
-      }));
-
-      setSmallBowelHistoryIndex(prev => ({
-        ...prev,
-        [section]: (smallBowelHistory[section as keyof typeof smallBowelHistory] || []).length
-      }));
-
-      return {
-        ...prev,
-        smallBowel: newSmallBowel
-      };
-    });
-  };
-
-  const updateCholecystectomy = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const currentCholecystectomy = prev.cholecystectomy || createInitialCholecystectomyState();
-      const newCholecystectomy = {
-        ...currentCholecystectomy,
-        [section]: {
-          ...currentCholecystectomy?.[section],
-          [field]: value
-        }
-      };
-
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newCholecystectomy.patientInfo?.weight;
-        const height = field === 'height' ? value : newCholecystectomy.patientInfo?.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newCholecystectomy.patientInfo.bmi = bmi;
-        }
-      }
-
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newCholecystectomy.patientInfo.age = age;
-        }
-      }
-
-      setCholecystectomyHistory(prevHistory => ({
-        ...prevHistory,
-        [section]: [
-          ...(prevHistory[section as keyof typeof prevHistory] || []),
-          newCholecystectomy[section]
-        ]
-      }));
-
-      setCholecystectomyHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        [section]: (cholecystectomyHistory[section as keyof typeof cholecystectomyHistory] || [])
-          .length
-      }));
-
-      return {
-        ...prev,
-        cholecystectomy: newCholecystectomy
-      };
-    });
-  };
-
-  const updatePeriAnal = (section: string, field: string, value: any) => {
-    setCurrentReport(prev => {
-      const currentPeriAnal = prev.periAnal || createInitialPeriAnalState();
-      const newPeriAnal = {
-        ...currentPeriAnal,
-        [section]: {
-          ...currentPeriAnal?.[section],
-          [field]: value
-        }
-      };
-
-      if (section === 'patientInfo' && (field === 'weight' || field === 'height')) {
-        const weight = field === 'weight' ? value : newPeriAnal.patientInfo?.weight;
-        const height = field === 'height' ? value : newPeriAnal.patientInfo?.height;
-        const bmi = calculateBMI(weight, height);
-        if (bmi) {
-          newPeriAnal.patientInfo.bmi = bmi;
-        }
-      }
-
-      if (section === 'patientInfo' && field === 'dateOfBirth') {
-        const age = calculateAge(value);
-        if (age) {
-          newPeriAnal.patientInfo.age = age;
-        }
-      }
-
-      setPeriAnalHistory(prevHistory => ({
-        ...prevHistory,
-        [section]: [
-          ...(prevHistory[section as keyof typeof prevHistory] || []),
-          newPeriAnal[section]
-        ]
-      }));
-
-      setPeriAnalHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        [section]: (periAnalHistory[section as keyof typeof periAnalHistory] || []).length
-      }));
-
-      return {
-        ...prev,
-        periAnal: newPeriAnal
-      };
-    });
-  };
-
-  const updateAppendectomyPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.appendectomy?.patientInfo);
-
-    setCurrentReport(prev => {
-      nextPatientInfo = mergePatientInfoUpdates(prev.appendectomy?.patientInfo, updates);
-      const newAppendectomy = {
-        ...prev.appendectomy,
-        patientInfo: nextPatientInfo,
-      };
-      const newReport = {
-        ...prev,
-        appendectomy: newAppendectomy,
-      };
-
-      if (enablePersistence) {
-        autoSaveAppendectomy(newReport.appendectomy);
-      }
-
-      return newReport;
-    });
-
-    setAppendectomyHistory(prevHistory => {
-      const newHistory = { ...prevHistory };
-      const currentIndex = appendectomyHistoryIndex.patientInfo;
-      const patientInfoHistory = [...(newHistory.patientInfo || []).slice(0, currentIndex + 1), nextPatientInfo];
-
-      newHistory.patientInfo =
-        patientInfoHistory.length > 20 ? patientInfoHistory.slice(-20) : patientInfoHistory;
-
-      setAppendectomyHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: (newHistory.patientInfo?.length || 1) - 1,
-      }));
-
-      return newHistory;
-    });
-  };
-
-  const updateVentralHerniaPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.ventralHernia?.patientInfo);
-
-    setCurrentReport(prev => {
-      nextPatientInfo = mergePatientInfoUpdates(prev.ventralHernia?.patientInfo, updates);
-
-      return {
-        ...prev,
-        ventralHernia: {
-          ...prev.ventralHernia,
-          patientInfo: nextPatientInfo,
-        },
-      };
-    });
-
-    setVentralHerniaHistory(prevHistory => {
-      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
-
-      setVentralHerniaHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: patientInfoHistory.length - 1,
-      }));
-
-      return {
-        ...prevHistory,
-        patientInfo: patientInfoHistory,
-      };
-    });
-  };
-
-  const updateRectalCancerPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.rectalCancer?.patientInfo);
-
-    setCurrentReport(prev => {
-      nextPatientInfo = mergePatientInfoUpdates(prev.rectalCancer?.patientInfo, updates);
-
-      return {
-        ...prev,
-        rectalCancer: {
-          ...prev.rectalCancer,
-          patientInfo: nextPatientInfo,
-        },
-      };
-    });
-
-    setRectalCancerHistory(prevHistory => {
-      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
-
-      setRectalCancerHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: patientInfoHistory.length - 1,
-      }));
-
-      return {
-        ...prevHistory,
-        patientInfo: patientInfoHistory,
-      };
-    });
-  };
-
-  const updateSmallBowelPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.smallBowel?.patientInfo);
-
-    setCurrentReport(prev => {
-      nextPatientInfo = mergePatientInfoUpdates(prev.smallBowel?.patientInfo, updates);
-
-      return {
-        ...prev,
-        smallBowel: {
-          ...prev.smallBowel,
-          patientInfo: nextPatientInfo,
-        },
-      };
-    });
-
-    setSmallBowelHistory(prevHistory => {
-      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
-
-      setSmallBowelHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: patientInfoHistory.length - 1,
-      }));
-
-      return {
-        ...prevHistory,
-        patientInfo: patientInfoHistory,
-      };
-    });
-  };
-
-  const updateCholecystectomyPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.cholecystectomy?.patientInfo);
-
-    setCurrentReport(prev => {
-      const currentCholecystectomy = prev.cholecystectomy || createInitialCholecystectomyState();
-      nextPatientInfo = mergePatientInfoUpdates(currentCholecystectomy.patientInfo, updates);
-
-      return {
-        ...prev,
-        cholecystectomy: {
-          ...currentCholecystectomy,
-          patientInfo: nextPatientInfo,
-        },
-      };
-    });
-
-    setCholecystectomyHistory(prevHistory => {
-      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
-
-      setCholecystectomyHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: patientInfoHistory.length - 1,
-      }));
-
-      return {
-        ...prevHistory,
-        patientInfo: patientInfoHistory,
-      };
-    });
-  };
-
-  const updatePeriAnalPatientInfoBulk = (updates: Record<string, any>) => {
-    if (Object.keys(updates || {}).length === 0) {
-      return;
-    }
-
-    let nextPatientInfo = createInitialPatientInfoState(currentReport.periAnal?.patientInfo);
-
-    setCurrentReport(prev => {
-      const currentPeriAnal = prev.periAnal || createInitialPeriAnalState();
-      nextPatientInfo = mergePatientInfoUpdates(currentPeriAnal.patientInfo, updates);
-
-      return {
-        ...prev,
-        periAnal: {
-          ...currentPeriAnal,
-          patientInfo: nextPatientInfo,
-        },
-      };
-    });
-
-    setPeriAnalHistory(prevHistory => {
-      const patientInfoHistory = [...(prevHistory.patientInfo || []), nextPatientInfo];
-
-      setPeriAnalHistoryIndex(prevIndex => ({
-        ...prevIndex,
-        patientInfo: patientInfoHistory.length - 1,
-      }));
-
-      return {
-        ...prevHistory,
-        patientInfo: patientInfoHistory,
-      };
-    });
-  };
-
-  const handleExportPDF = async (section?: string) => {
-    console.log("=== EXPORT PDF CLICKED - NETLIFY PRODUCTION VERSION ===");
-    console.log("Environment:", window.location.origin);
-    console.log("User agent:", navigator.userAgent);
-    console.log("PDF generation starting...");
-    console.log("Current tab:", currentTab);
-    console.log("Requested section:", section);
-    
-    // Check browser capabilities
-    console.log("Browser supports download:", 'download' in document.createElement('a'));
-    console.log("Browser supports blob:", typeof Blob !== 'undefined');
-    console.log("Browser supports URL.createObjectURL:", typeof URL.createObjectURL === 'function');
-    
-    setIsGeneratingPDF(true);
-    
-    try {
-      const exportSection = section || currentTab;
-      const exportTemplateType = getTemplateTypeFromTab(exportSection);
-      const exportPatientInfo = createInitialPatientInfoState(
-        getTemplatePatientInfo(currentReport, exportTemplateType),
-      );
-      if (
-        String(exportPatientInfo.name || "").trim() &&
-        String(exportPatientInfo.dateOfBirth || "").trim()
-      ) {
-        const targetContext = resolveSilentPatientAutosaveTarget(exportPatientInfo);
-        if (!editingPatientContext && !pendingPatientAutosaveContextRef.current) {
-          pendingPatientAutosaveContextRef.current = targetContext;
-        }
-
-        await saveCurrentTemplateToPatients(
-          editingPatientContext ? "update" : "create",
-          {
-            silent: true,
-            requireNameAndDob: true,
-            syncImmediately: true,
-            patientInfoOverride: exportPatientInfo,
-            reportSnapshotOverride: currentReport,
-            templateTypeOverride: exportTemplateType,
-            currentTabOverride: exportSection,
-            targetContext,
-          },
-        );
-      }
-
-      // Show user that PDF generation is starting
-      toast.info("Starting PDF generation... Please allow downloads if prompted.");
-      
-      // Check if we're in appendectomy tab - if so, export the live report content
-      if (exportSection === "appendectomy") {
-        console.log("📋 Exporting appendectomy live report");
-        console.log("Appendectomy data:", currentReport.appendectomy);
-        
-        // Extract surgical markings from procedure findings
-        let surgicalMarkings = [];
-        try {
-          if (currentReport.appendectomy?.procedureFindings?.findings) {
-            const markings = JSON.parse(currentReport.appendectomy.procedureFindings.findings);
-            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
-              surgicalMarkings = markings;
-            }
-          }
-        } catch (e) {
-          // Not JSON, no surgical markings
-        }
-
-        // Use the new appendectomy PDF generator
-        const result = await generateAppendectomyPDF(
-          currentReport.appendectomy?.patientInfo?.name || 'Unknown Patient',
-          currentReport.appendectomy?.patientInfo?.patientId || 'N/A',
-          surgicalMarkings, // Pass surgical markings
-          currentReport.appendectomy // Pass appendectomy data
-        );
-        
-        if (result.success && result.blob) {
-          // Create download link
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-          // Create filename in format: PatientName_PatientID_Appendectomy_Report_dd_mm_yyyy
-          const now = new Date();
-          const day = now.getDate().toString().padStart(2, '0');
-          const month = (now.getMonth() + 1).toString().padStart(2, '0');
-          const year = now.getFullYear();
-          const dateFormatted = `${day}_${month}_${year}`;
-          
-          const cleanPatientName = (currentReport.appendectomy?.patientInfo?.name || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
-          const cleanPatientId = (currentReport.appendectomy?.patientInfo?.patientId || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
-          
-          link.download = `${cleanPatientName}_${cleanPatientId}_Appendectomy_Report_${dateFormatted}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          
-          toast.success("Appendectomy report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate appendectomy PDF");
-        }
+  // Handle filling mock data for testing
+  const handleFillMockData = () => {
+    let mockData: any = null;
+    let templateKey = '';
+
+    switch (currentTab) {
+      case 'inguinalHernia':
+        mockData = generateInguinalHerniaMockData();
+        templateKey = 'inguinalHernia';
+        break;
+      case 'gastroscopy':
+        mockData = generateGastroscopyMockData();
+        templateKey = 'gastroscopy';
+        break;
+      case 'colonoscopy':
+        mockData = generateColonoscopyMockData();
+        templateKey = 'colonoscopy';
+        break;
+      case 'cholecystectomy':
+        mockData = generateCholecystectomyMockData();
+        templateKey = 'cholecystectomy';
+        break;
+      case 'transanalMinimallyInvasiveSurgery':
+        mockData = generateTAMISMockData();
+        templateKey = 'transanalMinimallyInvasiveSurgery';
+        break;
+      case 'openAbdominalSurgery':
+        mockData = generateOpenAbdominalMockData();
+        templateKey = 'openAbdominalSurgery';
+        break;
+      case 'openGeneralSurgery':
+        mockData = generateOpenGeneralMockData();
+        templateKey = 'openGeneralSurgery';
+        break;
+      default:
+        toast.info(`Mock data for "${currentTab}" template is not yet available.`);
         return;
-      }
-      
-      // Check if we're in rectal cancer tab
-      if (exportSection === "rectalCancer" || exportSection === "rectal") {
-        console.log("📋 Exporting rectal cancer surgery live report");
-        console.log("Rectal cancer data:", currentReport.rectalCancer);
-        
-        // Extract surgical markings from procedure findings
-        let surgicalMarkings = [];
-        try {
-          if (currentReport.rectalCancer?.procedureFindings?.findings) {
-            const markings = JSON.parse(currentReport.rectalCancer.procedureFindings.findings);
-            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
-              surgicalMarkings = markings;
-            }
-          }
-        } catch (e) {
-          // Not JSON, no surgical markings
-        }
+    }
 
-        // Use the new rectal cancer PDF generator
-        const result = await generateRectalCancerPDF(
-          currentReport.rectalCancer?.patientInfo?.name || currentReport.patientInfo?.name || 'Unknown Patient',
-          currentReport.rectalCancer?.patientInfo?.patientId || currentReport.patientInfo?.patientId || 'N/A',
-          surgicalMarkings, // Pass surgical markings
-          currentReport.rectalCancer, // Pass rectal cancer data
-          currentReport.rectalCancer?.patientInfo || currentReport.patientInfo // Pass patient info
-        );
-        
-        if (result.success && result.blob) {
-          // Create download link
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-          const patientName = (currentReport.rectalCancer?.patientInfo?.name || currentReport.patientInfo?.name || 'patient').replace(/\s+/g, '_');
-          const dob = formatDOBForFilename(currentReport.rectalCancer?.patientInfo?.dateOfBirth || currentReport.patientInfo?.dateOfBirth);
-          link.download = `${patientName}_${dob}_Colorectal_Resection_Report.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          
-          toast.success("Colorectal resection report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate rectal cancer PDF");
-        }
-        return;
-      }
-
-      if (exportSection === "smallBowel") {
-        console.log("📋 Exporting small bowel surgery live report");
-        console.log("Small bowel data:", currentReport.smallBowel);
-
-        let surgicalMarkings = [];
-        try {
-          if (currentReport.smallBowel?.procedureFindings?.findings) {
-            const markings = JSON.parse(currentReport.smallBowel.procedureFindings.findings);
-            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
-              surgicalMarkings = markings;
-            }
-          }
-        } catch (e) {
-          // Not JSON, no surgical markings
-        }
-
-        const result = await generateSmallBowelSurgeryPDF(
-          currentReport.smallBowel?.patientInfo?.name || 'Unknown Patient',
-          currentReport.smallBowel?.patientInfo?.patientId || 'N/A',
-          surgicalMarkings,
-          currentReport.smallBowel,
-          currentReport.smallBowel?.patientInfo
-        );
-
-        if (result.success && result.blob) {
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-
-          const now = new Date();
-          const day = now.getDate().toString().padStart(2, '0');
-          const month = (now.getMonth() + 1).toString().padStart(2, '0');
-          const year = now.getFullYear();
-          const formattedDate = `${day}_${month}_${year}`;
-
-          const cleanPatientName = (currentReport.smallBowel?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
-          const cleanPatientId = (currentReport.smallBowel?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
-
-          link.download = `${cleanPatientName}_${cleanPatientId}_Small_Bowel_Surgery_Report_${formattedDate}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-
-          toast.success("Small bowel surgery report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate small bowel surgery PDF");
-        }
-        return;
-      }
-
-      if (exportSection === "cholecystectomy") {
-        console.log("📋 Exporting cholecystectomy live report");
-        console.log("Cholecystectomy data:", currentReport.cholecystectomy);
-
-        let surgicalMarkings = [];
-        try {
-          if (currentReport.cholecystectomy?.procedureFindings?.findings) {
-            const markings = JSON.parse(currentReport.cholecystectomy.procedureFindings.findings);
-            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
-              surgicalMarkings = markings;
-            }
-          }
-        } catch (e) {
-          // Not JSON, no surgical markings
-        }
-
-        const result = await generateCholecystectomyPDF(
-          currentReport.cholecystectomy?.patientInfo?.name || 'Unknown Patient',
-          currentReport.cholecystectomy?.patientInfo?.patientId || 'N/A',
-          surgicalMarkings,
-          currentReport.cholecystectomy,
-          currentReport.cholecystectomy?.patientInfo
-        );
-
-        if (result.success && result.blob) {
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-
-          const now = new Date();
-          const day = now.getDate().toString().padStart(2, '0');
-          const month = (now.getMonth() + 1).toString().padStart(2, '0');
-          const year = now.getFullYear();
-          const formattedDate = `${day}_${month}_${year}`;
-
-          const cleanPatientName = (currentReport.cholecystectomy?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
-          const cleanPatientId = (currentReport.cholecystectomy?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
-
-          link.download = `${cleanPatientName}_${cleanPatientId}_Cholecystectomy_Report_${formattedDate}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-
-          toast.success("Cholecystectomy report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate cholecystectomy PDF");
-        }
-        return;
-      }
-
-      if (exportSection === "periAnal") {
-        console.log("📋 Exporting peri-anal live report");
-        console.log("Peri-Anal data:", currentReport.periAnal);
-
-        const result = await generatePeriAnalPDF(
-          currentReport.periAnal?.patientInfo?.name || 'Unknown Patient',
-          currentReport.periAnal?.patientInfo?.patientId || 'N/A',
-          currentReport.periAnal,
-          currentReport.periAnal?.patientInfo
-        );
-
-        if (result.success && result.blob) {
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-
-          const now = new Date();
-          const day = now.getDate().toString().padStart(2, '0');
-          const month = (now.getMonth() + 1).toString().padStart(2, '0');
-          const year = now.getFullYear();
-          const formattedDate = `${day}_${month}_${year}`;
-
-          const cleanPatientName = (currentReport.periAnal?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
-          const cleanPatientId = (currentReport.periAnal?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
-
-          link.download = `${cleanPatientName}_${cleanPatientId}_Peri_Anal_Report_${formattedDate}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-
-          toast.success("Peri-Anal report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate peri-anal PDF");
-        }
-        return;
-      }
-      
-      // Check if we're in ventral hernia tab
-      if (exportSection === "ventralHernia" || exportSection === "hernia") {
-        console.log("📋 Exporting ventral hernia repair live report");
-        console.log("Ventral hernia data:", currentReport.ventralHernia);
-        
-        // Extract surgical markings from procedure findings
-        let surgicalMarkings = [];
-        try {
-          if (currentReport.ventralHernia?.procedureFindings?.findings) {
-            const markings = JSON.parse(currentReport.ventralHernia.procedureFindings.findings);
-            if (Array.isArray(markings) && markings.length > 0 && markings[0].type) {
-              surgicalMarkings = markings;
-            }
-          }
-        } catch (e) {
-          // Not JSON, no surgical markings
-        }
-
-        // Use the new ventral hernia PDF generator
-        const result = await generateVentralHerniaPDF(
-          currentReport.ventralHernia?.patientInfo?.name || 'Unknown Patient',
-          currentReport.ventralHernia?.patientInfo?.patientId || 'N/A',
-          surgicalMarkings, // Pass surgical markings
-          currentReport.ventralHernia // Pass ventral hernia data
-        );
-        
-        if (result.success && result.blob) {
-          // Create download link
-          const url = URL.createObjectURL(result.blob);
-          const link = document.createElement('a');
-          link.href = url;
-          // Format filename as: PatientName_PatientID_Ventral_Hernia_Report_DD_MM_YYYY
-          const now = new Date();
-          const day = now.getDate().toString().padStart(2, '0');
-          const month = (now.getMonth() + 1).toString().padStart(2, '0');
-          const year = now.getFullYear();
-          const formattedDate = `${day}_${month}_${year}`;
-          
-          const cleanPatientName = (currentReport.ventralHernia?.patientInfo?.name || 'Unknown_Patient').replace(/[^a-zA-Z0-9]/g, '_');
-          const cleanPatientId = (currentReport.ventralHernia?.patientInfo?.patientId || 'Unknown_ID').replace(/[^a-zA-Z0-9]/g, '_');
-          
-          link.download = `${cleanPatientName}_${cleanPatientId}_Ventral_Hernia_Report_${formattedDate}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          
-          toast.success("Ventral hernia repair report PDF generated successfully!");
-        } else {
-          throw new Error(result.error || "Failed to generate ventral hernia PDF");
-        }
-        return;
-      }
-      
-      // Original endoscopy export logic
-      console.log("currentReport:", currentReport);
-      console.log("gastroscopy findings:", currentReport.gastroscopyFindings);
-      console.log("colonoscopy findings:", currentReport.colonoscopyFindings);
-      console.log("gastroscopy canvas data exists:", !!currentReport.gastroscopyCanvasData);
-      console.log("colonoscopy canvas data exists:", !!currentReport.colonoscopyCanvasData);
-      
-      // USE FINAL PDF GENERATOR (completely new)  
-      const finalDiagrams: FinalDiagramCapture[] = [];
-      
-      // Add diagrams if canvas data exists
-      if (currentReport.gastroscopyCanvasData) {
-        console.log("✅ Adding gastroscopy diagram to FINAL PDF");
-        finalDiagrams.push({
-          canvasImageData: currentReport.gastroscopyCanvasData,
-          findings: currentReport.gastroscopyFindings?.findings || [],
-          type: 'gastroscopy'
-        });
-      }
-      
-      if (currentReport.colonoscopyCanvasData) {
-        console.log("✅ Adding colonoscopy diagram to FINAL PDF");
-        finalDiagrams.push({
-          canvasImageData: currentReport.colonoscopyCanvasData,
-          findings: currentReport.colonoscopyFindings?.findings || [],
-          type: 'colonoscopy'
-        });
-      }
-
-      console.log("📊 Total diagrams for FINAL PDF:", finalDiagrams.length);
-
-      const result = await generateFinalPDF(
-        currentReport.patientInfo?.name || '',
-        currentReport.patientInfo?.patientId || '',
-        finalDiagrams.length > 0 ? finalDiagrams : undefined,
-        currentReport
-      );
-      
-      console.log("🎉 PDF Generation Result:", result);
-      toast.success("PDF generated successfully! Check your downloads folder.");
-    } catch (error) {
-      console.error('❌ Error exporting PDF:', error);
-      toast.error(`PDF Export Failed: ${error.message}. Check browser console for details.`);
-      
-      // Show additional help to user
-      setTimeout(() => {
-        toast.info("Tip: Try allowing popups and downloads for this site, then refresh and try again.");
-      }, 2000);
-    } finally {
-      setIsGeneratingPDF(false);
+    if (mockData && templateKey) {
+      setCurrentReport(prev => ({
+        ...prev,
+        [templateKey]: mockData
+      }));
+      toast.success(`Mock data populated for ${currentTab}`);
     }
   };
-
-  const handleSaveDraft = async () => {
-    setIsSavingDraft(true);
-    
-    try {
-      const draftId = saveDraft(currentReport);
-      toast.success("Draft saved successfully!");
-    } catch (error) {
-      console.error('Error saving draft:', error);
-      toast.error("Failed to save draft. Please try again.");
-    } finally {
-      setIsSavingDraft(false);
-    }
-  };
-
-  // Handle editing a finding from the report preview
-  const handleEditFinding = (findingId: string, type: 'gastroscopy' | 'colonoscopy', updatedFinding?: any) => {
-    if (updatedFinding) {
-      // Update the finding data directly in the report (inline edit save)
-      if (type === 'gastroscopy') {
-        const currentFindings = currentReport.gastroscopyFindings?.findings || [];
-        const updatedFindings = currentFindings.map((finding: any) => 
-          finding.id === findingId ? { ...finding, ...updatedFinding } : finding
-        );
-        updateReport('gastroscopyFindings', { 
-          ...currentReport.gastroscopyFindings, 
-          findings: updatedFindings 
-        });
-      } else if (type === 'colonoscopy') {
-        const currentFindings = currentReport.colonoscopyFindings?.findings || [];
-        const updatedFindings = currentFindings.map((finding: any) => 
-          finding.id === findingId ? { ...finding, ...updatedFinding } : finding
-        );
-        updateReport('colonoscopyFindings', { 
-          ...currentReport.colonoscopyFindings, 
-          findings: updatedFindings 
-        });
-      }
-      toast.success("Finding updated successfully!");
-    } else {
-      // This is just to trigger inline editing in the ReportPreview component
-      // The actual editing happens inline, no need to navigate anywhere
-      toast.info("Edit the finding inline below.");
-    }
-  };
-
-  // Handle removing a finding from the report preview
-  const handleRemoveFinding = (findingId: string, type: 'gastroscopy' | 'colonoscopy') => {
-    // Remove from the data first to update both UI and diagrams
-    if (type === 'gastroscopy') {
-      const currentFindings = currentReport.gastroscopyFindings?.findings || [];
-      const updatedFindings = currentFindings.filter((finding: any) => finding.id !== findingId);
-      updateReport('gastroscopyFindings', { 
-        ...currentReport.gastroscopyFindings, 
-        findings: updatedFindings 
-      });
-    } else if (type === 'colonoscopy') {
-      const currentFindings = currentReport.colonoscopyFindings?.findings || [];
-      const updatedFindings = currentFindings.filter((finding: any) => finding.id !== findingId);
-      updateReport('colonoscopyFindings', { 
-        ...currentReport.colonoscopyFindings, 
-        findings: updatedFindings 
-      });
-    }
-    
-    // Also try to remove from the diagram component if available
-    const methods = diagramMethods[type];
-    if (methods?.removeFinding) {
-      methods.removeFinding(findingId);
-    }
-    
-    toast.success("Finding removed successfully!");
-  };
-
-  // Handle editing procedure findings from the report preview
-  const handleEditProcedureFindings = (updatedFindings?: string) => {
-    if (updatedFindings !== undefined) {
-      // Update the findings data (inline edit save)
-      updateReport('procedureFindings', {
-        ...currentReport.procedureFindings,
-        findings: updatedFindings
-      });
-      toast.success("Procedure findings updated successfully!");
-    } else {
-      // This is just to trigger inline editing in the ReportPreview component
-      toast.info("Edit the findings inline below.");
-    }
-  };
-
-  // Handle removing procedure findings from the report preview
-  const handleRemoveProcedureFindings = () => {
-    updateReport('procedureFindings', {
-      findings: '',
-      additionalNotes: ''
-    });
-    toast.success("Procedure findings removed successfully!");
-  };
-
-  // Handle redo from live report
-  const handleRedoFinding = (type: 'gastroscopy' | 'colonoscopy') => {
-    const methods = diagramMethods[type];
-    if (methods?.redoLastAction) {
-      methods.redoLastAction();
-      toast.success("Action redone successfully!");
-    } else {
-      toast.info(`Please use the ${type} diagram to redo actions.`);
-    }
-  };
-
-  // Handle undo from live report
-  const handleUndoFinding = (type: 'gastroscopy' | 'colonoscopy') => {
-    const methods = diagramMethods[type];
-    if (methods?.undoLastAction) {
-      methods.undoLastAction();
-      toast.success("Action undone successfully!");
-    } else {
-      toast.info(`Please use the ${type} diagram to undo actions.`);
-    }
-  };
-
-  // Handle editing patient info from live report
-  const handleEditPatientInfo = (field: string, value: string) => {
-    updateReport('patientInfo', {
-      ...currentReport.patientInfo,
-      [field]: value
-    });
-    toast.success("Patient information updated successfully!");
-  };
-
-  // Handle editing conclusion from live report
-  const handleEditConclusion = (updatedConclusion?: string) => {
-    if (updatedConclusion !== undefined) {
-      updateReport('conclusion', updatedConclusion);
-      toast.success("Conclusion updated successfully!");
-    }
-  };
-
-  // Handle removing conclusion from live report
-  const handleRemoveConclusion = () => {
-    updateReport('conclusion', '');
-    toast.success("Conclusion removed successfully!");
-  };
-
-  // Handle editing follow-up from live report
-  const handleEditFollowUp = (field: 'options' | 'other' | 'notes', value: any) => {
-    updateReport('followUp', {
-      ...currentReport.followUp,
-      [field]: value,
-      enabled: field === 'options' ? (Array.isArray(value) ? value.length > 0 : false) : currentReport.followUp?.enabled || true
-    });
-    toast.success("Follow-up updated successfully!");
-  };
-
-  // Handle removing follow-up from live report
-  const handleRemoveFollowUp = () => {
-    updateReport('followUp', {
-      enabled: false,
-      options: [],
-      other: '',
-      notes: ''
-    });
-    toast.success("Follow-up removed successfully!");
-  };
-
-  // Development helper function to clear persistent data
-  const clearPersistentData = () => {
-    if (clearAllStorage()) {
-      toast.success("All persistent data cleared successfully!");
-      // Refresh the page to reset all state
-      window.location.reload();
-    } else {
-      toast.error("Failed to clear persistent data");
-    }
-  };
-
-  // Development helper function to toggle persistence
-  const togglePersistence = () => {
-    const newState = !enablePersistence;
-    if (newState) {
-      localStorage.removeItem('disable_persistence');
-      toast.success("Persistence enabled - your data will be saved");
-    } else {
-      localStorage.setItem('disable_persistence', 'true');
-      toast.success("Persistence disabled - perfect for development");
-    }
-    window.location.reload();
-  };
-
-  // Development helpers: Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
-        event.preventDefault();
-        clearPersistentData();
-      } else if (event.ctrlKey && event.shiftKey && event.key === 'P') {
-        event.preventDefault();
-        togglePersistence();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enablePersistence]);
 
   return (
     <AppLayout>
@@ -5268,31 +2671,50 @@ const Index = () => {
                       </Button>
                     </div>
                   </div>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    className="w-full text-xs sm:w-auto"
-                    onClick={handleClearAllTemplatesData}
-                    title="Clear all template data"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Clear All Data
-                  </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full text-xs sm:w-auto bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      onClick={handleFillMockData}
+                      title="Fill with mock data for testing"
+                    >
+                      <Database className="w-4 h-4 mr-2" />
+                      Fill Mock Data
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full text-xs sm:w-auto"
+                      onClick={handleClearAllTemplatesData}
+                      title="Clear all template data"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Clear All Data
+                    </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
                   {appSection === "templates" ? (
                     <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
-	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1 sm:grid sm:grid-cols-7 sm:overflow-visible">
+	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1">
                     <TabsTrigger value="procedure" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Endoscopy
                     </TabsTrigger>
+                      <TabsTrigger value="gastroscopy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        Gastroscopy
+                      </TabsTrigger>
+                      <TabsTrigger value="colonoscopy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        Colonoscopy
+                      </TabsTrigger>
                     <TabsTrigger value="appendectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Appendicectomy
                     </TabsTrigger>
                     <TabsTrigger value="hernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                       Ventral Hernia Repair
+                    </TabsTrigger>
+                    <TabsTrigger value="inguinalHernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      Inguinal Hernia Repair
                     </TabsTrigger>
 	                    <TabsTrigger value="rectal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
 	                      Colorectal Resection
@@ -5305,6 +2727,15 @@ const Index = () => {
                       </TabsTrigger>
                       <TabsTrigger value="periAnal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
                         Peri-Anal
+                      </TabsTrigger>
+                      <TabsTrigger value="transanalMinimallyInvasiveSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        TAMIS
+                      </TabsTrigger>
+                      <TabsTrigger value="openGeneralSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        Open General Surgery
+                      </TabsTrigger>
+                      <TabsTrigger value="openAbdominalSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                        Open Abdominal Surgery
                       </TabsTrigger>
 	                  </TabsList>
                   
@@ -10609,6 +8040,255 @@ const Index = () => {
                           <CardContent>
                             <div ref={reportPreviewRef}>
                               <PeriAnalReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="gastroscopy" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <GastroscopyForm
+                          currentReport={currentReport}
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("gastroscopy", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("gastroscopy", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("gastroscopy")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="text-sm">
+                              Live Report
+                              <span className="text-xs text-gray-500 font-normal ml-2">
+                                Real-time preview of gastroscopy findings
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <GastroscopyReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="colonoscopy" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <ColonoscopyForm
+                          currentReport={currentReport}
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("colonoscopy", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("colonoscopy", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("colonoscopy")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="text-sm">
+                              Live Report
+                              <span className="text-xs text-gray-500 font-normal ml-2">
+                                Real-time preview of colonoscopy findings
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <ColonoscopyReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="inguinalHernia" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <InguinalHerniaRepairForm
+                          currentReport={currentReport}
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("inguinalHernia", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("inguinalHernia", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("inguinalHernia")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Inguinal Hernia Repair"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={(data) => {
+                                updateSimpleTemplateSection("inguinalHernia", "procedureFindings", "findings", data.findings);
+                                updateSimpleTemplateSection("inguinalHernia", "procedureFindings", "additionalNotes", data.additionalNotes || "");
+                              }}
+                              currentProcedureFindings={currentReport.inguinalHernia?.procedureFindings || { findings: "", additionalNotes: "" }}
+                              diagramMarkingScale={1.5}
+                              customImage={appendectomyImage}
+                            />
+                          }
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="text-sm">Live Report</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <InguinalHerniaRepairReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="transanalMinimallyInvasiveSurgery" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <TransanalMinimallyInvasiveSurgeryForm
+                          currentReport={currentReport}
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("transanalMinimallyInvasiveSurgery", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("transanalMinimallyInvasiveSurgery", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("transanalMinimallyInvasiveSurgery")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader>
+                            <CardTitle className="text-sm">Live Report</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <TransanalMinimallyInvasiveSurgeryReportPreview report={currentReport} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="openGeneralSurgery" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <NarrativeSurgeryForm
+                          currentReport={currentReport}
+                          reportKey="openGeneralSurgery"
+                          variant="general"
+                          title="Open General Surgery - Narrative Report"
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("openGeneralSurgery", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("openGeneralSurgery", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("openGeneralSurgery")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Open General Surgery"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={(data) => {
+                                updateSimpleTemplateSection("openGeneralSurgery", "procedureFindings", "findings", data.findings);
+                                updateSimpleTemplateSection("openGeneralSurgery", "procedureFindings", "additionalNotes", data.additionalNotes || "");
+                              }}
+                              currentProcedureFindings={currentReport.openGeneralSurgery?.procedureFindings || { findings: "", additionalNotes: "" }}
+                              diagramMarkingScale={1.5}
+                              customImage={appendectomyImage}
+                            />
+                          }
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader><CardTitle className="text-sm">Live Report</CardTitle></CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <NarrativeSurgeryReportPreview report={currentReport} reportKey="openGeneralSurgery" variant="general" title="OPEN GENERAL SURGERY NARRATIVE REPORT" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="openAbdominalSurgery" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 2xl:grid-cols-3 gap-6">
+                      <div className="2xl:col-span-2 space-y-6">
+                        <NarrativeSurgeryForm
+                          currentReport={currentReport}
+                          reportKey="openAbdominalSurgery"
+                          variant="abdominal"
+                          title="Open Abdominal Surgery - Narrative Report"
+                          updateTemplate={(section, field, value) =>
+                            updateSimpleTemplateSection("openAbdominalSurgery", section, field, value)
+                          }
+                          onBulkPatientInfoUpdate={(updates) =>
+                            updateSimpleTemplatePatientInfoBulk("openAbdominalSurgery", updates)
+                          }
+                          currentExtractedPatientInfo={currentExtractedPatientInfo}
+                          onCurrentPatientChange={updateCurrentExtractedPatient}
+                          onExportPDF={() => handleExportPDF("openAbdominalSurgery")}
+                          onSavePatient={handleSaveCurrentTemplateRecord}
+                          isGeneratingPDF={isGeneratingPDF}
+                          diagramElement={
+                            <ConditionalDiagramDisplay
+                              selectedProcedures={["Open Abdominal Surgery"]}
+                              onGastroscopyUpdate={() => {}}
+                              onColonoscopyUpdate={(data) => {
+                                updateSimpleTemplateSection("openAbdominalSurgery", "procedureFindings", "findings", data.findings);
+                                updateSimpleTemplateSection("openAbdominalSurgery", "procedureFindings", "additionalNotes", data.additionalNotes || "");
+                              }}
+                              currentProcedureFindings={currentReport.openAbdominalSurgery?.procedureFindings || { findings: "", additionalNotes: "" }}
+                              diagramMarkingScale={1.5}
+                              customImage={appendectomyImage}
+                            />
+                          }
+                        />
+                      </div>
+                      <div className="2xl:col-span-1">
+                        <Card className="shadow-glass-heavy sticky top-6">
+                          <CardHeader><CardTitle className="text-sm">Live Report</CardTitle></CardHeader>
+                          <CardContent>
+                            <div ref={reportPreviewRef}>
+                              <NarrativeSurgeryReportPreview report={currentReport} reportKey="openAbdominalSurgery" variant="abdominal" title="OPEN ABDOMINAL SURGERY NARRATIVE REPORT" />
                             </div>
                           </CardContent>
                         </Card>

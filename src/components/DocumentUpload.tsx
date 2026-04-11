@@ -1,8 +1,13 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, Image, Video, File, Download, Eye, X } from "lucide-react";
+import { Upload, Camera, FileText, Image, Video, File, Download, Eye, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DOCUMENT_UPLOAD_ACCEPT,
+  openNativeFilePicker,
+  VISUALLY_HIDDEN_FILE_INPUT_CLASS,
+} from "@/utils/fileInputs";
 
 interface UploadedDocument {
   id: string;
@@ -21,6 +26,15 @@ export const DocumentUpload = ({ onUpdate }: DocumentUploadProps) => {
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [viewingDocument, setViewingDocument] = useState<UploadedDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const appendDocuments = (newDocuments: UploadedDocument[]) => {
+    setDocuments((prev) => {
+      const updatedDocuments = [...prev, ...newDocuments];
+      onUpdate(updatedDocuments);
+      return updatedDocuments;
+    });
+  };
 
   const getFileIcon = (type: string) => {
     if (type.startsWith('image/')) return <Image className="h-4 w-4" />;
@@ -53,9 +67,7 @@ export const DocumentUpload = ({ onUpdate }: DocumentUploadProps) => {
           uploadDate: new Date()
         };
 
-        const updatedDocuments = [...documents, newDocument];
-        setDocuments(updatedDocuments);
-        onUpdate(updatedDocuments);
+        appendDocuments([newDocument]);
       };
       reader.readAsDataURL(file);
     });
@@ -63,6 +75,9 @@ export const DocumentUpload = ({ onUpdate }: DocumentUploadProps) => {
     // Reset the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = '';
     }
   };
 
@@ -90,15 +105,26 @@ export const DocumentUpload = ({ onUpdate }: DocumentUploadProps) => {
       {/* Upload Button */}
       <div className="flex gap-2">
         <Button
-          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          onClick={() => openNativeFilePicker(fileInputRef.current)}
           className="glass-button flex items-center gap-2 text-xs"
         >
           <Upload className="h-3 w-3" />
           Upload Documents & Media
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => openNativeFilePicker(cameraInputRef.current)}
+          className="glass-button flex items-center gap-2 text-xs"
+        >
+          <Camera className="h-3 w-3" />
+          Take Photo
+        </Button>
         
         {documents.length > 0 && (
           <Button
+            type="button"
             variant="outline"
             onClick={() => setViewingDocument(documents[0])}
             className="glass-button flex items-center gap-2 text-xs"
@@ -113,9 +139,21 @@ export const DocumentUpload = ({ onUpdate }: DocumentUploadProps) => {
         ref={fileInputRef}
         type="file"
         multiple
-        accept="*/*"
+        accept={DOCUMENT_UPLOAD_ACCEPT}
         onChange={handleFileSelect}
-        className="hidden"
+        className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
+        tabIndex={-1}
+        aria-hidden="true"
       />
 
       {/* Documents List */}

@@ -8,13 +8,19 @@ interface ReportsTabProps {
 }
 
 const TEMPLATE_ORDER: TemplateType[] = [
+  "procedure",
+  "gastroscopy",
+  "colonoscopy",
   "appendectomy",
   "ventralHernia",
   "rectalCancer",
   "smallBowel",
   "cholecystectomy",
   "periAnal",
-  "procedure",
+  "inguinalHernia",
+  "transanalMinimallyInvasiveSurgery",
+  "openGeneralSurgery",
+  "openAbdominalSurgery",
 ];
 
 export const ReportsTab = ({

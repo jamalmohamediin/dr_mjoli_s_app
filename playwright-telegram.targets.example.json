@@ -1,0 +1,51 @@
+{
+  "defaultTarget": "dr-mjoli-app",
+  "targets": {
+    "dr-mjoli-app": {
+      "cwd": ".",
+      "nodePath": "C:/Progra~1/cursor/resources/app/resources/helpers/node.exe",
+      "playwrightCli": "node_modules/playwright/cli.js",
+      "runs": {
+        "smoke": [
+          "test",
+          "--project=chromium",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "visible": [
+          "test",
+          "--project=chromium-headed",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "debug": [
+          "test",
+          "--project=chromium-headed",
+          "--debug",
+          "--workers=1",
+          "tests/e2e/live-visible-walkthrough.spec.ts"
+        ],
+        "ui": [
+          "test",
+          "--ui"
+        ]
+      }
+    },
+    "another-project": {
+      "cwd": "D:/Your/Other/Project",
+      "nodePath": "C:/Program Files/nodejs/node.exe",
+      "playwrightCli": "node_modules/playwright/cli.js",
+      "runs": {
+        "smoke": [
+          "test",
+          "--project=chromium",
+          "--workers=1"
+        ],
+        "ui": [
+          "test",
+          "--ui"
+        ]
+      }
+    }
+  }
+}

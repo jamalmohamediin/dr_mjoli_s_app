@@ -1,7 +1,7 @@
-import sagittalDiagram from "@/assets/peri-anal-sagittal.jpg";
-import externalDiagram from "@/assets/peri-anal-external.jpg";
-import lithotomyDiagram from "@/assets/peri-anal-lithotomy.jpg";
-import clockDiagram from "@/assets/peri-anal-clock.jpg";
+import sagittalDiagram from "@/assets/peri-anal-sagittal-replacement.png";
+import externalDiagram from "@/assets/peri-anal-external-replacement.png";
+import lithotomyDiagram from "@/assets/peri-anal-lithotomy-replacement.png";
+import clockDiagram from "@/assets/peri-anal-clock-replacement.png";
 
 export const PERI_ANAL_DIAGRAM_VARIANTS = [
   {

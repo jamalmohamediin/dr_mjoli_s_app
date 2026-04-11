@@ -19,6 +19,10 @@ import {
   normalizePatientInfo,
   normalizePatientStickerPayload,
 } from "@/utils/patientSticker";
+import {
+  openNativeFilePicker,
+  VISUALLY_HIDDEN_FILE_INPUT_CLASS,
+} from "@/utils/fileInputs";
 
 interface PatientInfoFieldsProps {
   patientInfo?: any;
@@ -622,7 +626,7 @@ export const PatientInfoFields = ({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => uploadInputRef.current?.click()}
+              onClick={() => openNativeFilePicker(uploadInputRef.current)}
               disabled={isExtracting}
             >
               <Upload className="h-4 w-4 mr-2" />
@@ -632,7 +636,7 @@ export const PatientInfoFields = ({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => openNativeFilePicker(cameraInputRef.current)}
               disabled={isExtracting}
             >
               <Camera className="h-4 w-4 mr-2" />
@@ -669,16 +673,20 @@ export const PatientInfoFields = ({
           ref={uploadInputRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
           onChange={handleFileSelection}
+          tabIndex={-1}
+          aria-hidden="true"
         />
         <input
           ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
-          className="hidden"
+          className={VISUALLY_HIDDEN_FILE_INPUT_CLASS}
           onChange={handleFileSelection}
+          tabIndex={-1}
+          aria-hidden="true"
         />
 
         {(normalizedInfo.stickerImageName || normalizedInfo.stickerExtractionError || normalizedInfo.stickerImageData) && (
