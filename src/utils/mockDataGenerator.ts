@@ -193,3 +193,11 @@ export const generateMockOpenGeneral = () => {
   };
   return state;
 };
+
+export const generateInguinalHerniaMockData = generateMockInguinalHernia;
+export const generateGastroscopyMockData = generateMockGastroscopy;
+export const generateColonoscopyMockData = generateMockColonoscopy;
+export const generateCholecystectomyMockData = generateMockCholecystectomy;
+export const generateTAMISMockData = generateMockTAMIS;
+export const generateOpenAbdominalMockData = generateMockOpenAbdominal;
+export const generateOpenGeneralMockData = generateMockOpenGeneral;
