@@ -1,9 +1,10 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { createDefaultClinicianList, DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 
 export const initialSmallBowelSurgeryState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    surgeons: [""],
+    surgeons: createDefaultClinicianList(),
     assistants: [""],
     anaesthetists: [""],
     indication: "",
@@ -101,7 +102,7 @@ export const initialSmallBowelSurgeryState = {
     additionalInformation: "",
     postOperativeManagement: "",
     surgeonSignature: "",
-    surgeonSignatureText: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
     dateTime: "",
   },
   procedureFindings: {

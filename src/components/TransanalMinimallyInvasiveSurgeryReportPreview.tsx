@@ -86,6 +86,10 @@ export const TransanalMinimallyInvasiveSurgeryReportPreview = ({
       title: "Specimen and Additional Information",
       entries: [
         { label: "Specimen retrieved", value: specimen.specimenRetrieved },
+        {
+          label: "Laboratory sent to",
+          value: specimen.specimenRetrieved === "Yes" ? specimen.laboratorySentTo : "",
+        },
         { label: "Orientation marked", value: specimen.orientationMarked },
         { label: "Additional information", value: additionalInfo.additionalInformation, fullWidth: true },
         { label: "Post operative management", value: additionalInfo.postOperativeManagement, fullWidth: true },

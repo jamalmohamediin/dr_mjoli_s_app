@@ -1,9 +1,10 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { createDefaultClinicianList, DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 
 export const initialCholecystectomyState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    surgeons: [""],
+    surgeons: createDefaultClinicianList(),
     assistants: [""],
     anaesthetists: [""],
     indication: [] as string[],
@@ -39,6 +40,8 @@ export const initialCholecystectomyState = {
     methodOfSubtotalControl: [] as string[],
     methodOfSubtotalControlOther: "",
     gallbladderDecompressionRequired: "",
+    decompressionFluidType: [] as string[],
+    decompressionFluidTypeOther: "",
     criticalViewSafetyConfirmation: [] as string[],
     criticalViewSafetyConfirmationOther: "",
     calotsTriangleDissected: "",
@@ -96,7 +99,7 @@ export const initialCholecystectomyState = {
     additionalInformation: "",
     postOperativeManagement: "",
     surgeonSignature: "",
-    surgeonSignatureText: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
     dateTime: "",
   },
   procedureFindings: {

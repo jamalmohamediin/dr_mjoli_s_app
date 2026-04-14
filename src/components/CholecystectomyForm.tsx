@@ -235,6 +235,15 @@ const peritonealLavageOptions = [
   "Other",
 ];
 
+const decompressionFluidTypeOptions = [
+  "Normal Bile",
+  "Thick Bile",
+  "Infected Bile",
+  "Clear Mucin / Hydrops",
+  "Pus",
+  "Other",
+];
+
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.filter(Boolean) as string[];
@@ -343,6 +352,13 @@ export const CholecystectomyForm = ({
     toArray(cholecystectomy.procedure?.additionalProcedures).includes(
       "Intraoperative cholangiogram"
     );
+
+  const hasStonesPresent = () =>
+    cholecystectomy.intraoperative?.stonesPresent === "Solitary Stones" ||
+    cholecystectomy.intraoperative?.stonesPresent === "Multiple Stones";
+
+  const isDecompressionRequired = () =>
+    cholecystectomy.procedure?.gallbladderDecompressionRequired === "Yes";
 
   const isSubtotalCholecystectomyRequired = () =>
     cholecystectomy.procedure?.extentOfCholecystectomy === "Subtotal Cholecystectomy Required";
@@ -778,67 +794,75 @@ export const CholecystectomyForm = ({
                 </div>
               </div>
 
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Type of Stones:</p>
-                <div className="flex flex-wrap gap-4 ml-4">
-                  {typeOfStonesOptions.map((option) => (
-                    <div className="flex items-center" key={`type-of-stones-${option}`}>
-                      <Checkbox
-                        id={`type-of-stones-${option}`}
-                        checked={cholecystectomy.intraoperative?.typeOfStones === option}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            updateCholecystectomy("intraoperative", "typeOfStones", option);
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`type-of-stones-${option}`}
-                        className="ml-2 block text-sm text-gray-700"
-                      >
-                        {option}
-                      </label>
+              {hasStonesPresent() && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Type of Stones:</p>
+                    <div className="flex flex-wrap gap-4 ml-4">
+                      {typeOfStonesOptions.map((option) => (
+                        <div className="flex items-center" key={`type-of-stones-${option}`}>
+                          <Checkbox
+                            id={`type-of-stones-${option}`}
+                            checked={cholecystectomy.intraoperative?.typeOfStones === option}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateCholecystectomy("intraoperative", "typeOfStones", option);
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`type-of-stones-${option}`}
+                            className="ml-2 block text-sm text-gray-700"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                {cholecystectomy.intraoperative?.typeOfStones === "Other" && (
-                  <div className="mt-3 ml-4">
-                    <Input
-                      type="text"
-                      placeholder="Specify Other Type of Stone"
-                      value={cholecystectomy.intraoperative?.typeOfStonesOther || ""}
-                      onChange={(e) =>
-                        updateCholecystectomy("intraoperative", "typeOfStonesOther", e.target.value)
-                      }
-                    />
+                    {cholecystectomy.intraoperative?.typeOfStones === "Other" && (
+                      <div className="mt-3 ml-4">
+                        <Input
+                          type="text"
+                          placeholder="Specify Other Type of Stone"
+                          value={cholecystectomy.intraoperative?.typeOfStonesOther || ""}
+                          onChange={(e) =>
+                            updateCholecystectomy(
+                              "intraoperative",
+                              "typeOfStonesOther",
+                              e.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Size of Stones:</p>
-                <div className="flex flex-wrap gap-4 ml-4">
-                  {sizeOfStonesOptions.map((option) => (
-                    <div className="flex items-center" key={`size-of-stones-${option}`}>
-                      <Checkbox
-                        id={`size-of-stones-${option}`}
-                        checked={cholecystectomy.intraoperative?.sizeOfStones === option}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            updateCholecystectomy("intraoperative", "sizeOfStones", option);
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`size-of-stones-${option}`}
-                        className="ml-2 block text-sm text-gray-700"
-                      >
-                        {option}
-                      </label>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Size of Stones:</p>
+                    <div className="flex flex-wrap gap-4 ml-4">
+                      {sizeOfStonesOptions.map((option) => (
+                        <div className="flex items-center" key={`size-of-stones-${option}`}>
+                          <Checkbox
+                            id={`size-of-stones-${option}`}
+                            checked={cholecystectomy.intraoperative?.sizeOfStones === option}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                updateCholecystectomy("intraoperative", "sizeOfStones", option);
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`size-of-stones-${option}`}
+                            className="ml-2 block text-sm text-gray-700"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         )}
@@ -1201,6 +1225,56 @@ export const CholecystectomyForm = ({
                   ))}
                 </div>
               </div>
+
+              {isDecompressionRequired() && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Type of Fluid Drained from Gall Bladder:
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                    {decompressionFluidTypeOptions.map((option) => (
+                      <div className="flex items-center" key={`decompression-fluid-type-${option}`}>
+                        <Checkbox
+                          id={`decompression-fluid-type-${option}`}
+                          checked={toArray(cholecystectomy.procedure?.decompressionFluidType).includes(
+                            option
+                          )}
+                          onCheckedChange={() =>
+                            toggleArrayValue(
+                              "procedure",
+                              "decompressionFluidType",
+                              option,
+                              cholecystectomy.procedure?.decompressionFluidType
+                            )
+                          }
+                        />
+                        <label
+                          htmlFor={`decompression-fluid-type-${option}`}
+                          className="ml-2 block text-sm text-gray-700"
+                        >
+                          {option}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  {toArray(cholecystectomy.procedure?.decompressionFluidType).includes("Other") && (
+                    <div className="mt-3 ml-4">
+                      <Input
+                        type="text"
+                        placeholder="Specify Other Type of Fluid Drained"
+                        value={cholecystectomy.procedure?.decompressionFluidTypeOther || ""}
+                        onChange={(e) =>
+                          updateCholecystectomy(
+                            "procedure",
+                            "decompressionFluidTypeOther",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-4">
                 <h3 className="text-md font-medium text-gray-800">Critical View of Safety</h3>

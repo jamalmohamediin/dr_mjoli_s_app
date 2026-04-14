@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
@@ -22,6 +23,7 @@ interface InguinalHerniaRepairFormProps {
   onCurrentPatientChange?: (patientInfo: any) => void;
   onExportPDF?: () => void;
   onSavePatient?: () => void;
+  onClearAllData?: () => void;
   isGeneratingPDF?: boolean;
   diagramElement?: React.ReactNode;
 }
@@ -86,7 +88,7 @@ const landmarkOptions = [
 const lapSacOptions = ["Reduced", "Transacted"];
 const lapFixationOptions = ["None", "Self-gripping", "Tacks", "Sutures", "Glue"];
 const lapFixationSiteOptions = ["Symphysis pubis", "Cooper’s ligament", "Anterior abdominal wall", "Other"];
-const peritoneumClosureOptions = ["Not applicable", "Not closed", "Continuous suture", "Tacks"];
+const peritoneumClosureOptions = ["Not Applicable", "Not Closed", "Continuous Suture", "Tacks"];
 const openSkinClosureOptions = ["Sutures", "Staples", "Subcuticular"];
 const lapSkinClosureOptions = ["Sutures", "Staples", "Glue"];
 const complicationOptions = [
@@ -108,6 +110,7 @@ export const InguinalHerniaRepairForm = ({
   onCurrentPatientChange,
   onExportPDF,
   onSavePatient,
+  onClearAllData,
   isGeneratingPDF,
   diagramElement,
 }: InguinalHerniaRepairFormProps) => {
@@ -124,6 +127,32 @@ export const InguinalHerniaRepairForm = ({
   const selectedRepairTechniques = toArray(procedure.repairTechnique);
   const showTissueRepairSection = selectedRepairTechniques.includes("Tissue repair");
   const showMeshRepairSection = selectedRepairTechniques.includes("Mesh repair");
+  const [expandedSections, setExpandedSections] = React.useState<{
+    openRepair: boolean;
+    laparoscopicRepair: boolean;
+  }>({
+    openRepair: showOpenRepairSection,
+    laparoscopicRepair: showLaparoscopicRepairSection,
+  });
+
+  React.useEffect(() => {
+    if (showOpenRepairSection) {
+      setExpandedSections((previous) => ({ ...previous, openRepair: true }));
+    }
+  }, [showOpenRepairSection]);
+
+  React.useEffect(() => {
+    if (showLaparoscopicRepairSection) {
+      setExpandedSections((previous) => ({ ...previous, laparoscopicRepair: true }));
+    }
+  }, [showLaparoscopicRepairSection]);
+
+  const toggleProcedureSection = (section: "openRepair" | "laparoscopicRepair") => {
+    setExpandedSections((previous) => ({
+      ...previous,
+      [section]: !previous[section],
+    }));
+  };
 
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
@@ -249,123 +278,153 @@ export const InguinalHerniaRepairForm = ({
           {procedure.approach === "Laparoscopic converted to open" ? (
             <>
               <CheckboxGrid label="Reason for conversion" options={conversionReasonOptions} values={procedure.reasonForConversion} onChange={(value) => updateTemplate("procedure", "reasonForConversion", value)} />
+              <LabeledInput label="Trocar Number" value={procedure.trocarNumber || ""} onChange={(value) => updateTemplate("procedure", "trocarNumber", value)} />
               <OptionalOtherInput
                 enabled={toArray(procedure.reasonForConversion).includes("Other")}
                 value={procedure.reasonForConversionOther || ""}
                 placeholder="Specify other conversion reason"
                 onChange={(value) => updateTemplate("procedure", "reasonForConversionOther", value)}
               />
-              <LabeledInput label="Trocar Number" value={procedure.trocarNumber || ""} onChange={(value) => updateTemplate("procedure", "trocarNumber", value)} />
             </>
           ) : null}
 
           {diagramElement}
           {showOpenRepairSection ? (
-            <div className="space-y-4 border-t border-gray-200 pt-4">
-              <h3 className="text-sm font-semibold text-gray-800">Open Inguinal Hernia Repair</h3>
-              <CheckboxGrid label="Incision used" options={incisionUsedOptions} values={procedure.incisionUsed} onChange={(value) => updateTemplate("procedure", "incisionUsed", value)} />
-              <OptionalOtherInput
-                enabled={toArray(procedure.incisionUsed).includes("Other")}
-                value={procedure.incisionOther || ""}
-                placeholder="Specify other incision"
-                onChange={(value) => updateTemplate("procedure", "incisionOther", value)}
-              />
-              <LabeledInput label="Length of incision (cm)" value={procedure.incisionLength || ""} onChange={(value) => updateTemplate("procedure", "incisionLength", value)} />
-              <RadioGrid label="External oblique aponeurosis incised" options={["Yes", "No"]} value={procedure.externalObliqueAponeurosisIncised || ""} onChange={(value) => updateTemplate("procedure", "externalObliqueAponeurosisIncised", value)} columns="grid-cols-2" />
-              <CheckboxGrid label="Cord structures" options={cordStructureOptions} values={procedure.cordStructures} onChange={(value) => updateTemplate("procedure", "cordStructures", value)} />
-              <CheckboxGrid label="Nerves identified" options={nerveOptions} values={procedure.nervesIdentified} onChange={(value) => updateTemplate("procedure", "nervesIdentified", value)} />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <RadioGrid label="Ilioinguinal preserved" options={["Yes", "No"]} value={procedure.ilioinguinalPreserved || ""} onChange={(value) => updateTemplate("procedure", "ilioinguinalPreserved", value)} columns="grid-cols-2" />
-                <RadioGrid label="Iliohypogastric preserved" options={["Yes", "No"]} value={procedure.iliohypogastricPreserved || ""} onChange={(value) => updateTemplate("procedure", "iliohypogastricPreserved", value)} columns="grid-cols-2" />
-                <RadioGrid label="Genital branch preserved" options={["Yes", "No"]} value={procedure.genitalBranchPreserved || ""} onChange={(value) => updateTemplate("procedure", "genitalBranchPreserved", value)} columns="grid-cols-2" />
-              </div>
-              <CheckboxGrid label="Sac Management" options={sacManagementOptions} values={procedure.sacManagement} onChange={(value) => updateTemplate("procedure", "sacManagement", value)} />
-              <RadioGrid label="Deep Ring reconstruction" options={deepRingOptions} value={procedure.deepRingReconstruction || ""} onChange={(value) => updateTemplate("procedure", "deepRingReconstruction", value)} columns="grid-cols-2" />
-              <CheckboxGrid label="Repair technique" options={repairTechniqueOptions} values={procedure.repairTechnique} onChange={(value) => updateTemplate("procedure", "repairTechnique", value)} columns="grid-cols-2" />
-
-              {showTissueRepairSection ? (
-                <div className="space-y-4 border-t border-gray-200 pt-4">
-                  <h4 className="text-sm font-semibold text-gray-800">Tissue reconstruction</h4>
-                  <CheckboxGrid label="Posterior wall tissue reconstruction" options={tissueReconstructionOptions} values={procedure.tissueReconstruction} onChange={(value) => updateTemplate("procedure", "tissueReconstruction", value)} />
+            <div className="rounded-md border border-gray-200">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-left"
+                onClick={() => toggleProcedureSection("openRepair")}
+              >
+                <span className="text-sm font-semibold text-gray-800">Open Inguinal Hernia Repair</span>
+                {expandedSections.openRepair ? (
+                  <ChevronUp className="h-4 w-4 text-gray-600" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-gray-600" />
+                )}
+              </button>
+              {expandedSections.openRepair ? (
+                <div className="space-y-4 border-t border-gray-200 p-4">
+                  <CheckboxGrid label="Incision used" options={incisionUsedOptions} values={procedure.incisionUsed} onChange={(value) => updateTemplate("procedure", "incisionUsed", value)} />
                   <OptionalOtherInput
-                    enabled={toArray(procedure.tissueReconstruction).includes("Other")}
-                    value={procedure.tissueReconstructionOther || ""}
-                    placeholder="Specify other tissue reconstruction"
-                    onChange={(value) => updateTemplate("procedure", "tissueReconstructionOther", value)}
+                    enabled={toArray(procedure.incisionUsed).includes("Other")}
+                    value={procedure.incisionOther || ""}
+                    placeholder="Specify other incision"
+                    onChange={(value) => updateTemplate("procedure", "incisionOther", value)}
                   />
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <LabeledInput label="Suture material used" value={procedure.sutureMaterial || ""} onChange={(value) => updateTemplate("procedure", "sutureMaterial", value)} />
-                    <RadioGrid label="Suture method" options={sutureMethodOptions} value={procedure.sutureMethod || ""} onChange={(value) => updateTemplate("procedure", "sutureMethod", value)} columns="grid-cols-2" />
+                  <LabeledInput label="Length of incision (cm)" value={procedure.incisionLength || ""} onChange={(value) => updateTemplate("procedure", "incisionLength", value)} />
+                  <RadioGrid label="External oblique aponeurosis incised" options={["Yes", "No"]} value={procedure.externalObliqueAponeurosisIncised || ""} onChange={(value) => updateTemplate("procedure", "externalObliqueAponeurosisIncised", value)} columns="grid-cols-2" />
+                  <CheckboxGrid label="Cord structures" options={cordStructureOptions} values={procedure.cordStructures} onChange={(value) => updateTemplate("procedure", "cordStructures", value)} />
+                  <CheckboxGrid label="Nerves identified" options={nerveOptions} values={procedure.nervesIdentified} onChange={(value) => updateTemplate("procedure", "nervesIdentified", value)} />
+                  <div className="space-y-4">
+                    <RadioGrid label="Ilioinguinal preserved" options={["Yes", "No"]} value={procedure.ilioinguinalPreserved || ""} onChange={(value) => updateTemplate("procedure", "ilioinguinalPreserved", value)} columns="grid-cols-2" />
+                    <RadioGrid label="Iliohypogastric preserved" options={["Yes", "No"]} value={procedure.iliohypogastricPreserved || ""} onChange={(value) => updateTemplate("procedure", "iliohypogastricPreserved", value)} columns="grid-cols-2" />
+                    <RadioGrid label="Genital branch preserved" options={["Yes", "No"]} value={procedure.genitalBranchPreserved || ""} onChange={(value) => updateTemplate("procedure", "genitalBranchPreserved", value)} columns="grid-cols-2" />
+                  </div>
+                  <CheckboxGrid label="Sac Management" options={sacManagementOptions} values={procedure.sacManagement} onChange={(value) => updateTemplate("procedure", "sacManagement", value)} />
+                  <RadioGrid label="Deep Ring reconstruction" options={deepRingOptions} value={procedure.deepRingReconstruction || ""} onChange={(value) => updateTemplate("procedure", "deepRingReconstruction", value)} columns="grid-cols-2" />
+                  <CheckboxGrid label="Repair technique" options={repairTechniqueOptions} values={procedure.repairTechnique} onChange={(value) => updateTemplate("procedure", "repairTechnique", value)} columns="grid-cols-2" />
+
+                  {showTissueRepairSection ? (
+                    <div className="space-y-4 border-t border-gray-200 pt-4">
+                      <h4 className="text-sm font-semibold text-gray-800">Tissue Reconstruction</h4>
+                      <CheckboxGrid label="Posterior wall tissue reconstruction" options={tissueReconstructionOptions} values={procedure.tissueReconstruction} onChange={(value) => updateTemplate("procedure", "tissueReconstruction", value)} />
+                      <OptionalOtherInput
+                        enabled={toArray(procedure.tissueReconstruction).includes("Other")}
+                        value={procedure.tissueReconstructionOther || ""}
+                        placeholder="Specify other tissue reconstruction"
+                        onChange={(value) => updateTemplate("procedure", "tissueReconstructionOther", value)}
+                      />
+                      <LabeledInput label="Suture material used" value={procedure.sutureMaterial || ""} onChange={(value) => updateTemplate("procedure", "sutureMaterial", value)} />
+                      <RadioGrid label="Suture method" options={sutureMethodOptions} value={procedure.sutureMethod || ""} onChange={(value) => updateTemplate("procedure", "sutureMethod", value)} columns="grid-cols-2" />
+                    </div>
+                  ) : null}
+
+                  {showMeshRepairSection ? (
+                    <div className="space-y-4 border-t border-gray-200 pt-4">
+                      <h4 className="text-sm font-semibold text-gray-800">Mesh Repair</h4>
+                      <LabeledInput label="Mesh inserted" value={procedure.meshInserted || ""} onChange={(value) => updateTemplate("procedure", "meshInserted", value)} />
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <LabeledInput label="Mesh size length (cm)" value={procedure.meshSizeLength || ""} onChange={(value) => updateTemplate("procedure", "meshSizeLength", value)} />
+                        <LabeledInput label="Mesh size width (cm)" value={procedure.meshSizeWidth || ""} onChange={(value) => updateTemplate("procedure", "meshSizeWidth", value)} />
+                      </div>
+                      <CheckboxGrid label="Mesh positioning" options={meshPositionOptions} values={procedure.meshPositioning} onChange={(value) => updateTemplate("procedure", "meshPositioning", value)} />
+                      <OptionalOtherInput
+                        enabled={toArray(procedure.meshPositioning).includes("Other")}
+                        value={procedure.meshPositioningOther || ""}
+                        placeholder="Specify other mesh positioning"
+                        onChange={(value) => updateTemplate("procedure", "meshPositioningOther", value)}
+                      />
+                      <CheckboxGrid label="Fixation" options={fixationOptions} values={procedure.fixation} onChange={(value) => updateTemplate("procedure", "fixation", value)} />
+                      <CheckboxGrid label="Fixation points" options={fixationPointOptions} values={procedure.fixationPoints} onChange={(value) => updateTemplate("procedure", "fixationPoints", value)} />
+                      <OptionalOtherInput
+                        enabled={toArray(procedure.fixationPoints).includes("Other")}
+                        value={procedure.fixationPointsOther || ""}
+                        placeholder="Specify other fixation point"
+                        onChange={(value) => updateTemplate("procedure", "fixationPointsOther", value)}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-4 border-t border-gray-200 pt-4">
+                    <h4 className="text-sm font-semibold text-gray-800">Closure</h4>
+                    <RadioGrid label="External oblique aponeurosis" options={["Closed", "Left open"]} value={closure.externalObliqueClosure || ""} onChange={(value) => updateTemplate("closure", "externalObliqueClosure", value)} columns="grid-cols-2" />
+                    <RadioGrid label="Subcutaneous tissue" options={["Closed", "Not closed"]} value={closure.subcutaneousTissueClosure || ""} onChange={(value) => updateTemplate("closure", "subcutaneousTissueClosure", value)} columns="grid-cols-2" />
+                    <CheckboxGrid label="Skin closure" options={openSkinClosureOptions} values={closure.skinClosureOpen} onChange={(value) => updateTemplate("closure", "skinClosureOpen", value)} />
+                    <RadioGrid label="Local anaesthetic infiltration" options={["Yes", "No"]} value={closure.localAnaestheticOpen || ""} onChange={(value) => updateTemplate("closure", "localAnaestheticOpen", value)} columns="grid-cols-2" />
                   </div>
                 </div>
               ) : null}
-
-              {showMeshRepairSection ? (
-                <div className="space-y-4 border-t border-gray-200 pt-4">
-                  <h4 className="text-sm font-semibold text-gray-800">Mesh Repair</h4>
-                  <LabeledInput label="Mesh inserted" value={procedure.meshInserted || ""} onChange={(value) => updateTemplate("procedure", "meshInserted", value)} />
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <LabeledInput label="Mesh size length (cm)" value={procedure.meshSizeLength || ""} onChange={(value) => updateTemplate("procedure", "meshSizeLength", value)} />
-                    <LabeledInput label="Mesh size width (cm)" value={procedure.meshSizeWidth || ""} onChange={(value) => updateTemplate("procedure", "meshSizeWidth", value)} />
-                  </div>
-                  <CheckboxGrid label="Mesh positioning" options={meshPositionOptions} values={procedure.meshPositioning} onChange={(value) => updateTemplate("procedure", "meshPositioning", value)} />
-                  <OptionalOtherInput
-                    enabled={toArray(procedure.meshPositioning).includes("Other")}
-                    value={procedure.meshPositioningOther || ""}
-                    placeholder="Specify other mesh positioning"
-                    onChange={(value) => updateTemplate("procedure", "meshPositioningOther", value)}
-                  />
-                  <CheckboxGrid label="Fixation" options={fixationOptions} values={procedure.fixation} onChange={(value) => updateTemplate("procedure", "fixation", value)} />
-                  <CheckboxGrid label="Fixation points" options={fixationPointOptions} values={procedure.fixationPoints} onChange={(value) => updateTemplate("procedure", "fixationPoints", value)} />
-                  <OptionalOtherInput
-                    enabled={toArray(procedure.fixationPoints).includes("Other")}
-                    value={procedure.fixationPointsOther || ""}
-                    placeholder="Specify other fixation point"
-                    onChange={(value) => updateTemplate("procedure", "fixationPointsOther", value)}
-                  />
-                </div>
-              ) : null}
-
-              <div className="space-y-4 border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-semibold text-gray-800">Closure</h4>
-                <RadioGrid label="External oblique aponeurosis" options={["Closed", "Left open"]} value={closure.externalObliqueClosure || ""} onChange={(value) => updateTemplate("closure", "externalObliqueClosure", value)} columns="grid-cols-2" />
-                <RadioGrid label="Subcutaneous tissue" options={["Closed", "Not closed"]} value={closure.subcutaneousTissueClosure || ""} onChange={(value) => updateTemplate("closure", "subcutaneousTissueClosure", value)} columns="grid-cols-2" />
-                <CheckboxGrid label="Skin closure" options={openSkinClosureOptions} values={closure.skinClosureOpen} onChange={(value) => updateTemplate("closure", "skinClosureOpen", value)} />
-                <RadioGrid label="Local anaesthetic infiltration" options={["Yes", "No"]} value={closure.localAnaestheticOpen || ""} onChange={(value) => updateTemplate("closure", "localAnaestheticOpen", value)} columns="grid-cols-2" />
-              </div>
             </div>
           ) : null}
 
           {showLaparoscopicRepairSection ? (
-            <div className="space-y-4 border-t border-gray-200 pt-4">
-              <h3 className="text-sm font-semibold text-gray-800">Laparoscopic Inguinal Hernia Repair (TEP / TAPP)</h3>
-              <RadioGrid label="Laparoscopic approach" options={lapApproachOptions} value={procedure.laparoscopicApproach || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicApproach", value)} columns="grid-cols-2" />
-              <CheckboxGrid label="Method of preperitoneal space developed" options={preperitonealOptions} values={procedure.preperitonealDevelopment} onChange={(value) => updateTemplate("procedure", "preperitonealDevelopment", value)} />
-              <OptionalOtherInput
-                enabled={toArray(procedure.preperitonealDevelopment).includes("other")}
-                value={procedure.preperitonealDevelopmentOther || ""}
-                placeholder="Specify other method"
-                onChange={(value) => updateTemplate("procedure", "preperitonealDevelopmentOther", value)}
-              />
-              <CheckboxGrid label="Landmarks and critical zones identified" options={landmarkOptions} values={procedure.landmarks} onChange={(value) => updateTemplate("procedure", "landmarks", value)} />
-              <CheckboxGrid label="Laparoscopic sac management" options={lapSacOptions} values={procedure.laparoscopicSacManagement} onChange={(value) => updateTemplate("procedure", "laparoscopicSacManagement", value)} columns="grid-cols-2" />
-              <LabeledInput label="Laparoscopic mesh used" value={procedure.laparoscopicMeshUsed || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshUsed", value)} />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <LabeledInput label="Laparoscopic mesh size length (cm)" value={procedure.laparoscopicMeshSizeLength || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshSizeLength", value)} />
-                <LabeledInput label="Laparoscopic mesh size width (cm)" value={procedure.laparoscopicMeshSizeWidth || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshSizeWidth", value)} />
-              </div>
-              <CheckboxGrid label="Laparoscopic fixation" options={lapFixationOptions} values={procedure.laparoscopicFixation} onChange={(value) => updateTemplate("procedure", "laparoscopicFixation", value)} />
-              <CheckboxGrid label="Laparoscopic fixation sites" options={lapFixationSiteOptions} values={procedure.laparoscopicFixationSites} onChange={(value) => updateTemplate("procedure", "laparoscopicFixationSites", value)} />
-              <OptionalOtherInput
-                enabled={toArray(procedure.laparoscopicFixationSites).includes("Other")}
-                value={procedure.laparoscopicFixationSitesOther || ""}
-                placeholder="Specify other laparoscopic fixation site"
-                onChange={(value) => updateTemplate("procedure", "laparoscopicFixationSitesOther", value)}
-              />
-              <RadioGrid label="Peritoneum closure (TAPP only)" options={peritoneumClosureOptions} value={procedure.peritoneumClosure || ""} onChange={(value) => updateTemplate("procedure", "peritoneumClosure", value)} />
-              <RadioGrid label="Fascial closure (≥10 mm ports)" options={["Yes", "No"]} value={closure.fascialClosurePorts || ""} onChange={(value) => updateTemplate("closure", "fascialClosurePorts", value)} columns="grid-cols-2" />
-              <CheckboxGrid label="Skin closure (laparoscopic)" options={lapSkinClosureOptions} values={closure.skinClosureLaparoscopic} onChange={(value) => updateTemplate("closure", "skinClosureLaparoscopic", value)} />
-              <RadioGrid label="Local anaesthetic infiltration (laparoscopic)" options={["Yes", "No"]} value={closure.localAnaestheticLaparoscopic || ""} onChange={(value) => updateTemplate("closure", "localAnaestheticLaparoscopic", value)} columns="grid-cols-2" />
+            <div className="rounded-md border border-gray-200">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-left"
+                onClick={() => toggleProcedureSection("laparoscopicRepair")}
+              >
+                <span className="text-sm font-semibold text-gray-800">Laparoscopic Inguinal Hernia Repair (TEP / TAPP)</span>
+                {expandedSections.laparoscopicRepair ? (
+                  <ChevronUp className="h-4 w-4 text-gray-600" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-gray-600" />
+                )}
+              </button>
+              {expandedSections.laparoscopicRepair ? (
+                <div className="space-y-4 border-t border-gray-200 p-4">
+                  <RadioGrid label="Laparoscopic approach" options={lapApproachOptions} value={procedure.laparoscopicApproach || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicApproach", value)} columns="grid-cols-2" />
+                  <CheckboxGrid label="Method of preperitoneal space developed" options={preperitonealOptions} values={procedure.preperitonealDevelopment} onChange={(value) => updateTemplate("procedure", "preperitonealDevelopment", value)} />
+                  <OptionalOtherInput
+                    enabled={toArray(procedure.preperitonealDevelopment).includes("other")}
+                    value={procedure.preperitonealDevelopmentOther || ""}
+                    placeholder="Specify other method"
+                    onChange={(value) => updateTemplate("procedure", "preperitonealDevelopmentOther", value)}
+                  />
+                  <CheckboxGrid label="Landmarks and critical zones identified" options={landmarkOptions} values={procedure.landmarks} onChange={(value) => updateTemplate("procedure", "landmarks", value)} />
+                  <CheckboxGrid label="Laparoscopic sac management" options={lapSacOptions} values={procedure.laparoscopicSacManagement} onChange={(value) => updateTemplate("procedure", "laparoscopicSacManagement", value)} columns="grid-cols-2" />
+                  <LabeledInput label="Laparoscopic mesh used" value={procedure.laparoscopicMeshUsed || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshUsed", value)} />
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <LabeledInput label="Laparoscopic mesh size length (cm)" value={procedure.laparoscopicMeshSizeLength || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshSizeLength", value)} />
+                    <LabeledInput label="Laparoscopic mesh size width (cm)" value={procedure.laparoscopicMeshSizeWidth || ""} onChange={(value) => updateTemplate("procedure", "laparoscopicMeshSizeWidth", value)} />
+                  </div>
+                  <CheckboxGrid label="Laparoscopic fixation" options={lapFixationOptions} values={procedure.laparoscopicFixation} onChange={(value) => updateTemplate("procedure", "laparoscopicFixation", value)} />
+                  <CheckboxGrid label="Laparoscopic fixation sites" options={lapFixationSiteOptions} values={procedure.laparoscopicFixationSites} onChange={(value) => updateTemplate("procedure", "laparoscopicFixationSites", value)} />
+                  <OptionalOtherInput
+                    enabled={toArray(procedure.laparoscopicFixationSites).includes("Other")}
+                    value={procedure.laparoscopicFixationSitesOther || ""}
+                    placeholder="Specify other laparoscopic fixation site"
+                    onChange={(value) => updateTemplate("procedure", "laparoscopicFixationSitesOther", value)}
+                  />
+                  {procedure.laparoscopicApproach === "TAPP (Transabdominal Preperitoneal)" ? (
+                    <RadioGrid label="Peritoneum Closure (TAPP Only)" options={peritoneumClosureOptions} value={procedure.peritoneumClosure || ""} onChange={(value) => updateTemplate("procedure", "peritoneumClosure", value)} />
+                  ) : null}
+                  <RadioGrid label="Fascial closure (≥10 mm ports)" options={["Yes", "No"]} value={closure.fascialClosurePorts || ""} onChange={(value) => updateTemplate("closure", "fascialClosurePorts", value)} columns="grid-cols-2" />
+                  <CheckboxGrid label="Skin closure (laparoscopic)" options={lapSkinClosureOptions} values={closure.skinClosureLaparoscopic} onChange={(value) => updateTemplate("closure", "skinClosureLaparoscopic", value)} />
+                  <RadioGrid label="Local anaesthetic infiltration (laparoscopic)" options={["Yes", "No"]} value={closure.localAnaestheticLaparoscopic || ""} onChange={(value) => updateTemplate("closure", "localAnaestheticLaparoscopic", value)} columns="grid-cols-2" />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </CardContent>
@@ -403,6 +462,24 @@ export const InguinalHerniaRepairForm = ({
           <Button type="button" variant="outline" size="sm" onClick={() => updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue())}>
             Use Current Date/Time
           </Button>
+
+          <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
+            {onExportPDF ? (
+              <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onExportPDF} disabled={isGeneratingPDF}>
+                {isGeneratingPDF ? "Generating..." : "Export PDF"}
+              </Button>
+            ) : null}
+            {onSavePatient ? (
+              <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onSavePatient}>
+                Save Patient
+              </Button>
+            ) : null}
+            {onClearAllData ? (
+              <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onClearAllData}>
+                Clear All Patient Data
+              </Button>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -50,12 +50,18 @@ interface PdfPreviewState {
 
 const TEMPLATE_TYPES: TemplateType[] = [
   "procedure",
+  "gastroscopy",
+  "colonoscopy",
   "appendectomy",
   "ventralHernia",
   "rectalCancer",
   "smallBowel",
   "cholecystectomy",
   "periAnal",
+  "inguinalHernia",
+  "transanalMinimallyInvasiveSurgery",
+  "openGeneralSurgery",
+  "openAbdominalSurgery",
 ];
 
 const sameDay = (left: Date, right: Date) =>

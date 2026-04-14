@@ -94,6 +94,7 @@ export const PatientInfoFields = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const lastSelectedFileRef = useRef<File | null>(null);
   const lastAutoFilledSignatureRef = useRef("");
+  const lastSharedPatientSyncSignatureRef = useRef("");
   const webhookUrl =
     import.meta.env.VITE_N8N_PATIENT_STICKER_WEBHOOK_URL?.trim() ||
     "/api/patient-sticker-extract";
@@ -102,10 +103,12 @@ export const PatientInfoFields = ({
   const canAutofillExtractedPatient = hasExtractedPatientStickerData(
     normalizedCurrentExtractedPatient,
   );
-  const extractedPatientSignature = canAutofillExtractedPatient
+  const canAutofillSharedPatient = hasMeaningfulPatientInfoSyncData(
+    normalizedCurrentExtractedPatient,
+  );
+  const sharedPatientSignature = canAutofillSharedPatient
     ? getPatientStickerSyncSignature(normalizedCurrentExtractedPatient)
     : "";
-  const currentPatientHasSyncedDetails = hasMeaningfulPatientInfoSyncData(normalizedInfo);
 
   const syncExtractedPatientDraft = (nextInfo: any) => {
     if (onCurrentPatientChange) {
@@ -294,22 +297,67 @@ export const PatientInfoFields = ({
   };
 
   useEffect(() => {
-    if (!canAutofillExtractedPatient || !extractedPatientSignature) {
+    if (!canAutofillSharedPatient || !sharedPatientSignature) {
       lastAutoFilledSignatureRef.current = "";
       return;
     }
 
-    if (currentPatientHasSyncedDetails) {
+    const sourceSnapshot = createPatientStickerSyncSnapshot(normalizedCurrentExtractedPatient);
+    const targetSnapshot = createPatientStickerSyncSnapshot(normalizedInfo);
+    const sourceName = String(sourceSnapshot.name || "").trim().toLowerCase();
+    const sourcePatientId = String(sourceSnapshot.patientId || "").trim().toLowerCase();
+    const sourceDob = String(sourceSnapshot.dateOfBirth || "").trim();
+    const targetName = String(targetSnapshot.name || "").trim().toLowerCase();
+    const targetPatientId = String(targetSnapshot.patientId || "").trim().toLowerCase();
+    const targetDob = String(targetSnapshot.dateOfBirth || "").trim();
+
+    const targetHasIdentity = Boolean(targetName || targetPatientId || targetDob);
+    const sourceHasIdentity = Boolean(sourceName || sourcePatientId || sourceDob);
+    const identityMatches =
+      (!targetName || !sourceName || targetName === sourceName) &&
+      (!targetPatientId || !sourcePatientId || targetPatientId === sourcePatientId) &&
+      (!targetDob || !sourceDob || targetDob === sourceDob);
+
+    if (targetHasIdentity && sourceHasIdentity && !identityMatches) {
       return;
     }
 
-    if (lastAutoFilledSignatureRef.current === extractedPatientSignature) {
+    const isMissingValue = (value: any) => {
+      if (typeof value === "string") {
+        return value.trim().length === 0;
+      }
+
+      if (Array.isArray(value)) {
+        return value.length === 0;
+      }
+
+      return value === null || value === undefined || value === false;
+    };
+
+    const hasValue = (value: any) => !isMissingValue(value);
+
+    const updates = Object.entries(sourceSnapshot).reduce((acc, [key, value]) => {
+      if (hasValue(value) && isMissingValue((targetSnapshot as any)[key])) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+
+    if (Object.keys(updates).length === 0) {
       return;
     }
 
-    lastAutoFilledSignatureRef.current = extractedPatientSignature;
+    const autofillSignature = JSON.stringify({
+      source: sharedPatientSignature,
+      updates,
+    });
 
-    const updates = createPatientStickerSyncSnapshot(normalizedCurrentExtractedPatient);
+    if (lastAutoFilledSignatureRef.current === autofillSignature) {
+      return;
+    }
+
+    lastAutoFilledSignatureRef.current = autofillSignature;
+
     if (onBulkUpdate) {
       onBulkUpdate(updates);
     } else {
@@ -319,14 +367,30 @@ export const PatientInfoFields = ({
     }
 
   }, [
-    canAutofillExtractedPatient,
-    currentPatientHasSyncedDetails,
-    extractedPatientSignature,
+    canAutofillSharedPatient,
+    sharedPatientSignature,
     normalizedCurrentExtractedPatient,
+    normalizedInfo,
     onBulkUpdate,
-    onCurrentPatientChange,
     onFieldChange,
   ]);
+
+  useEffect(() => {
+    if (!onCurrentPatientChange || !hasMeaningfulPatientInfoSyncData(normalizedInfo)) {
+      lastSharedPatientSyncSignatureRef.current = "";
+      return;
+    }
+
+    const snapshot = createPatientStickerSyncSnapshot(normalizedInfo);
+    const signature = getPatientStickerSyncSignature(snapshot);
+
+    if (!signature || signature === lastSharedPatientSyncSignatureRef.current) {
+      return;
+    }
+
+    lastSharedPatientSyncSignatureRef.current = signature;
+    onCurrentPatientChange(snapshot);
+  }, [normalizedInfo, onCurrentPatientChange]);
 
   const renderFieldRow = (label: string, field: string, input: React.ReactNode) => (
     <div
@@ -772,11 +836,9 @@ export const PatientInfoFields = ({
             "Age:",
             "age",
             <Input
-              className="bg-gray-100"
               value={normalizedInfo.age}
               onChange={(event) => handleBaseChange("age", event.target.value)}
-              placeholder="Calculated from the Date Of Birth"
-              readOnly
+              placeholder="Auto-calculated from DOB or enter manually"
             />,
           )}
           {renderFieldRow(

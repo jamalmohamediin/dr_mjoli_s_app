@@ -1,9 +1,10 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { createDefaultClinicianList, DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 
 export const createInitialNarrativeSurgeryState = (variant: "general" | "abdominal") => ({
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    surgeons: [""],
+    surgeons: createDefaultClinicianList(),
     assistants: [""],
     anaesthetists: [""],
     imaging: [] as string[],
@@ -31,7 +32,7 @@ export const createInitialNarrativeSurgeryState = (variant: "general" | "abdomin
     postOperativeManagement: "",
   },
   additionalInfo: {
-    doctorName: "",
+    doctorName: DEFAULT_CLINICIAN_NAME,
     surgeonSignature: "",
     dateTime: "",
   },

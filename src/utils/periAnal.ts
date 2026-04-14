@@ -1,4 +1,5 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { createDefaultClinicianList, DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 import {
   createInitialPeriAnalDiagramMarkings,
   DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
@@ -7,7 +8,7 @@ import {
 export const initialPeriAnalState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    surgeons: [""],
+    surgeons: createDefaultClinicianList(),
     assistants: [""],
     anaesthetists: [""],
     indication: "",
@@ -248,7 +249,7 @@ export const initialPeriAnalState = {
     additionalInformation: "",
     postOperativeManagement: "",
     surgeonSignature: "",
-    surgeonSignatureText: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
     dateTime: "",
   },
   procedureFindings: {

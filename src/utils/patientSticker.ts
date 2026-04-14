@@ -34,6 +34,11 @@ export const PATIENT_STICKER_SYNC_KEYS = [
   "sexOther",
   "age",
   "dateOfBirth",
+  "weight",
+  "height",
+  "bmi",
+  "asaScore",
+  "asaNotes",
   ...PATIENT_STICKER_FIELD_KEYS,
 ] as const;
 
@@ -281,8 +286,9 @@ export const mergePatientInfoUpdates = (
   currentPatientInfo: any,
   updates: Record<string, any> = {},
 ) => {
+  const previousInfo = createInitialPatientInfoState(currentPatientInfo || {});
   const nextInfo = createInitialPatientInfoState({
-    ...(currentPatientInfo || {}),
+    ...previousInfo,
     ...updates,
   });
 
@@ -290,7 +296,13 @@ export const mergePatientInfoUpdates = (
     Object.prototype.hasOwnProperty.call(updates, "dateOfBirth") &&
     !Object.prototype.hasOwnProperty.call(updates, "age")
   ) {
-    nextInfo.age = calculatePatientAge(nextInfo.dateOfBirth);
+    const previousAge = String(previousInfo.age || "").trim();
+    const previousAutoAge = calculatePatientAge(previousInfo.dateOfBirth);
+    const canAutoRecalculateAge = !previousAge || previousAge === previousAutoAge;
+
+    if (canAutoRecalculateAge) {
+      nextInfo.age = calculatePatientAge(nextInfo.dateOfBirth);
+    }
   }
 
   if (

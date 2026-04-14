@@ -26,11 +26,12 @@ interface ColonoscopyFormProps {
   onCurrentPatientChange?: (patientInfo: any) => void;
   onExportPDF?: () => void;
   onSavePatient?: () => void;
+  onClearAllData?: () => void;
   isGeneratingPDF?: boolean;
 }
 
 const indicationOptions = [
-  "Investigation of signs & symptom",
+  "Investigation of signs & symptoms",
   "Surveillance (Cancer / IBD / Polyps)",
   "Screening (Asymptomatic)",
   "Planned intervention",
@@ -60,8 +61,11 @@ const symptomOptions = [
   "Other",
 ];
 const sedationistOptions = ["Anaesthetist / Physician", "Physician", "Endoscopist", "Nurse", "Other"];
+const procedureUrgencyOptions = ["Emergency", "Semi-Emergency", "Semi-Elective", "Elective"];
+const preoperativeImagingOptions = ["None", "Ultrasound", "CT Scan", "MRI", "Other"];
+const sedationTypeOptions = ["None", "Topical", "Conscious sedation", "GA"];
 const monitoringOptions = ["Pulse oximetry", "BP", "ECG", "Other"];
-const sedationLevelOptions = ["None", "minimal", "moderate", "deep", "Anaesthesia"];
+const sedationLevelOptions = ["None", "Minimal", "Moderate", "Deep", "Anaesthesia"];
 const bowelPrepOptions = [
   "Low volume split dose bowel prep",
   "Low volume previous day bowel prep",
@@ -72,12 +76,12 @@ const bowelPrepOptions = [
 ];
 const overallBowelOptions = ["Excellent", "Good", "Fair", "Poor", "Inadequate", "Poor bowel prep – procedure abandoned"];
 const procedureOptions = ["Colonoscopy", "Flexible sigmoidoscopy", "Rigid sigmoidoscopy", "Proctoscopy", "Stoma colonoscopy", "Stoma ileoscopy", "Other"];
-const depthOptions = ["Terminal ileum", "Caecum", "Ascending colon", "hepatic flexure", "Transverse colon", "Splenic flexure", "Descending colon", "Sigmoid colon", "Rectum"];
-const caecalLandmarkOptions = ["Not reached", "Appendiceal orifice", "Ileocecal valve", "Caecal folds (Mercedes Benz sign)", "Transillumination", "Terminal ileum intubation", "Other"];
-const caecumNotReachedOptions = ["Poor bowel prep", "Poor patient tolerance", "Scope looping", "Obstructing lesion", "Complications during procedure", "Difficult colonoscopy", "Other"];
+const depthOptions = ["Terminal Ileum", "Caecum", "Ascending Colon", "Hepatic Flexure", "Transverse Colon", "Splenic Flexure", "Descending Colon", "Sigmoid Colon", "Rectum"];
+const caecalLandmarkOptions = ["Not Reached", "Appendiceal Orifice", "Ileocecal Valve", "Caecal Folds (Mercedes Benz Sign)", "Transillumination", "Terminal Ileum Intubation", "Other"];
+const caecumNotReachedOptions = ["Poor Bowel Prep", "Poor Patient Tolerance", "Scope Looping", "Obstructing Lesion", "Complications During Procedure", "Difficult Colonoscopy", "Other"];
 const difficultyOptions = ["Easy", "Average", "Difficult"];
-const findingOptions = ["Normal", "Haemorrhoids", "Inflammation", "Stricture (Benign/Malignant)", "Polyp(s)", "Diverticula", "Tumour", "AV malformation", "Radiation proctitis", "Ulcer (s)", "Other"];
-const siteOptions = ["Anus", "rectum", "Sigmoid colon", "Descending colon", "Splenic flexure", "Transverse colon", "Hepatic flexure", "Ascending colon", "Caecum", "Terminal ileum", "Other"];
+const findingOptions = ["Haemorrhoids", "Inflammation", "Stricture (Benign/Malignant)", "Polyp(s)", "Diverticula", "Tumour", "AV Malformation", "Radiation Proctitis", "Ulcer (s)", "Other"];
+const siteOptions = ["Anus", "Rectum", "Sigmoid Colon", "Descending Colon", "Splenic Flexure", "Transverse Colon", "Hepatic Flexure", "Ascending Colon", "Caecum", "Terminal Ileum", "Other"];
 const diagnosisOptions = [
   "Normal",
   "Anal Fissure",
@@ -118,6 +122,13 @@ const interventionOptions = [
   "Endoscopic mucosal dissection",
   "Other",
 ];
+const bbpsScoreOptions = [
+  "0 Unprepared Colon; Mucosa Not Seen.",
+  "1 Portion Of Mucosa Seen; Staining/Stool Obscures Other Areas.",
+  "2 Minor Staining/Stool; Mucosa Well Seen.",
+  "3 Entire Mucosa Seen; No Residual Staining/Stool.",
+];
+const followUpOptions = ["Barium Swallow", "Barium Enema", "Operation", "CT Scan", "MRI", "Blood Tests", "Repeat Endoscopy", "Histology Results", "Other"];
 
 export const ColonoscopyForm = ({
   currentReport,
@@ -127,6 +138,7 @@ export const ColonoscopyForm = ({
   onCurrentPatientChange,
   onExportPDF,
   onSavePatient,
+  onClearAllData,
   isGeneratingPDF,
 }: ColonoscopyFormProps) => {
   const template = currentReport.colonoscopy || createInitialColonoscopyState();
@@ -147,6 +159,23 @@ export const ColonoscopyForm = ({
   const diagnosis = template.diagnosis;
   const additionalInfo = template.additionalInfo;
 
+  const selectedDepth = toArray(procedureDetails.depthOfExamination);
+  const selectedCaecalLandmarks = toArray(procedureDetails.caecalLandmarks);
+  const selectedCaecumNotReachedReasons = toArray(procedureDetails.reasonsCaecumNotReached);
+  const reachedTerminalOrCaecum =
+    selectedDepth.includes("Terminal Ileum") || selectedDepth.includes("Caecum");
+  const showCaecalLandmarks =
+    reachedTerminalOrCaecum ||
+    selectedCaecalLandmarks.length > 0 ||
+    String(procedureDetails.caecalLandmarksOther || "").trim().length > 0;
+  const showCaecumNotReachedReasons =
+    selectedCaecalLandmarks.includes("Not Reached") ||
+    (selectedDepth.length > 0 && !reachedTerminalOrCaecum) ||
+    selectedCaecumNotReachedReasons.length > 0 ||
+    String(procedureDetails.reasonsCaecumNotReachedOther || "").trim().length > 0;
+
+  const selectedFindings = toArray(findingsSummary.findings);
+
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
       onBulkPatientInfoUpdate(updates);
@@ -160,6 +189,36 @@ export const ColonoscopyForm = ({
       ...(preoperative.medications || {}),
       [field]: value,
     });
+  };
+
+  const parseBbpsScore = (value: string) => {
+    const match = String(value || "").trim().match(/^([0-3])/);
+    return match ? Number(match[1]) : null;
+  };
+
+  const updateBbpsField = (
+    field: "bbpsRightColon" | "bbpsTransverseColon" | "bbpsLeftColon",
+    value: string,
+  ) => {
+    updateTemplate("bowelPreparation", field, value);
+
+    const rightScore = parseBbpsScore(
+      field === "bbpsRightColon" ? value : bowelPreparation.bbpsRightColon || "",
+    );
+    const transverseScore = parseBbpsScore(
+      field === "bbpsTransverseColon" ? value : bowelPreparation.bbpsTransverseColon || "",
+    );
+    const leftScore = parseBbpsScore(
+      field === "bbpsLeftColon" ? value : bowelPreparation.bbpsLeftColon || "",
+    );
+
+    if (rightScore !== null && transverseScore !== null && leftScore !== null) {
+      updateTemplate(
+        "bowelPreparation",
+        "totalBbps",
+        String(rightScore + transverseScore + leftScore),
+      );
+    }
   };
 
   const calculateDuration = (startTime: string, endTime: string) => {
@@ -235,7 +294,11 @@ export const ColonoscopyForm = ({
         </CardHeader>
         <CardContent className="space-y-4">
           <MultiValueTextField label="Endoscopist" values={preoperative.endoscopists || [""]} placeholder="Enter endoscopist name" onChange={(value) => updateTemplate("preoperative", "endoscopists", value)} />
+          <MultiValueTextField label="Assistant" values={preoperative.assistants || [""]} placeholder="Enter assistant name" onChange={(value) => updateTemplate("preoperative", "assistants", value)} />
           <MultiValueTextField label="Anesthetist" values={preoperative.anaesthetists || [""]} placeholder="Enter anesthetist name" onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)} />
+          <CheckboxGrid label="Procedure Urgency" options={procedureUrgencyOptions} values={preoperative.procedureUrgency} onChange={(value) => updateTemplate("preoperative", "procedureUrgency", value)} columns="grid-cols-2 md:grid-cols-4" />
+          <CheckboxGrid label="Preoperative Imaging" options={preoperativeImagingOptions} values={preoperative.preoperativeImaging} onChange={(value) => updateTemplate("preoperative", "preoperativeImaging", value)} columns="grid-cols-2 md:grid-cols-5" />
+          <OptionalOtherInput enabled={toArray(preoperative.preoperativeImaging).includes("Other")} value={preoperative.preoperativeImagingOther || ""} placeholder="Specify other preoperative imaging" onChange={(value) => updateTemplate("preoperative", "preoperativeImagingOther", value)} />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">Start Time</Label>
@@ -260,17 +323,21 @@ export const ColonoscopyForm = ({
           <OptionalOtherInput enabled={toArray(preoperative.indications).includes("Other")} value={preoperative.indicationOther || ""} placeholder="Specify other indication" onChange={(value) => updateTemplate("preoperative", "indicationOther", value)} />
           <CheckboxGrid label="Signs & Symptoms" options={symptomOptions} values={preoperative.signsSymptoms} onChange={(value) => updateTemplate("preoperative", "signsSymptoms", value)} />
           <OptionalOtherInput enabled={toArray(preoperative.signsSymptoms).includes("Other")} value={preoperative.signsSymptomsOther || ""} placeholder="Specify other sign/symptom" onChange={(value) => updateTemplate("preoperative", "signsSymptomsOther", value)} />
-          <RadioGrid label="Sedationist" options={sedationistOptions} value={preoperative.sedationist || ""} onChange={(value) => updateTemplate("preoperative", "sedationist", value)} />
-          <OptionalOtherInput enabled={preoperative.sedationist === "Other"} value={preoperative.sedationistOther || ""} placeholder="Specify other sedationist" onChange={(value) => updateTemplate("preoperative", "sedationistOther", value)} />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <LabeledInput label="Midazolam dose (mg)" value={preoperative.medications?.midazolamDose || ""} onChange={(value) => updateMedication("midazolamDose", value)} />
-            <LabeledInput label="Fentanyl dose (mcg)" value={preoperative.medications?.fentanylDose || ""} onChange={(value) => updateMedication("fentanylDose", value)} />
-            <LabeledInput label="Propofol dose (mg)" value={preoperative.medications?.propofolDose || ""} onChange={(value) => updateMedication("propofolDose", value)} />
-            <LabeledInput label="Other medication" value={preoperative.medications?.otherMedication || ""} onChange={(value) => updateMedication("otherMedication", value)} />
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-800">Sedation / Anaesthesia</h3>
+            <RadioGrid label="Sedationist" options={sedationistOptions} value={preoperative.sedationist || ""} onChange={(value) => updateTemplate("preoperative", "sedationist", value)} />
+            <OptionalOtherInput enabled={preoperative.sedationist === "Other"} value={preoperative.sedationistOther || ""} placeholder="Specify other sedationist" onChange={(value) => updateTemplate("preoperative", "sedationistOther", value)} />
+            <CheckboxGrid label="Type of sedation" options={sedationTypeOptions} values={preoperative.sedationTypes} onChange={(value) => updateTemplate("preoperative", "sedationTypes", value)} columns="grid-cols-2 md:grid-cols-4" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <LabeledInput label="Midazolam: mg" value={preoperative.medications?.midazolamDose || ""} onChange={(value) => updateMedication("midazolamDose", value)} />
+              <LabeledInput label="Fentanyl: mcg" value={preoperative.medications?.fentanylDose || ""} onChange={(value) => updateMedication("fentanylDose", value)} />
+              <LabeledInput label="Propofol: mg" value={preoperative.medications?.propofolDose || ""} onChange={(value) => updateMedication("propofolDose", value)} />
+              <LabeledInput label="Other medication" value={preoperative.medications?.otherMedication || ""} onChange={(value) => updateMedication("otherMedication", value)} />
+            </div>
+            <CheckboxGrid label="Monitoring" options={monitoringOptions} values={preoperative.monitoring} onChange={(value) => updateTemplate("preoperative", "monitoring", value)} columns="grid-cols-2 md:grid-cols-4" />
+            <OptionalOtherInput enabled={toArray(preoperative.monitoring).includes("Other")} value={preoperative.monitoringOther || ""} placeholder="Specify other monitoring" onChange={(value) => updateTemplate("preoperative", "monitoringOther", value)} />
+            <RadioGrid label="Level of sedation achieved" options={sedationLevelOptions} value={preoperative.sedationLevel || ""} onChange={(value) => updateTemplate("preoperative", "sedationLevel", value)} />
           </div>
-          <CheckboxGrid label="Monitoring" options={monitoringOptions} values={preoperative.monitoring} onChange={(value) => updateTemplate("preoperative", "monitoring", value)} columns="grid-cols-2 md:grid-cols-4" />
-          <OptionalOtherInput enabled={toArray(preoperative.monitoring).includes("Other")} value={preoperative.monitoringOther || ""} placeholder="Specify other monitoring" onChange={(value) => updateTemplate("preoperative", "monitoringOther", value)} />
-          <RadioGrid label="Level of sedation achieved" options={sedationLevelOptions} value={preoperative.sedationLevel || ""} onChange={(value) => updateTemplate("preoperative", "sedationLevel", value)} />
         </CardContent>
       </Card>
 
@@ -282,20 +349,32 @@ export const ColonoscopyForm = ({
           <CheckboxGrid label="Type of Prep" options={bowelPrepOptions} values={bowelPreparation.prepType} onChange={(value) => updateTemplate("bowelPreparation", "prepType", value)} />
           <OptionalOtherInput enabled={toArray(bowelPreparation.prepType).includes("Other")} value={bowelPreparation.prepTypeOther || ""} placeholder="Specify other bowel prep" onChange={(value) => updateTemplate("bowelPreparation", "prepTypeOther", value)} />
           <RadioGrid label="Overall Assessment" options={overallBowelOptions} value={bowelPreparation.overallAssessment || ""} onChange={(value) => updateTemplate("bowelPreparation", "overallAssessment", value)} />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <LabeledInput label="Right colon BBPS" value={bowelPreparation.bbpsRightColon || ""} onChange={(value) => updateTemplate("bowelPreparation", "bbpsRightColon", value)} placeholder="0-3" />
-            <LabeledInput label="Transverse colon BBPS" value={bowelPreparation.bbpsTransverseColon || ""} onChange={(value) => updateTemplate("bowelPreparation", "bbpsTransverseColon", value)} placeholder="0-3" />
-            <LabeledInput label="Left colon BBPS" value={bowelPreparation.bbpsLeftColon || ""} onChange={(value) => updateTemplate("bowelPreparation", "bbpsLeftColon", value)} placeholder="0-3" />
-            <LabeledInput label="Total BBPS / 9" value={bowelPreparation.totalBbps || ""} onChange={(value) => updateTemplate("bowelPreparation", "totalBbps", value)} />
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-800">Boston Bowel Preparation Scale</h3>
+            <RadioGrid label="Right Colon" options={bbpsScoreOptions} value={bowelPreparation.bbpsRightColon || ""} onChange={(value) => updateBbpsField("bbpsRightColon", value)} />
+            <RadioGrid label="Transverse Colon" options={bbpsScoreOptions} value={bowelPreparation.bbpsTransverseColon || ""} onChange={(value) => updateBbpsField("bbpsTransverseColon", value)} />
+            <RadioGrid label="Left Colon" options={bbpsScoreOptions} value={bowelPreparation.bbpsLeftColon || ""} onChange={(value) => updateBbpsField("bbpsLeftColon", value)} />
+            <LabeledInput label="Total BBPS Score / 9" value={bowelPreparation.totalBbps || ""} onChange={(value) => updateTemplate("bowelPreparation", "totalBbps", value)} />
           </div>
-          <CheckboxGrid label="Procedure" options={procedureOptions} values={procedureDetails.procedures} onChange={(value) => updateTemplate("procedureDetails", "procedures", value)} />
-          <OptionalOtherInput enabled={toArray(procedureDetails.procedures).includes("Other")} value={procedureDetails.procedureOther || ""} placeholder="Specify other procedure" onChange={(value) => updateTemplate("procedureDetails", "procedureOther", value)} />
-          <CheckboxGrid label="Depth of Examination" options={depthOptions} values={procedureDetails.depthOfExamination} onChange={(value) => updateTemplate("procedureDetails", "depthOfExamination", value)} />
-          <CheckboxGrid label="Caecal intubation landmarks identified" options={caecalLandmarkOptions} values={procedureDetails.caecalLandmarks} onChange={(value) => updateTemplate("procedureDetails", "caecalLandmarks", value)} />
-          <OptionalOtherInput enabled={toArray(procedureDetails.caecalLandmarks).includes("Other")} value={procedureDetails.caecalLandmarksOther || ""} placeholder="Specify other landmark" onChange={(value) => updateTemplate("procedureDetails", "caecalLandmarksOther", value)} />
-          <CheckboxGrid label="Reason for not reaching Caecum" options={caecumNotReachedOptions} values={procedureDetails.reasonsCaecumNotReached} onChange={(value) => updateTemplate("procedureDetails", "reasonsCaecumNotReached", value)} />
-          <OptionalOtherInput enabled={toArray(procedureDetails.reasonsCaecumNotReached).includes("Other")} value={procedureDetails.reasonsCaecumNotReachedOther || ""} placeholder="Specify other reason" onChange={(value) => updateTemplate("procedureDetails", "reasonsCaecumNotReachedOther", value)} />
-          <RadioGrid label="Difficulty" options={difficultyOptions} value={procedureDetails.difficulty || ""} onChange={(value) => updateTemplate("procedureDetails", "difficulty", value)} columns="grid-cols-3" />
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-800">Procedure Details</h3>
+            <CheckboxGrid label="Procedure" options={procedureOptions} values={procedureDetails.procedures} onChange={(value) => updateTemplate("procedureDetails", "procedures", value)} />
+            <OptionalOtherInput enabled={toArray(procedureDetails.procedures).includes("Other")} value={procedureDetails.procedureOther || ""} placeholder="Specify other procedure" onChange={(value) => updateTemplate("procedureDetails", "procedureOther", value)} />
+            <CheckboxGrid label="Depth of Examination" options={depthOptions} values={procedureDetails.depthOfExamination} onChange={(value) => updateTemplate("procedureDetails", "depthOfExamination", value)} />
+            {showCaecalLandmarks ? (
+              <>
+                <CheckboxGrid label="Caecal Intubation Landmarks Identified" options={caecalLandmarkOptions} values={procedureDetails.caecalLandmarks} onChange={(value) => updateTemplate("procedureDetails", "caecalLandmarks", value)} />
+                <OptionalOtherInput enabled={toArray(procedureDetails.caecalLandmarks).includes("Other")} value={procedureDetails.caecalLandmarksOther || ""} placeholder="Specify other landmark" onChange={(value) => updateTemplate("procedureDetails", "caecalLandmarksOther", value)} />
+              </>
+            ) : null}
+            {showCaecumNotReachedReasons ? (
+              <>
+                <CheckboxGrid label="Reason For Not Reaching Caecum" options={caecumNotReachedOptions} values={procedureDetails.reasonsCaecumNotReached} onChange={(value) => updateTemplate("procedureDetails", "reasonsCaecumNotReached", value)} />
+                <OptionalOtherInput enabled={toArray(procedureDetails.reasonsCaecumNotReached).includes("Other")} value={procedureDetails.reasonsCaecumNotReachedOther || ""} placeholder="Specify other reason" onChange={(value) => updateTemplate("procedureDetails", "reasonsCaecumNotReachedOther", value)} />
+              </>
+            ) : null}
+            <RadioGrid label="Difficulty" options={difficultyOptions} value={procedureDetails.difficulty || ""} onChange={(value) => updateTemplate("procedureDetails", "difficulty", value)} columns="grid-cols-3" />
+          </div>
         </CardContent>
       </Card>
 
@@ -310,74 +389,92 @@ export const ColonoscopyForm = ({
           <OptionalOtherInput enabled={toArray(findingsSummary.sitesOfAbnormality).includes("Other")} value={findingsSummary.siteOther || ""} placeholder="Specify other site" onChange={(value) => updateTemplate("findingsSummary", "siteOther", value)} />
           <LabeledTextarea label="Description of findings" value={findingsSummary.descriptionOfFindings || ""} onChange={(value) => updateTemplate("findingsSummary", "descriptionOfFindings", value)} rows={4} />
 
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Haemorrhoids</h3>
-            <LabeledInput label="Haemorrhoid Grade" value={haemorrhoids.grade || ""} onChange={(value) => updateTemplate("haemorrhoids", "grade", value)} placeholder="Grade I-IV / Internal and external" />
-            <LabeledInput label="Bleeding Status" value={haemorrhoids.bleedingStatus || ""} onChange={(value) => updateTemplate("haemorrhoids", "bleedingStatus", value)} placeholder="No bleeding / Active bleeding / etc." />
-            <LabeledInput label="Internal and external haemorrhoids" value={haemorrhoids.internalExternal || ""} onChange={(value) => updateTemplate("haemorrhoids", "internalExternal", value)} placeholder="Optional note" />
-          </div>
+          {selectedFindings.includes("Haemorrhoids") || toArray(haemorrhoids.grades).length > 0 || toArray(haemorrhoids.bleedingStatus).length > 0 ? (
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-sm font-semibold text-gray-800">Haemorrhoids</h3>
+              <CheckboxGrid label="Haemorrhoid Grade" options={["Grade I", "Grade II", "Grade III", "Grade IV", "Internal And External Haemorrhoids"]} values={haemorrhoids.grades} onChange={(value) => updateTemplate("haemorrhoids", "grades", value)} />
+              <CheckboxGrid label="Bleeding Status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={haemorrhoids.bleedingStatus} onChange={(value) => updateTemplate("haemorrhoids", "bleedingStatus", value)} />
+            </div>
+          ) : null}
 
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Inflammation</h3>
-            <CheckboxGrid label="Description of inflammation" options={["Pancolitis", "Segmental", "Patchy (skip lesions)", "Continuous", "Presence of pseudopolyps", "Cobblestoning", "Presence of exudate / slough", "Strictures", "peri-appendiceal patch", "Backwash ileitis", "Other"]} values={inflammation.description} onChange={(value) => updateTemplate("inflammation", "description", value)} />
-            <OptionalOtherInput enabled={toArray(inflammation.description).includes("Other")} value={inflammation.descriptionOther || ""} placeholder="Specify other inflammation description" onChange={(value) => updateTemplate("inflammation", "descriptionOther", value)} />
-            <LabeledInput label="Severity of Inflammation" value={inflammation.severity || ""} onChange={(value) => updateTemplate("inflammation", "severity", value)} placeholder="Mild / Moderate / Severe" />
-            <LabeledInput label="Presence of ulcers" value={inflammation.ulcerBurden || ""} onChange={(value) => updateTemplate("inflammation", "ulcerBurden", value)} placeholder="None / <10% / 10–30% / >30%" />
-            <CheckboxGrid label="Ulcer features" options={["Superficial ulcers", "Deep ulcers", "Linear ulcers", "Aphthous ulcers", "Serpiginous ulcers", "Confluent ulceration", "Other"]} values={inflammation.ulcerFeatures} onChange={(value) => updateTemplate("inflammation", "ulcerFeatures", value)} />
-            <OptionalOtherInput enabled={toArray(inflammation.ulcerFeatures).includes("Other")} value={inflammation.ulcerFeaturesOther || ""} placeholder="Specify other ulcer feature" onChange={(value) => updateTemplate("inflammation", "ulcerFeaturesOther", value)} />
-            <CheckboxGrid label="Endoscopic impression" options={["Features suggestive of Ulcerative Colitis", "Features suggestive of Crohn's Disease", "Features suggestive of Infectious Colitis", "Features suggestive of Ischemic Colitis", "Nonspecific colitis", "Nonspecific colon ulcer", "Other"]} values={inflammation.endoscopicImpression} onChange={(value) => updateTemplate("inflammation", "endoscopicImpression", value)} />
-            <OptionalOtherInput enabled={toArray(inflammation.endoscopicImpression).includes("Other")} value={inflammation.impressionOther || ""} placeholder="Specify other inflammation impression" onChange={(value) => updateTemplate("inflammation", "impressionOther", value)} />
-          </div>
+          {selectedFindings.includes("Inflammation") || toArray(inflammation.description).length > 0 || String(inflammation.ulcerBurden || "").trim().length > 0 ? (
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-sm font-semibold text-gray-800">Inflammation</h3>
+              <CheckboxGrid label="Description Of Inflammation" options={["Pancolitis", "Segmental", "Patchy (Skip Lesions)", "Continuous", "Presence Of Pseudopolyps", "Cobblestoning", "Presence Of Exudate / Slough", "Strictures", "Peri-Appendiceal Patch", "Backwash Ileitis", "Other"]} values={inflammation.description} onChange={(value) => updateTemplate("inflammation", "description", value)} />
+              <OptionalOtherInput enabled={toArray(inflammation.description).includes("Other")} value={inflammation.descriptionOther || ""} placeholder="Specify other inflammation description" onChange={(value) => updateTemplate("inflammation", "descriptionOther", value)} />
+              <RadioGrid label="Severity Of Inflammation" options={["Mild", "Moderate", "Severe"]} value={inflammation.severity || ""} onChange={(value) => updateTemplate("inflammation", "severity", value)} columns="grid-cols-3" />
+              <RadioGrid label="Presence Of Ulcers" options={["None", "<10%", "10-30%", ">30%"]} value={inflammation.ulcerBurden || ""} onChange={(value) => updateTemplate("inflammation", "ulcerBurden", value)} columns="grid-cols-2 md:grid-cols-4" />
+              {inflammation.ulcerBurden && inflammation.ulcerBurden !== "None" ? (
+                <>
+                  <CheckboxGrid label="Ulcer Features" options={["Superficial Ulcers", "Deep Ulcers", "Linear Ulcers", "Aphthous Ulcers", "Serpiginous Ulcers", "Confluent Ulceration", "Other"]} values={inflammation.ulcerFeatures} onChange={(value) => updateTemplate("inflammation", "ulcerFeatures", value)} />
+                  <OptionalOtherInput enabled={toArray(inflammation.ulcerFeatures).includes("Other")} value={inflammation.ulcerFeaturesOther || ""} placeholder="Specify other ulcer feature" onChange={(value) => updateTemplate("inflammation", "ulcerFeaturesOther", value)} />
+                </>
+              ) : null}
+              <CheckboxGrid label="Endoscopic Impression" options={["Features Suggestive Of Ulcerative Colitis", "Features Suggestive Of Crohn's Disease", "Features Suggestive Of Infectious Colitis", "Features Suggestive Of Ischemic Colitis", "Nonspecific Colitis", "Nonspecific Colon Ulcer", "Other"]} values={inflammation.endoscopicImpression} onChange={(value) => updateTemplate("inflammation", "endoscopicImpression", value)} />
+              <OptionalOtherInput enabled={toArray(inflammation.endoscopicImpression).includes("Other")} value={inflammation.impressionOther || ""} placeholder="Specify other inflammation impression" onChange={(value) => updateTemplate("inflammation", "impressionOther", value)} />
+            </div>
+          ) : null}
 
-          <div className="space-y-4 border-t pt-4">
+          {selectedFindings.includes("Stricture (Benign/Malignant)") || selectedFindings.includes("Polyp(s)") || selectedFindings.includes("Tumour") || String(stricture.number || "").trim().length > 0 || String(polyps.number || "").trim().length > 0 || String(tumour.length || "").trim().length > 0 ? (
+            <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-semibold text-gray-800">Stricture / Polyps / Tumour</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <LabeledInput label="Number of strictures" value={stricture.number || ""} onChange={(value) => updateTemplate("stricture", "number", value)} />
-              <LabeledInput label="Multiple strictures count" value={stricture.multipleNumber || ""} onChange={(value) => updateTemplate("stricture", "multipleNumber", value)} />
-              <LabeledInput label="Length of stricture" value={stricture.length || ""} onChange={(value) => updateTemplate("stricture", "length", value)} placeholder="<1 cm / 1-3 cm / etc." />
-              <LabeledInput label="Severity of narrowing" value={stricture.severityOfNarrowing || ""} onChange={(value) => updateTemplate("stricture", "severityOfNarrowing", value)} placeholder="Mild / Moderate / Severe" />
-              <LabeledInput label="Traversability" value={stricture.traversability || ""} onChange={(value) => updateTemplate("stricture", "traversability", value)} placeholder="Easily traversed / etc." />
-              <LabeledInput label="Stricture impression" value={stricture.impressionOther || ""} onChange={(value) => updateTemplate("stricture", "impressionOther", value)} placeholder="Extra notes" />
-              <LabeledInput label="Polyp number" value={polyps.number || ""} onChange={(value) => updateTemplate("polyps", "number", value)} />
-              <LabeledInput label="Polyp size" value={polyps.size || ""} onChange={(value) => updateTemplate("polyps", "size", value)} />
+              <RadioGrid label="Number Of Strictures" options={["Single", "Multiple"]} value={stricture.number || ""} onChange={(value) => updateTemplate("stricture", "number", value)} columns="grid-cols-2" />
+              {stricture.number === "Multiple" ? (
+                <LabeledInput label="Multiple (Number)" value={stricture.multipleNumber || ""} onChange={(value) => updateTemplate("stricture", "multipleNumber", value)} />
+              ) : <div />}
+              <RadioGrid label="Length Of Stricture" options={["<1 Cm", "Short Segment (1 - 3 Cm)", "Intermediate (3-5 Cm)", "Long Segment (>5 Cm)"]} value={stricture.length || ""} onChange={(value) => updateTemplate("stricture", "length", value)} />
+              <CheckboxGrid label="Severity Of Narrowing" options={["Mild (<50%)", "Moderate (50-75%)", "Severe (>75%)", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={stricture.severityOfNarrowing} onChange={(value) => updateTemplate("stricture", "severityOfNarrowing", value)} columns="grid-cols-2 md:grid-cols-3" />
+              <RadioGrid label="Polyp Number" options={["1", "1 - 5", "5 - 10", "10 - 20", "20 - 50", "50 - 100", "> 100"]} value={polyps.number || ""} onChange={(value) => updateTemplate("polyps", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
+              <CheckboxGrid label="Polyp Size" options={["Diminutive (<=5 Mm)", "Small (6-9 Mm)", "Large (>=10 Mm)", "Advanced (>=20 Mm)"]} values={polyps.size} onChange={(value) => updateTemplate("polyps", "size", value)} columns="grid-cols-2 md:grid-cols-4" />
               <LabeledInput label="Largest polyp diameter length (mm)" value={polyps.largestDiameterLength || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterLength", value)} />
               <LabeledInput label="Largest polyp diameter width (mm)" value={polyps.largestDiameterWidth || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterWidth", value)} />
+              <LabeledInput label="Range (if multiple) from mm" value={polyps.rangeFrom || ""} onChange={(value) => updateTemplate("polyps", "rangeFrom", value)} />
+              <LabeledInput label="Range (if multiple) to mm" value={polyps.rangeTo || ""} onChange={(value) => updateTemplate("polyps", "rangeTo", value)} />
               <LabeledInput label="Tumour length (cm)" value={tumour.length || ""} onChange={(value) => updateTemplate("tumour", "length", value)} />
-              <LabeledInput label="Circumferential involvement" value={tumour.circumferentialInvolvement || ""} onChange={(value) => updateTemplate("tumour", "circumferentialInvolvement", value)} />
+              <CheckboxGrid label="Circumferential involvement" options={["<25%", "25-50%", "50-75%", ">75%", "Circumferential"]} values={tumour.circumferentialInvolvement} onChange={(value) => updateTemplate("tumour", "circumferentialInvolvement", value)} />
             </div>
-            <CheckboxGrid label="Stricture morphology" options={["Normal mucosa", "Smooth / regular", "Erythema", "Irregular / nodular", "Shouldered edges", "Concentric narrowing", "Eccentric narrowing", "Ulcerated", "Mass lesion suspected", "Other"]} values={stricture.morphology} onChange={(value) => updateTemplate("stricture", "morphology", value)} />
+            <CheckboxGrid label="Stricture morphology" options={["Normal Mucosa", "Smooth / Regular", "Erythema", "Irregular / Nodular", "Shouldered Edges", "Concentric Narrowing", "Eccentric Narrowing", "Ulcerated", "Mass Lesion Suspected", "Other"]} values={stricture.morphology} onChange={(value) => updateTemplate("stricture", "morphology", value)} />
             <OptionalOtherInput enabled={toArray(stricture.morphology).includes("Other")} value={stricture.morphologyOther || ""} placeholder="Specify other morphology" onChange={(value) => updateTemplate("stricture", "morphologyOther", value)} />
-            <CheckboxGrid label="Stricture endoscopic impression" options={["Suspicious for malignancy", "Benign stricture", "Inflammatory stricture (e.g. Crohn's Disease)", "Post-inflammatory / fibrosis", "Ischemic stricture (Ischemic Colitis)", "Post-surgical / anastomotic stricture", "Radiation-induced", "Indeterminate"]} values={stricture.endoscopicImpression} onChange={(value) => updateTemplate("stricture", "endoscopicImpression", value)} />
-            <CheckboxGrid label="Polyp morphology" options={["Pedunculated", "Sessile", "Slightly elevated", "Flat", "Depressed", "Excavated", "Pseudopolyps", "other"]} values={polyps.morphology} onChange={(value) => updateTemplate("polyps", "morphology", value)} />
-            <OptionalOtherInput enabled={toArray(polyps.morphology).includes("other")} value={polyps.morphologyOther || ""} placeholder="Specify other polyp morphology" onChange={(value) => updateTemplate("polyps", "morphologyOther", value)} />
-            <CheckboxGrid label="Tumour lumen narrowing" options={["No narrowing", "Partial obstruction", "Significant narrowing", "Complete obstruction", "Easily traversed", "Traversed with difficulty", "Not traversable"]} values={tumour.lumenNarrowing} onChange={(value) => updateTemplate("tumour", "lumenNarrowing", value)} />
-            <CheckboxGrid label="Tumour endoscopic Impression" options={["Highly suspicious for malignancy", "Likely malignant tumour", "Early cancer (superficial)", "Benign tumour (e.g. lipoma)", "Indeterminate"]} values={tumour.endoscopicImpression} onChange={(value) => updateTemplate("tumour", "endoscopicImpression", value)} />
-          </div>
+            <CheckboxGrid label="Stricture endoscopic impression" options={["Suspicious For Malignancy", "Benign Stricture", "Inflammatory Stricture (E.G. Crohn's Disease)", "Post-Inflammatory / Fibrosis", "Ischemic Stricture (Ischemic Colitis)", "Post-Surgical / Anastomotic Stricture", "Radiation-Induced", "Indeterminate"]} values={stricture.endoscopicImpression} onChange={(value) => updateTemplate("stricture", "endoscopicImpression", value)} />
+            <CheckboxGrid label="Polyp morphology" options={["Pedunculated", "Sessile", "Slightly Elevated", "Flat", "Depressed", "Excavated", "Pseudopolyps", "Other"]} values={polyps.morphology} onChange={(value) => updateTemplate("polyps", "morphology", value)} />
+            <OptionalOtherInput enabled={toArray(polyps.morphology).includes("Other")} value={polyps.morphologyOther || ""} placeholder="Specify other polyp morphology" onChange={(value) => updateTemplate("polyps", "morphologyOther", value)} />
+            <CheckboxGrid label="Tumour lumen narrowing" options={["No Narrowing", "Partial Obstruction", "Significant Narrowing", "Complete Obstruction", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={tumour.lumenNarrowing} onChange={(value) => updateTemplate("tumour", "lumenNarrowing", value)} />
+            <CheckboxGrid label="Tumour endoscopic Impression" options={["Highly Suspicious For Malignancy", "Likely Malignant Tumour", "Early Cancer (Superficial)", "Benign Tumour (E.G. Lipoma)", "Indeterminate"]} values={tumour.endoscopicImpression} onChange={(value) => updateTemplate("tumour", "endoscopicImpression", value)} />
+            </div>
+          ) : null}
 
-          <div className="space-y-4 border-t pt-4">
+          {selectedFindings.includes("Diverticula") || selectedFindings.includes("AV Malformation") || selectedFindings.includes("Radiation Proctitis") || selectedFindings.includes("Ulcer (s)") || String(diverticula.number || "").trim().length > 0 || String(avMalformation.number || "").trim().length > 0 || String(radiationProctitis.extentFromAnalVerge || "").trim().length > 0 || String(ulcer.number || "").trim().length > 0 ? (
+            <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-semibold text-gray-800">Diverticula / AV Malformation / Radiation Proctitis / Ulcer</h3>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <LabeledInput label="Diverticula number" value={diverticula.number || ""} onChange={(value) => updateTemplate("diverticula", "number", value)} />
-              <LabeledInput label="Diverticula size" value={diverticula.size || ""} onChange={(value) => updateTemplate("diverticula", "size", value)} />
-              <LabeledInput label="Diverticula distribution pattern" value={diverticula.distributionPattern || ""} onChange={(value) => updateTemplate("diverticula", "distributionPattern", value)} />
-              <LabeledInput label="AV malformation number" value={avMalformation.number || ""} onChange={(value) => updateTemplate("avMalformation", "number", value)} />
-              <LabeledInput label="AV malformation size" value={avMalformation.size || ""} onChange={(value) => updateTemplate("avMalformation", "size", value)} />
-              <LabeledInput label="AV malformation bleeding status" value={avMalformation.bleedingStatus || ""} onChange={(value) => updateTemplate("avMalformation", "bleedingStatus", value)} />
-              <LabeledInput label="AV malformation distribution" value={avMalformation.distributionPattern || ""} onChange={(value) => updateTemplate("avMalformation", "distributionPattern", value)} />
-              <LabeledInput label="AV malformation burden" value={avMalformation.burden || ""} onChange={(value) => updateTemplate("avMalformation", "burden", value)} />
-              <LabeledInput label="Risk of bleeding" value={avMalformation.bleedingRisk || ""} onChange={(value) => updateTemplate("avMalformation", "bleedingRisk", value)} />
+              <RadioGrid label="Diverticula Number" options={["Single", "Few", "Multiple", "Extensive"]} value={diverticula.number || ""} onChange={(value) => updateTemplate("diverticula", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
+              <RadioGrid label="Diverticula Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={diverticula.size || ""} onChange={(value) => updateTemplate("diverticula", "size", value)} columns="grid-cols-3" />
+              <CheckboxGrid label="Diverticula Distribution Pattern" options={["Focal", "Segmental", "Diffuse", "Pan Colonic"]} values={diverticula.distributionPattern} onChange={(value) => updateTemplate("diverticula", "distributionPattern", value)} columns="grid-cols-2 md:grid-cols-4" />
+              <RadioGrid label="AV Malformation Number" options={["Single", "Multiple (<=5)", "Numerous (>5)"]} value={avMalformation.number || ""} onChange={(value) => updateTemplate("avMalformation", "number", value)} columns="grid-cols-3" />
+              <RadioGrid label="AV Malformation Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={avMalformation.size || ""} onChange={(value) => updateTemplate("avMalformation", "size", value)} columns="grid-cols-3" />
+              <RadioGrid label="AV Malformation Burden" options={["Mild", "Moderate", "Severe"]} value={avMalformation.burden || ""} onChange={(value) => updateTemplate("avMalformation", "burden", value)} columns="grid-cols-3" />
+              <RadioGrid label="Risk Of Bleeding" options={["Low", "Moderate", "High"]} value={avMalformation.bleedingRisk || ""} onChange={(value) => updateTemplate("avMalformation", "bleedingRisk", value)} columns="grid-cols-3" />
               <LabeledInput label="Extent from anal verge (cm)" value={radiationProctitis.extentFromAnalVerge || ""} onChange={(value) => updateTemplate("radiationProctitis", "extentFromAnalVerge", value)} />
-              <LabeledInput label="Radiation proctitis severity" value={radiationProctitis.severity || ""} onChange={(value) => updateTemplate("radiationProctitis", "severity", value)} />
-              <LabeledInput label="Ulcer number" value={ulcer.number || ""} onChange={(value) => updateTemplate("ulcer", "number", value)} />
-              <LabeledInput label="Approximate ulcer count if multiple" value={ulcer.approximateNumberIfMultiple || ""} onChange={(value) => updateTemplate("ulcer", "approximateNumberIfMultiple", value)} />
-              <LabeledInput label="Ulcer distribution" value={ulcer.distribution || ""} onChange={(value) => updateTemplate("ulcer", "distribution", value)} />
+              <RadioGrid label="Radiation proctitis severity" options={["Mild", "Moderate", "Severe"]} value={radiationProctitis.severity || ""} onChange={(value) => updateTemplate("radiationProctitis", "severity", value)} columns="grid-cols-3" />
+              <RadioGrid label="Ulcer Number" options={["Single", "Multiple"]} value={ulcer.number || ""} onChange={(value) => updateTemplate("ulcer", "number", value)} columns="grid-cols-2" />
+              {ulcer.number === "Multiple" ? (
+                <LabeledInput label="Approximate ulcer count if multiple" value={ulcer.approximateNumberIfMultiple || ""} onChange={(value) => updateTemplate("ulcer", "approximateNumberIfMultiple", value)} />
+              ) : <div />}
+              <CheckboxGrid label="Ulcer Distribution" options={["Focal", "Segmental", "Diffuse"]} values={ulcer.distribution} onChange={(value) => updateTemplate("ulcer", "distribution", value)} columns="grid-cols-3" />
+              <LabeledInput label="Largest Ulcer Diameter (mm) - Length" value={ulcer.largestDiameterLength || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterLength", value)} />
+              <LabeledInput label="Largest Ulcer Diameter (mm) - Width" value={ulcer.largestDiameterWidth || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterWidth", value)} />
+              <LabeledInput label="Range (if multiple) from mm" value={ulcer.rangeFrom || ""} onChange={(value) => updateTemplate("ulcer", "rangeFrom", value)} />
+              <LabeledInput label="Range (if multiple) to mm" value={ulcer.rangeTo || ""} onChange={(value) => updateTemplate("ulcer", "rangeTo", value)} />
             </div>
-            <CheckboxGrid label="Diverticula morphology" options={["Normal mucosa", "Simple", "Containing fecolith", "Erythematous", "Inflamed", "Ulcerated", "Associated colitis", "other"]} values={diverticula.morphology} onChange={(value) => updateTemplate("diverticula", "morphology", value)} />
-            <OptionalOtherInput enabled={toArray(diverticula.morphology).includes("other")} value={diverticula.morphologyOther || ""} placeholder="Specify other diverticula morphology" onChange={(value) => updateTemplate("diverticula", "morphologyOther", value)} />
+            <CheckboxGrid label="Diverticula morphology" options={["Normal Mucosa", "Simple", "Containing Fecolith", "Erythematous", "Inflamed", "Ulcerated", "Associated Colitis", "Other"]} values={diverticula.morphology} onChange={(value) => updateTemplate("diverticula", "morphology", value)} />
+            <OptionalOtherInput enabled={toArray(diverticula.morphology).includes("Other")} value={diverticula.morphologyOther || ""} placeholder="Specify other diverticula morphology" onChange={(value) => updateTemplate("diverticula", "morphologyOther", value)} />
             <CheckboxGrid label="AV malformation morphology" options={["Flat", "Raised", "Clustered", "Solitary"]} values={avMalformation.morphology} onChange={(value) => updateTemplate("avMalformation", "morphology", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="AV malformation color appearance" options={["Reddish", "Purple", "Tortuous vessels", "Erythematous patch"]} values={avMalformation.colorAppearance} onChange={(value) => updateTemplate("avMalformation", "colorAppearance", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="Radiation proctitis distribution" options={["Rectum only", "Rectosigmoid involvement", "Segmental", "Diffuse", "Patchy", "Circumferential"]} values={radiationProctitis.distribution} onChange={(value) => updateTemplate("radiationProctitis", "distribution", value)} />
-            <CheckboxGrid label="Radiation proctitis mucosal findings" options={["Erythema", "Telangiectasia", "Edema", "Friable / contact bleeding", "Spontaneous bleeding", "Pallor / atrophy", "Necrosis", "Stricture", "Fistula", "Ulceration", "Ectatic vessels", "Angiodysplasia-like lesions", "Other"]} values={radiationProctitis.mucosalFindings} onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindings", value)} />
+            <CheckboxGrid label="AV malformation color appearance" options={["Reddish", "Purple", "Tortuous Vessels", "Erythematous Patch"]} values={avMalformation.colorAppearance} onChange={(value) => updateTemplate("avMalformation", "colorAppearance", value)} columns="grid-cols-2 md:grid-cols-4" />
+            <CheckboxGrid label="AV malformation bleeding status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={avMalformation.bleedingStatus} onChange={(value) => updateTemplate("avMalformation", "bleedingStatus", value)} />
+            <CheckboxGrid label="AV malformation distribution" options={["Focal", "Segmental", "Diffuse", "Pancolonic"]} values={avMalformation.distributionPattern} onChange={(value) => updateTemplate("avMalformation", "distributionPattern", value)} />
+            <CheckboxGrid label="Radiation proctitis distribution" options={["Rectum Only", "Rectosigmoid Involvement", "Segmental", "Diffuse", "Patchy", "Circumferential"]} values={radiationProctitis.distribution} onChange={(value) => updateTemplate("radiationProctitis", "distribution", value)} />
+            <CheckboxGrid label="Radiation proctitis mucosal findings" options={["Erythema", "Telangiectasia", "Edema", "Friable / Contact Bleeding", "Spontaneous Bleeding", "Pallor / Atrophy", "Necrosis", "Stricture", "Fistula", "Ulceration", "Ectatic Vessels", "Angiodysplasia-Like Lesions", "Other"]} values={radiationProctitis.mucosalFindings} onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindings", value)} />
             <OptionalOtherInput enabled={toArray(radiationProctitis.mucosalFindings).includes("Other")} value={radiationProctitis.mucosalFindingsOther || ""} placeholder="Specify other mucosal finding" onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindingsOther", value)} />
             <CheckboxGrid label="Ulcer shape" options={["Round", "Oval", "Linear", "Irregular", "Serpiginous"]} values={ulcer.shape} onChange={(value) => updateTemplate("ulcer", "shape", value)} columns="grid-cols-2 md:grid-cols-5" />
             <CheckboxGrid label="Ulcer depth" options={["Superficial", "Deep", "Excavated"]} values={ulcer.depth} onChange={(value) => updateTemplate("ulcer", "depth", value)} columns="grid-cols-3" />
@@ -389,11 +486,18 @@ export const ColonoscopyForm = ({
             <OptionalOtherInput enabled={toArray(ulcer.surroundingMucosa).includes("Other")} value={ulcer.surroundingMucosaOther || ""} placeholder="Specify other surrounding mucosa" onChange={(value) => updateTemplate("ulcer", "surroundingMucosaOther", value)} />
             <CheckboxGrid label="Associated Findings" options={["Inflammation", "Stricture", "Mass lesion", "Fistula opening", "Perianal disease", "Diverticulosis nearby", "Other"]} values={ulcer.associatedFindings} onChange={(value) => updateTemplate("ulcer", "associatedFindings", value)} />
             <OptionalOtherInput enabled={toArray(ulcer.associatedFindings).includes("Other")} value={ulcer.associatedFindingsOther || ""} placeholder="Specify other associated finding" onChange={(value) => updateTemplate("ulcer", "associatedFindingsOther", value)} />
-            <CheckboxGrid label="Suspected Etiology (Endoscopic)" options={["Inflammatory bowel disease", "Infective", "Ischaemic colitis", "Drug-induced (e.g. NSAIDs)", "Malignancy-related", "Radiation colitis", "Indeterminate", "Other"]} values={ulcer.suspectedEtiology} onChange={(value) => updateTemplate("ulcer", "suspectedEtiology", value)} />
-            <CheckboxGrid label="IBD Type" options={["Crohn’s disease", "Ulcerative colitis"]} values={ulcer.ibdType} onChange={(value) => updateTemplate("ulcer", "ibdType", value)} columns="grid-cols-2" />
-            <CheckboxGrid label="Infective etiology" options={["Cytomegalovirus colitis", "Tuberculosis", "Other"]} values={ulcer.infectiveEtiology} onChange={(value) => updateTemplate("ulcer", "infectiveEtiology", value)} columns="grid-cols-3" />
-            <OptionalOtherInput enabled={toArray(ulcer.infectiveEtiology).includes("Other") || toArray(ulcer.suspectedEtiology).includes("Other")} value={ulcer.etiologyOther || ""} placeholder="Specify other etiology" onChange={(value) => updateTemplate("ulcer", "etiologyOther", value)} />
-          </div>
+            <CheckboxGrid label="Suspected Etiology (Endoscopic)" options={["Inflammatory Bowel Disease", "Infective", "Ischaemic Colitis", "Drug-Induced (E.G. Nsaids)", "Malignancy-Related", "Radiation Colitis", "Indeterminate"]} values={ulcer.suspectedEtiology} onChange={(value) => updateTemplate("ulcer", "suspectedEtiology", value)} />
+            {toArray(ulcer.suspectedEtiology).includes("Inflammatory Bowel Disease") ? (
+              <CheckboxGrid label="Inflammatory Bowel Disease" options={["Crohn's Disease", "Ulcerative Colitis"]} values={ulcer.ibdType} onChange={(value) => updateTemplate("ulcer", "ibdType", value)} columns="grid-cols-2" />
+            ) : null}
+            {toArray(ulcer.suspectedEtiology).includes("Infective") ? (
+              <>
+                <CheckboxGrid label="Infective" options={["Cytomegalovirus Colitis", "Tuberculosis", "Other"]} values={ulcer.infectiveEtiology} onChange={(value) => updateTemplate("ulcer", "infectiveEtiology", value)} columns="grid-cols-3" />
+                <OptionalOtherInput enabled={toArray(ulcer.infectiveEtiology).includes("Other")} value={ulcer.etiologyOther || ""} placeholder="Specify other infective etiology" onChange={(value) => updateTemplate("ulcer", "etiologyOther", value)} />
+              </>
+            ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -405,6 +509,7 @@ export const ColonoscopyForm = ({
           <AnatomyDiagram
             type="colonoscopy"
             customImage={colonoscopyTemplateImage}
+            initialFindings={Array.isArray(template.diagram?.findings) ? template.diagram.findings : []}
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
               if (data.canvasImageData !== undefined) {
@@ -417,34 +522,65 @@ export const ColonoscopyForm = ({
 
       <Card className="glass-card-light">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-800">Interventions and Diagnosis</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-800">Interventions and Final Endoscopic Diagnosis</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <CheckboxGrid label="Interventions Performed" options={interventionOptions} values={interventions.interventions} onChange={(value) => updateTemplate("interventions", "interventions", value)} />
           <OptionalOtherInput enabled={toArray(interventions.interventions).includes("Other")} value={interventions.other || ""} placeholder="Specify other intervention" onChange={(value) => updateTemplate("interventions", "other", value)} />
-          <CheckboxGrid label="Colonoscopy Diagnosis" options={diagnosisOptions} values={diagnosis.diagnoses} onChange={(value) => updateTemplate("diagnosis", "diagnoses", value)} />
+          <CheckboxGrid label="Final Endoscopic Diagnosis" options={diagnosisOptions} values={diagnosis.diagnoses} onChange={(value) => updateTemplate("diagnosis", "diagnoses", value)} />
           <OptionalOtherInput enabled={toArray(diagnosis.diagnoses).includes("Other")} value={diagnosis.diagnosisOther || ""} placeholder="Specify other diagnosis" onChange={(value) => updateTemplate("diagnosis", "diagnosisOther", value)} />
         </CardContent>
       </Card>
 
       <Card className="glass-card-light">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-800">Additional Notes, Conclusion and Management</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-800">Specimen, Conclusion, Follow-up and Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <LabeledTextarea label="Additional Notes" value={additionalInfo.additionalNotes || ""} onChange={(value) => updateTemplate("additionalInfo", "additionalNotes", value)} />
+          <RadioGrid label="Specimen Sent for Pathology" options={["Yes", "No"]} value={additionalInfo.specimenSentForPathology || ""} onChange={(value) => updateTemplate("additionalInfo", "specimenSentForPathology", value)} columns="grid-cols-2" />
+          <RadioGrid label="Other Specimens Taken" options={["No", "Yes"]} value={additionalInfo.otherSpecimensTaken || ""} onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensTaken", value)} columns="grid-cols-2" />
+          <OptionalOtherInput enabled={additionalInfo.otherSpecimensTaken === "Yes"} label="Yes (Specify)" value={additionalInfo.otherSpecimensTakenDetails || ""} placeholder="e.g. Biopsies" onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensTakenDetails", value)} />
+          <LabeledInput label="Specify Laboratory Sent to" value={additionalInfo.laboratorySentTo || ""} onChange={(value) => updateTemplate("additionalInfo", "laboratorySentTo", value)} />
           <LabeledTextarea label="Conclusion" value={additionalInfo.conclusion || ""} onChange={(value) => updateTemplate("additionalInfo", "conclusion", value)} />
-          <LabeledTextarea label="Management" value={additionalInfo.management || ""} onChange={(value) => updateTemplate("additionalInfo", "management", value)} />
+          <CheckboxGrid label="Follow-up" options={followUpOptions} values={additionalInfo.followUpOptions} onChange={(value) => updateTemplate("additionalInfo", "followUpOptions", value)} />
+          <OptionalOtherInput enabled={toArray(additionalInfo.followUpOptions).includes("Other")} value={additionalInfo.followUpOther || ""} placeholder="Specify other follow-up" onChange={(value) => updateTemplate("additionalInfo", "followUpOther", value)} />
+          <LabeledTextarea label="Additional Notes" value={additionalInfo.additionalNotes || ""} onChange={(value) => updateTemplate("additionalInfo", "additionalNotes", value)} />
+          <LabeledTextarea label="Post Operative Management" value={additionalInfo.postOperativeManagement || additionalInfo.management || ""} onChange={(value) => {
+            updateTemplate("additionalInfo", "postOperativeManagement", value);
+            updateTemplate("additionalInfo", "management", value);
+          }} />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <LabeledInput label="Endoscopist Name" value={additionalInfo.endoscopistName || ""} onChange={(value) => updateTemplate("additionalInfo", "endoscopistName", value)} placeholder="Enter endoscopist name" />
+            <LabeledInput label="Surgeon's Signature" value={additionalInfo.surgeonSignatureText || additionalInfo.endoscopistName || ""} onChange={(value) => {
+              updateTemplate("additionalInfo", "surgeonSignatureText", value);
+              updateTemplate("additionalInfo", "endoscopistName", value);
+            }} placeholder="Enter surgeon name" />
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">Date</Label>
+              <Label className="text-sm font-medium text-gray-700">Date and Time</Label>
               <DateTimeDDMMYYYY24HourInput value={additionalInfo.dateTime || ""} onChange={(value) => updateTemplate("additionalInfo", "dateTime", value)} />
             </div>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue())}>
             Use Current Date/Time
           </Button>
+          <div className="border-t pt-4">
+            <div className="flex flex-wrap gap-2">
+              {onExportPDF ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onExportPDF} disabled={isGeneratingPDF}>
+                  {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+                </Button>
+              ) : null}
+              {onSavePatient ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onSavePatient}>
+                  Save Patient
+                </Button>
+              ) : null}
+              {onClearAllData ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onClearAllData}>
+                  Clear All Patient Data
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

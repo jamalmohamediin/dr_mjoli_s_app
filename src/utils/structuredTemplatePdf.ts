@@ -4,6 +4,7 @@ import {
   formatDateDDMMYYYYWithDashes,
   formatDateTimeDDMMYYYYWithDashes,
 } from "@/utils/dateFormatter";
+import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
 import { hasText, toArray } from "@/utils/templateDataHelpers";
 
@@ -24,6 +25,8 @@ interface StructuredTemplatePdfOptions {
   diagram?: {
     title: string;
     imageData?: string | null;
+    placement?: "end" | "inlineRight";
+    sectionTitle?: string;
   };
   signature?: {
     text?: string;
@@ -125,6 +128,9 @@ export const generateStructuredTemplatePdf = async ({
     });
   };
 
+  const toEntryText = (entry: StructuredTemplatePdfEntry) =>
+    `${entry.label}: ${Array.isArray(entry.value) ? toArray(entry.value).join(", ") : entry.value || ""}`;
+
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "bold");
   pdf.text("Dr. Monde Mjoli", margin, y);
@@ -180,6 +186,8 @@ export const generateStructuredTemplatePdf = async ({
     drawSingleRow(`ASA Notes: ${info.asaNotes}`);
   }
 
+  let inlineDiagramRendered = false;
+
   filteredSections.forEach((section) => {
     y += 2;
     ensureSpace(16);
@@ -190,6 +198,52 @@ export const generateStructuredTemplatePdf = async ({
     y += 7;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
+
+    const shouldRenderInlineDiagram =
+      Boolean(diagram?.imageData) &&
+      diagram?.placement === "inlineRight" &&
+      diagram?.sectionTitle === section.title &&
+      !inlineDiagramRendered;
+
+    if (shouldRenderInlineDiagram) {
+      const gap = 6;
+      const rightWidth = 80;
+      const leftWidth = contentWidth - rightWidth - gap;
+      const leftX = margin;
+      const rightX = margin + leftWidth + gap;
+
+      const leftLines = section.entries.map((entry) => pdf.splitTextToSize(toEntryText(entry), leftWidth));
+      const leftHeight = leftLines.reduce((total, lines) => total + lines.length * lineHeight, 0);
+      const estimatedRightHeight = 74;
+      const sectionHeight = Math.max(leftHeight, estimatedRightHeight) + 2;
+
+      ensureSpace(sectionHeight + 2, 24);
+
+      let leftY = y;
+      leftLines.forEach((lines) => {
+        lines.forEach((line: string) => {
+          pdf.text(line, leftX, leftY);
+          leftY += lineHeight;
+        });
+      });
+
+      const portsAndIncisionsLayout = drawRectalStylePortsAndIncisions({
+        pdf,
+        x: rightX,
+        y,
+        pageHeight,
+        diagramCanvas: diagram?.imageData || null,
+        fallbackLabel: hasText(diagram?.title) ? String(diagram?.title) : "DIAGRAM",
+      });
+      const rightBottomY = portsAndIncisionsLayout.diagramBottomY;
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+
+      y += Math.max(sectionHeight, rightBottomY - y + 2);
+      inlineDiagramRendered = true;
+      return;
+    }
 
     for (let index = 0; index < section.entries.length; index += 2) {
       const leftEntry = section.entries[index];
@@ -207,9 +261,7 @@ export const generateStructuredTemplatePdf = async ({
 
       const useSingleRow =
         leftValue.length > 110 ||
-        rightValue.length > 110 ||
-        Array.isArray(leftEntry.value) ||
-        Array.isArray(rightEntry?.value);
+        rightValue.length > 110;
 
       if (useSingleRow) {
         drawSingleRow(leftValue);
@@ -222,15 +274,19 @@ export const generateStructuredTemplatePdf = async ({
     }
   });
 
-  if (diagram?.imageData) {
+  const shouldRenderDiagramAtEnd =
+    Boolean(diagram?.imageData) &&
+    !(diagram?.placement === "inlineRight" && inlineDiagramRendered);
+
+  if (shouldRenderDiagramAtEnd) {
     y += 2;
     ensureSpace(90, 30);
     drawRule();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
-    pdf.text(diagram.title, margin, y);
+    pdf.text(diagram?.title || "Diagram", margin, y);
     y += 7;
-    pdf.addImage(diagram.imageData, "PNG", margin, y, contentWidth, 75);
+    pdf.addImage(diagram?.imageData || "", "PNG", margin, y, contentWidth, 75);
     y += 80;
   }
 

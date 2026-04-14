@@ -20,6 +20,7 @@ interface NarrativeSurgeryFormProps {
   onCurrentPatientChange?: (patientInfo: any) => void;
   onExportPDF?: () => void;
   onSavePatient?: () => void;
+  onClearPatientData?: () => void;
   isGeneratingPDF?: boolean;
   diagramElement?: React.ReactNode;
 }
@@ -86,6 +87,7 @@ export const NarrativeSurgeryForm = ({
   onCurrentPatientChange,
   onExportPDF,
   onSavePatient,
+  onClearPatientData,
   isGeneratingPDF,
   diagramElement,
 }: NarrativeSurgeryFormProps) => {
@@ -128,6 +130,8 @@ export const NarrativeSurgeryForm = ({
       updateTemplate("preoperative", "duration", calculateDuration(startTime, endTime));
     }
   };
+  const showBottomActionRow =
+    Boolean(onExportPDF) || Boolean(onSavePatient) || Boolean(onClearPatientData);
 
   return (
     <div className="space-y-6">
@@ -396,6 +400,44 @@ export const NarrativeSurgeryForm = ({
               Use Current Date/Time
             </Button>
           </div>
+          {showBottomActionRow ? (
+            <div className="flex flex-wrap gap-2 border-t border-gray-200 pt-4">
+              {onExportPDF ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="glass-button text-xs"
+                  onClick={onExportPDF}
+                  disabled={isGeneratingPDF}
+                >
+                  {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+                </Button>
+              ) : null}
+              {onSavePatient ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="glass-button text-xs"
+                  onClick={onSavePatient}
+                >
+                  Save Patient
+                </Button>
+              ) : null}
+              {onClearPatientData ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="glass-button text-xs"
+                  onClick={onClearPatientData}
+                >
+                  Clear All Patient Data
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

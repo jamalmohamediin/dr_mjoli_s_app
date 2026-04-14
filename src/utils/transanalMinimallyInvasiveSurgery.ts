@@ -1,9 +1,10 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { createDefaultClinicianList, DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 
 export const initialTransanalMinimallyInvasiveSurgeryState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    surgeons: [""],
+    surgeons: createDefaultClinicianList(),
     assistants: [""],
     anaesthetists: [""],
     diagnosis: [] as string[],
@@ -54,12 +55,13 @@ export const initialTransanalMinimallyInvasiveSurgeryState = {
   },
   specimen: {
     specimenRetrieved: "",
+    laboratorySentTo: "",
     orientationMarked: "",
   },
   additionalInfo: {
     additionalInformation: "",
     postOperativeManagement: "",
-    doctorSignature: "",
+    doctorSignature: DEFAULT_CLINICIAN_NAME,
     surgeonSignature: "",
     dateTime: "",
   },

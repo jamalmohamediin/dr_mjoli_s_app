@@ -1,4 +1,5 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import { DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 
 export const initialInguinalHerniaState = {
   patientInfo: createInitialPatientInfoState(),
@@ -80,7 +81,7 @@ export const initialInguinalHerniaState = {
     additionalNotes: "",
     postOperativeManagement: "",
     surgeonSignature: "",
-    surgeonSignatureText: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
     dateTime: "",
   },
   procedureFindings: {

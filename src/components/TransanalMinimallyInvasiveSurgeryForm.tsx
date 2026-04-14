@@ -26,6 +26,7 @@ interface TransanalMinimallyInvasiveSurgeryFormProps {
   onCurrentPatientChange?: (patientInfo: any) => void;
   onExportPDF?: () => void;
   onSavePatient?: () => void;
+  onClearAllData?: () => void;
   isGeneratingPDF?: boolean;
 }
 
@@ -91,6 +92,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
   onCurrentPatientChange,
   onExportPDF,
   onSavePatient,
+  onClearAllData,
   isGeneratingPDF,
 }: TransanalMinimallyInvasiveSurgeryFormProps) => {
   const template =
@@ -299,6 +301,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={["< 25%", "25 – 50%", "50 – 75%", "75 - 100%"]}
             value={operativeFindings.circumferentialInvolvement || ""}
             onChange={(value) => updateTemplate("operativeFindings", "circumferentialInvolvement", value)}
+            columns="grid-cols-1"
           />
         </CardContent>
       </Card>
@@ -313,6 +316,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={equipmentOptions}
             values={procedure.equipmentUsed}
             onChange={(value) => updateTemplate("procedure", "equipmentUsed", value)}
+            columns="grid-cols-1"
           />
           <OptionalOtherInput
             enabled={toArray(procedure.equipmentUsed).includes("Other")}
@@ -320,27 +324,25 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             placeholder="Specify other equipment"
             onChange={(value) => updateTemplate("procedure", "equipmentOther", value)}
           />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <LabeledInput
-              label="Insufflation pressure (mmHg)"
-              value={procedure.insufflationPressure || ""}
-              onChange={(value) => updateTemplate("procedure", "insufflationPressure", value)}
-            />
-            <RadioGrid
-              label="Circular rectal purse suture inserted"
-              options={["Yes", "No"]}
-              value={procedure.purseStringInserted || ""}
-              onChange={(value) => updateTemplate("procedure", "purseStringInserted", value)}
-              columns="grid-cols-2"
-            />
-            <RadioGrid
-              label="Lesion peripheral margin marked"
-              options={["Yes", "No"]}
-              value={procedure.lesionPeripheralMarginMarked || ""}
-              onChange={(value) => updateTemplate("procedure", "lesionPeripheralMarginMarked", value)}
-              columns="grid-cols-2"
-            />
-          </div>
+          <LabeledInput
+            label="Insufflation pressure (mmHg)"
+            value={procedure.insufflationPressure || ""}
+            onChange={(value) => updateTemplate("procedure", "insufflationPressure", value)}
+          />
+          <RadioGrid
+            label="Circular rectal purse suture inserted"
+            options={["Yes", "No"]}
+            value={procedure.purseStringInserted || ""}
+            onChange={(value) => updateTemplate("procedure", "purseStringInserted", value)}
+            columns="grid-cols-2"
+          />
+          <RadioGrid
+            label="Lesion peripheral margin marked"
+            options={["Yes", "No"]}
+            value={procedure.lesionPeripheralMarginMarked || ""}
+            onChange={(value) => updateTemplate("procedure", "lesionPeripheralMarginMarked", value)}
+            columns="grid-cols-2"
+          />
           <LabeledInput
             label="Planned margin (mm)"
             value={procedure.plannedMargin || ""}
@@ -351,6 +353,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={depthOfExcisionOptions}
             values={procedure.depthOfExcision}
             onChange={(value) => updateTemplate("procedure", "depthOfExcision", value)}
+            columns="grid-cols-1"
           />
           <OptionalOtherInput
             enabled={toArray(procedure.depthOfExcision).includes("Other")}
@@ -363,6 +366,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={deviceOptions}
             values={procedure.deviceUsed}
             onChange={(value) => updateTemplate("procedure", "deviceUsed", value)}
+            columns="grid-cols-1"
           />
           <OptionalOtherInput
             enabled={toArray(procedure.deviceUsed).includes("Other")}
@@ -375,6 +379,7 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={haemostasisOptions}
             values={procedure.haemostasis}
             onChange={(value) => updateTemplate("procedure", "haemostasis", value)}
+            columns="grid-cols-1"
           />
           <OptionalOtherInput
             enabled={toArray(procedure.haemostasis).includes("Other")}
@@ -387,24 +392,28 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             options={defectManagementOptions}
             values={procedure.defectManagement}
             onChange={(value) => updateTemplate("procedure", "defectManagement", value)}
+            columns="grid-cols-1"
           />
           <CheckboxGrid
             label="Direction of defect closure"
             options={closureDirectionOptions}
             values={procedure.closureDirection}
             onChange={(value) => updateTemplate("procedure", "closureDirection", value)}
+            columns="grid-cols-1"
           />
           <CheckboxGrid
             label="Closure technique"
             options={closureTechniqueOptions}
             values={procedure.closureTechnique}
             onChange={(value) => updateTemplate("procedure", "closureTechnique", value)}
+            columns="grid-cols-1"
           />
           <CheckboxGrid
             label="Suture material"
             options={sutureMaterialOptions}
             values={procedure.sutureMaterial}
             onChange={(value) => updateTemplate("procedure", "sutureMaterial", value)}
+            columns="grid-cols-1"
           />
           <OptionalOtherInput
             enabled={toArray(procedure.sutureMaterial).includes("Other")}
@@ -456,9 +465,22 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             label="Specimen retrieved"
             options={["Yes", "No"]}
             value={specimen.specimenRetrieved || ""}
-            onChange={(value) => updateTemplate("specimen", "specimenRetrieved", value)}
+            onChange={(value) => {
+              updateTemplate("specimen", "specimenRetrieved", value);
+              if (value !== "Yes") {
+                updateTemplate("specimen", "laboratorySentTo", "");
+              }
+            }}
             columns="grid-cols-2"
           />
+          {specimen.specimenRetrieved === "Yes" ? (
+            <LabeledInput
+              label="Specify Laboratory Sent to"
+              value={specimen.laboratorySentTo || ""}
+              onChange={(value) => updateTemplate("specimen", "laboratorySentTo", value)}
+              placeholder="Enter laboratory name"
+            />
+          ) : null}
           <RadioGrid
             label="Orientation marked"
             options={["Yes", "No"]}
@@ -486,13 +508,13 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
           />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <LabeledInput
-              label="Doctor"
+              label="Surgeon's Signature"
               value={additionalInfo.doctorSignature || ""}
               onChange={(value) => updateTemplate("additionalInfo", "doctorSignature", value)}
-              placeholder="Enter doctor name"
+              placeholder="Enter surgeon name/signature text"
             />
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">Date</Label>
+              <Label className="text-sm font-medium text-gray-700">Date and Time</Label>
               <DateTimeDDMMYYYY24HourInput
                 value={additionalInfo.dateTime || ""}
                 onChange={(value) => updateTemplate("additionalInfo", "dateTime", value)}
@@ -502,6 +524,25 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
           <Button type="button" variant="outline" size="sm" onClick={() => updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue())}>
             Use Current Date/Time
           </Button>
+          <div className="border-t pt-4">
+            <div className="flex flex-wrap gap-2">
+              {onExportPDF ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onExportPDF} disabled={isGeneratingPDF}>
+                  {isGeneratingPDF ? "Generating..." : "Print/Export PDF"}
+                </Button>
+              ) : null}
+              {onSavePatient ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onSavePatient}>
+                  Save Patient
+                </Button>
+              ) : null}
+              {onClearAllData ? (
+                <Button variant="outline" size="sm" className="glass-button text-xs" onClick={onClearAllData}>
+                  Clear All Patient Data
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

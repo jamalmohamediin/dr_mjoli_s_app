@@ -3,12 +3,19 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim(),
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim(),
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim(),
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim(),
-  appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim(),
+  // Keep the known public Firebase app config as a fallback so
+  // local/manual builds do not silently disconnect from Firestore.
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY?.trim() || "AIzaSyANAp02TgbOEdONXxZQiluFb1nbON8os5E",
+  authDomain:
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || "dr-mjoli.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim() || "dr-mjoli",
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim() || "dr-mjoli.firebasestorage.app",
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() || "211488805925",
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID?.trim() || "1:211488805925:web:f05614e58622785ee29bcc",
 };
 
 const hasFirebaseConfig = Object.values(firebaseConfig).every((value) => Boolean(value));

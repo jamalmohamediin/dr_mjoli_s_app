@@ -2,7 +2,29 @@ import {
   StructuredTemplatePdfSection,
   generateStructuredTemplatePdf,
 } from "@/utils/structuredTemplatePdf";
-import { joinSelections, toArray } from "@/utils/templateDataHelpers";
+import { joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
+
+const titleCase = (value: unknown) =>
+  toUiTitleCase(value === undefined || value === null ? "" : String(value));
+
+const formatSelectionList = (value: unknown) =>
+  toArray(value)
+    .map((entry) => titleCase(entry))
+    .join(", ");
+
+const formatSelectionListWithOther = (value: unknown, otherValue?: unknown) =>
+  titleCase(joinSelections(value, otherValue));
+
+const formatMeasurement = (value: unknown, unit: string) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return `${normalizedValue} ${unit}`;
+};
+
+const asSingleLineEntry = (value: string): string[] => (value ? [value] : []);
 
 export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   data: any,
@@ -14,63 +36,158 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   const operativeEvents = data?.operativeEvents || {};
   const specimen = data?.specimen || {};
   const additionalInfo = data?.additionalInfo || {};
+  const lesionSize =
+    operativeFindings.lesionSizeLength || operativeFindings.lesionSizeWidth
+      ? `${operativeFindings.lesionSizeLength || ""} x ${operativeFindings.lesionSizeWidth || ""} Cm`
+      : "";
+  const tumourStaging = [
+    preoperative.cT ? `cT ${preoperative.cT}` : "",
+    preoperative.cN ? `cN ${preoperative.cN}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const sections: StructuredTemplatePdfSection[] = [
     {
       title: "Preoperative Information",
       entries: [
-        { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
-        { label: "Assistant", value: toArray(preoperative.assistants).join(", ") },
-        { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", ") },
-        { label: "Diagnosis", value: joinSelections(preoperative.diagnosis, preoperative.diagnosisOther) },
-        { label: "Imaging", value: joinSelections(preoperative.imaging, preoperative.imagingOther) },
-        { label: "Tumour staging", value: [preoperative.cT ? `cT ${preoperative.cT}` : "", preoperative.cN ? `cN ${preoperative.cN}` : ""].filter(Boolean).join(", ") },
-        { label: "Urgency", value: preoperative.urgency },
-        { label: "Duration", value: preoperative.duration ? `${preoperative.duration} min` : "" },
+        { label: "Surgeon", value: formatSelectionList(preoperative.surgeons) },
+        { label: "Assistant", value: formatSelectionList(preoperative.assistants) },
+        { label: "Anesthetist", value: formatSelectionList(preoperative.anaesthetists) },
+        {
+          label: "Pre-Operative Diagnosis",
+          value: formatSelectionListWithOther(preoperative.diagnosis, preoperative.diagnosisOther),
+        },
+        {
+          label: "Pre-Operative Imaging",
+          value: formatSelectionListWithOther(preoperative.imaging, preoperative.imagingOther),
+        },
+        { label: "Tumour Staging", value: tumourStaging },
+        { label: "Urgency", value: titleCase(preoperative.urgency) },
+        { label: "Duration Of Procedure", value: formatMeasurement(preoperative.duration, "Min") },
       ],
     },
     {
       title: "Operative Findings",
       entries: [
-        { label: "Operative Findings", value: operativeFindings.findings },
-        { label: "Location", value: operativeFindings.locationInRectum },
-        { label: "Morphology", value: joinSelections(operativeFindings.morphology, operativeFindings.morphologyOther) },
-        { label: "Distance from anal verge", value: operativeFindings.distanceFromAnalVerge ? `${operativeFindings.distanceFromAnalVerge} cm` : "" },
-        { label: "Lesion size", value: operativeFindings.lesionSizeLength || operativeFindings.lesionSizeWidth ? `${operativeFindings.lesionSizeLength || ""} x ${operativeFindings.lesionSizeWidth || ""} cm` : "" },
-        { label: "Circumferential involvement", value: operativeFindings.circumferentialInvolvement },
+        { label: "Operative Findings", value: titleCase(operativeFindings.findings) },
+        {
+          label: "Distance From Anal Verge (Cm)",
+          value: formatMeasurement(operativeFindings.distanceFromAnalVerge, "Cm"),
+        },
+        { label: "Location In Rectum", value: formatSelectionList(operativeFindings.locationInRectum) },
+        { label: "Lesion Size", value: lesionSize },
+        {
+          label: "Morphology",
+          value: formatSelectionListWithOther(
+            operativeFindings.morphology,
+            operativeFindings.morphologyOther,
+          ),
+        },
+        {
+          label: "Circumferential Involvement",
+          value: titleCase(operativeFindings.circumferentialInvolvement),
+        },
       ],
     },
     {
       title: "Procedure Details",
       entries: [
-        { label: "Equipment used", value: joinSelections(procedure.equipmentUsed, procedure.equipmentOther) },
-        { label: "Insufflation pressure", value: procedure.insufflationPressure ? `${procedure.insufflationPressure} mmHg` : "" },
-        { label: "Purse suture inserted", value: procedure.purseStringInserted },
-        { label: "Lesion peripheral margin marked", value: procedure.lesionPeripheralMarginMarked },
-        { label: "Planned margin", value: procedure.plannedMargin ? `${procedure.plannedMargin} mm` : "" },
-        { label: "Depth of excision", value: joinSelections(procedure.depthOfExcision, procedure.depthOfExcisionOther) },
-        { label: "Device used", value: joinSelections(procedure.deviceUsed, procedure.deviceOther) },
-        { label: "Haemostasis", value: joinSelections(procedure.haemostasis, procedure.haemostasisOther) },
-        { label: "Defect management", value: procedure.defectManagement },
-        { label: "Closure direction", value: procedure.closureDirection },
-        { label: "Closure technique", value: procedure.closureTechnique },
-        { label: "Suture material", value: joinSelections(procedure.sutureMaterial, procedure.sutureMaterialOther) },
+        {
+          label: "Equipment Used",
+          value: formatSelectionListWithOther(procedure.equipmentUsed, procedure.equipmentOther),
+        },
+        {
+          label: "Insufflation Pressure",
+          value: formatMeasurement(procedure.insufflationPressure, "MmHg"),
+        },
+        { label: "Circular Rectal Purse Suture Inserted", value: titleCase(procedure.purseStringInserted) },
+        {
+          label: "Lesion Peripheral Margin Marked",
+          value: titleCase(procedure.lesionPeripheralMarginMarked),
+        },
+        { label: "Planned Margin", value: formatMeasurement(procedure.plannedMargin, "Mm") },
+        {
+          label: "Depth Of Excision",
+          value: formatSelectionListWithOther(
+            procedure.depthOfExcision,
+            procedure.depthOfExcisionOther,
+          ),
+        },
+        { label: "Device Used", value: formatSelectionListWithOther(procedure.deviceUsed, procedure.deviceOther) },
+        { label: "Haemostasis", value: formatSelectionListWithOther(procedure.haemostasis, procedure.haemostasisOther) },
+        { label: "Management Of Defect After Excision", value: formatSelectionList(procedure.defectManagement) },
+        { label: "Direction Of Defect Closure", value: formatSelectionList(procedure.closureDirection) },
+        { label: "Closure Technique", value: formatSelectionList(procedure.closureTechnique) },
+        {
+          label: "Suture Material",
+          value: formatSelectionListWithOther(procedure.sutureMaterial, procedure.sutureMaterialOther),
+        },
       ],
     },
     {
       title: "Operative Events",
       entries: [
-        { label: "Difficulties", value: joinSelections(operativeEvents.difficulties, operativeEvents.difficultiesOther) },
-        { label: "Complications", value: joinSelections(operativeEvents.complications, operativeEvents.complicationsOther) },
+        {
+          label: "Intra-Operative Difficulties",
+          value: formatSelectionListWithOther(
+            operativeEvents.difficulties,
+            operativeEvents.difficultiesOther,
+          ),
+        },
+        {
+          label: "Intra-Operative Complications",
+          value: formatSelectionListWithOther(
+            operativeEvents.complications,
+            operativeEvents.complicationsOther,
+          ),
+        },
       ],
     },
     {
-      title: "Specimen and Additional Information",
+      title: "SPECIMEN",
       entries: [
-        { label: "Specimen retrieved", value: specimen.specimenRetrieved },
-        { label: "Orientation marked", value: specimen.orientationMarked },
-        { label: "Additional information", value: additionalInfo.additionalInformation },
-        { label: "Post operative management", value: additionalInfo.postOperativeManagement },
+        {
+          label: "Specimen Retrieved",
+          value: asSingleLineEntry(titleCase(specimen.specimenRetrieved)),
+        },
+        {
+          label: "Orientation Marked",
+          value: asSingleLineEntry(titleCase(specimen.orientationMarked)),
+        },
+        {
+          label: "Specify Laboratory Sent To",
+          value: asSingleLineEntry(
+            specimen.specimenRetrieved === "Yes"
+              ? titleCase(specimen.laboratorySentTo)
+              : "",
+          ),
+        },
+      ],
+    },
+    {
+      title: "ADDITIONAL NOTES",
+      entries: [
+        {
+          label: "Additional Notes",
+          value: asSingleLineEntry(titleCase(additionalInfo.additionalInformation)),
+        },
+      ],
+    },
+    {
+      title: "POST OPERATIVE MANAGEMENT",
+      entries: [
+        {
+          label: "Post Operative Management",
+          value: asSingleLineEntry(titleCase(additionalInfo.postOperativeManagement)),
+        },
+      ],
+    },
+    {
+      title: "SURGEON'S SIGNATURE",
+      entries: [
+        { label: "Surgeon's Signature", value: titleCase(additionalInfo.doctorSignature) },
+        { label: "Date And Time", value: String(additionalInfo.dateTime || "").trim() },
       ],
     },
   ];
@@ -79,9 +196,5 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     title: "TRANSANAL MINIMALLY INVASIVE SURGERY REPORT",
     patientInfo: patientInfo || data?.patientInfo,
     sections,
-    signature: {
-      text: additionalInfo.doctorSignature,
-      dateTime: additionalInfo.dateTime,
-    },
   });
 };

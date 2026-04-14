@@ -1,9 +1,14 @@
 import { createInitialPatientInfoState } from "@/utils/patientSticker";
+import {
+  createDefaultClinicianList,
+  DEFAULT_CLINICIAN_NAME,
+} from "@/utils/clinicianDefaults";
 
 export const initialColonoscopyState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
-    endoscopists: [""],
+    endoscopists: createDefaultClinicianList(),
+    assistants: [""],
     anaesthetists: [""],
     startTime: "",
     caecalIntubationTime: "",
@@ -15,8 +20,14 @@ export const initialColonoscopyState = {
     indicationOther: "",
     signsSymptoms: [] as string[],
     signsSymptomsOther: "",
+    procedureUrgency: [] as string[],
+    preoperativeImaging: [] as string[],
+    preoperativeImagingOther: "",
     sedationist: "",
     sedationistOther: "",
+    sedationTypes: [] as string[],
+    sedationTypeOther: "",
+    medicationsUsed: [] as string[],
     medications: {
       midazolamDose: "",
       fentanylDose: "",
@@ -54,9 +65,10 @@ export const initialColonoscopyState = {
     descriptionOfFindings: "",
   },
   haemorrhoids: {
+    grades: [] as string[],
     grade: "",
     internalExternal: "",
-    bleedingStatus: "",
+    bleedingStatus: [] as string[],
   },
   inflammation: {
     description: [] as string[],
@@ -72,8 +84,8 @@ export const initialColonoscopyState = {
     number: "",
     multipleNumber: "",
     length: "",
-    severityOfNarrowing: "",
-    traversability: "",
+    severityOfNarrowing: [] as string[],
+    traversability: [] as string[],
     morphology: [] as string[],
     morphologyOther: "",
     endoscopicImpression: [] as string[],
@@ -81,7 +93,7 @@ export const initialColonoscopyState = {
   },
   polyps: {
     number: "",
-    size: "",
+    size: [] as string[],
     largestDiameterLength: "",
     largestDiameterWidth: "",
     rangeFrom: "",
@@ -91,14 +103,14 @@ export const initialColonoscopyState = {
   },
   tumour: {
     length: "",
-    circumferentialInvolvement: "",
+    circumferentialInvolvement: [] as string[],
     lumenNarrowing: [] as string[],
     endoscopicImpression: [] as string[],
   },
   diverticula: {
     number: "",
     size: "",
-    distributionPattern: "",
+    distributionPattern: [] as string[],
     morphology: [] as string[],
     morphologyOther: "",
   },
@@ -107,8 +119,8 @@ export const initialColonoscopyState = {
     size: "",
     morphology: [] as string[],
     colorAppearance: [] as string[],
-    bleedingStatus: "",
-    distributionPattern: "",
+    bleedingStatus: [] as string[],
+    distributionPattern: [] as string[],
     burden: "",
     bleedingRisk: "",
   },
@@ -122,7 +134,7 @@ export const initialColonoscopyState = {
   ulcer: {
     number: "",
     approximateNumberIfMultiple: "",
-    distribution: "",
+    distribution: [] as string[],
     largestDiameterLength: "",
     largestDiameterWidth: "",
     rangeFrom: "",
@@ -151,12 +163,19 @@ export const initialColonoscopyState = {
     diagnosisOther: "",
   },
   additionalInfo: {
-    additionalNotes: "",
+    specimenSentForPathology: "",
+    otherSpecimensTaken: "",
+    otherSpecimensTakenDetails: "",
+    laboratorySentTo: "",
     conclusion: "",
+    followUpOptions: [] as string[],
+    followUpOther: "",
+    additionalNotes: "",
     management: "",
-    endoscopistName: "",
+    postOperativeManagement: "",
+    endoscopistName: DEFAULT_CLINICIAN_NAME,
     surgeonSignature: "",
-    surgeonSignatureText: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
     dateTime: "",
   },
   diagram: {

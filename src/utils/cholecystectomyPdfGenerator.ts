@@ -277,10 +277,16 @@ export const generateCholecystectomyPDF = async (
       toArray(proc?.peritonealLavage),
       proc?.peritonealLavageOther
     );
+    const decompressionFluidTypeText = joinSelections(
+      toArray(proc?.decompressionFluidType),
+      proc?.decompressionFluidTypeOther
+    );
     const typeOfStonesText = joinSelections(
       toArray(intra?.typeOfStones),
       intra?.typeOfStonesOther
     );
+    const hasStonesPresent =
+      intra?.stonesPresent === "Solitary Stones" || intra?.stonesPresent === "Multiple Stones";
 
     sec("PATIENT INFORMATION");
     patientSubsection("Patient Details");
@@ -346,11 +352,10 @@ export const generateCholecystectomyPDF = async (
       `Gallbladder Appearance: ${joinSelections(toArray(intra?.gallbladderAppearance), intra?.gallbladderAppearanceOther)}`,
       `Adhesions to Gallbladder: ${txt(intra?.adhesionsToGallbladder)}`
     );
-    row2(
-      `Stones Present: ${txt(intra?.stonesPresent)}`,
-      `Type of Stones: ${typeOfStonesText}`
-    );
-    rowFull(`Size of Stones: ${txt(intra?.sizeOfStones)}`);
+    rowFull(`Stones Present: ${txt(intra?.stonesPresent)}`);
+    if (hasStonesPresent) {
+      row2(`Type of Stones: ${typeOfStonesText}`, `Size of Stones: ${txt(intra?.sizeOfStones)}`);
+    }
     y += 2;
 
     const leftXCh = col1X;
@@ -390,6 +395,9 @@ export const generateCholecystectomyPDF = async (
     addLeftCh("Extent of Cholecystectomy", extentOfCholecystectomyText);
     addLeftCh("Method of Subtotal Cholecystectomy Control", subtotalControlText);
     addLeftCh("Gall Bladder Decompression Required", txt(proc?.gallbladderDecompressionRequired));
+    if (txt(proc?.gallbladderDecompressionRequired) === "Yes") {
+      addLeftCh("Type of Fluid Drained from Gall Bladder", decompressionFluidTypeText);
+    }
     addLeftCh("Critical View of Safety Confirmation", criticalViewSafetyConfirmationText);
     addLeftCh("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
     addLeftCh("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));

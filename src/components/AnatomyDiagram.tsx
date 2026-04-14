@@ -29,6 +29,7 @@ interface AnatomyDiagramProps {
   containerRef?: React.RefObject<HTMLDivElement>;
   onMethodsReady?: (methods: { removeFinding: (id: string) => void; editFinding: (id: string) => void; undoLastAction: () => void; redoLastAction: () => void; canRedo: () => boolean }) => void;
   customImage?: string;
+  initialFindings?: Finding[];
 }
 
 interface Finding {
@@ -40,15 +41,26 @@ interface Finding {
   location: string;
 }
 
-export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, containerRef: externalContainerRef, onMethodsReady, customImage }: AnatomyDiagramProps) => {
+export const AnatomyDiagram = ({
+  type,
+  onUpdate,
+  canvasRef: externalCanvasRef,
+  containerRef: externalContainerRef,
+  onMethodsReady,
+  customImage,
+  initialFindings = [],
+}: AnatomyDiagramProps) => {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = externalCanvasRef || internalCanvasRef;
   const containerRef = externalContainerRef || internalContainerRef;
   const imageRef = useRef<HTMLImageElement>(null);
   const [drawingMode, setDrawingMode] = useState<'mark'>('mark');
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [findingsHistory, setFindingsHistory] = useState<Finding[][]>([[]]);
+  const normalizedInitialFindings = Array.isArray(initialFindings) ? initialFindings : [];
+  const [findings, setFindings] = useState<Finding[]>(normalizedInitialFindings);
+  const [findingsHistory, setFindingsHistory] = useState<Finding[][]>([
+    normalizedInitialFindings,
+  ]);
   const [redoHistory, setRedoHistory] = useState<Finding[][]>([]);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [showingDropdown, setShowingDropdown] = useState(false);
@@ -60,6 +72,30 @@ export const AnatomyDiagram = ({ type, onUpdate, canvasRef: externalCanvasRef, c
   const [customLocation, setCustomLocation] = useState<string>('');
   const [customFinding, setCustomFinding] = useState<string>('');
   const [notSureDescription, setNotSureDescription] = useState<string>('');
+  const lastInitialFindingsSignatureRef = useRef(
+    JSON.stringify(normalizedInitialFindings),
+  );
+
+  useEffect(() => {
+    const incomingFindings = Array.isArray(initialFindings) ? initialFindings : [];
+    const incomingSignature = JSON.stringify(incomingFindings);
+    const currentSignature = JSON.stringify(findings);
+
+    if (incomingSignature === lastInitialFindingsSignatureRef.current) {
+      return;
+    }
+
+    lastInitialFindingsSignatureRef.current = incomingSignature;
+
+    if (incomingSignature === currentSignature) {
+      return;
+    }
+
+    setFindings(incomingFindings);
+    setFindingsHistory([incomingFindings]);
+    setRedoHistory([]);
+    setSelectedFinding(null);
+  }, [initialFindings, findings]);
   
   // Color mapping for different finding types - improved differentiation
   const findingTypeColors: Record<string, string> = {

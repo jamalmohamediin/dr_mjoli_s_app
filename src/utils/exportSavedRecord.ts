@@ -133,8 +133,29 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   }
 
   if (record.templateType === "colonoscopy") {
+    const colonoscopyTemplateData = {
+      ...(reportSnapshot?.colonoscopy || {}),
+      colonoscopyCanvasData:
+        reportSnapshot?.colonoscopyCanvasData ||
+        reportSnapshot?.colonoscopy?.colonoscopyCanvasData ||
+        "",
+      colonoscopyFindings:
+        reportSnapshot?.colonoscopyFindings ||
+        reportSnapshot?.colonoscopy?.colonoscopyFindings ||
+        {},
+      diagram: {
+        ...(reportSnapshot?.colonoscopy?.diagram || {}),
+        canvasImageData:
+          reportSnapshot?.colonoscopy?.diagram?.canvasImageData ||
+          reportSnapshot?.colonoscopyCanvasData ||
+          reportSnapshot?.colonoscopy?.colonoscopyCanvasData ||
+          reportSnapshot?.colonoscopyFindings?.canvasImageData ||
+          "",
+      },
+    };
+
     const result = await generateColonoscopyPDF(
-      reportSnapshot?.colonoscopy,
+      colonoscopyTemplateData,
       reportSnapshot?.colonoscopy?.patientInfo || patientInfo,
     );
 

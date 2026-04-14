@@ -27,6 +27,13 @@ export const InguinalHerniaRepairReportPreview = ({
     showOpenRepairSection && selectedRepairTechniques.includes("Tissue repair");
   const showMeshRepairSection =
     showOpenRepairSection && selectedRepairTechniques.includes("Mesh repair");
+  const peritoneumClosureValue = !showLaparoscopicRepairSection
+    ? ""
+    : procedure.laparoscopicApproach === "TEP (Totally Extraperitoneal)"
+      ? "N/A"
+      : procedure.laparoscopicApproach === "TAPP (Transabdominal Preperitoneal)"
+        ? procedure.peritoneumClosure
+        : "";
   const preperitonealDevelopment = toArray(procedure.preperitonealDevelopment)
     .map((entry) => {
       if (entry.toLowerCase() === "other" && procedure.preperitonealDevelopmentOther) {
@@ -117,7 +124,7 @@ export const InguinalHerniaRepairReportPreview = ({
         { label: "Laparoscopic mesh size width", value: showLaparoscopicRepairSection && procedure.laparoscopicMeshSizeWidth ? `${procedure.laparoscopicMeshSizeWidth} cm` : "" },
         { label: "Laparoscopic fixation", value: showLaparoscopicRepairSection ? procedure.laparoscopicFixation : [], badges: true },
         { label: "Laparoscopic fixation sites", value: showLaparoscopicRepairSection ? joinSelections(procedure.laparoscopicFixationSites, procedure.laparoscopicFixationSitesOther) : "", fullWidth: true },
-        { label: "Peritoneum closure", value: showLaparoscopicRepairSection ? procedure.peritoneumClosure : "" },
+        { label: "Peritoneum closure", value: peritoneumClosureValue },
         { label: "Fascial closure (≥10 mm ports)", value: showLaparoscopicRepairSection ? closure.fascialClosurePorts : "" },
         { label: "Skin closure (laparoscopic)", value: showLaparoscopicRepairSection ? closure.skinClosureLaparoscopic : [], badges: true },
         { label: "Local anaesthetic infiltration (laparoscopic)", value: showLaparoscopicRepairSection ? closure.localAnaestheticLaparoscopic : "" },

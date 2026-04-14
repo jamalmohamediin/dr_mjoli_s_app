@@ -120,8 +120,6 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
     cholecystectomy?.preoperative?.indication?.length > 0 ||
     cholecystectomy?.intraoperative?.gallbladderAppearance?.length > 0 ||
     cholecystectomy?.intraoperative?.stonesPresent ||
-    cholecystectomy?.intraoperative?.typeOfStones ||
-    cholecystectomy?.intraoperative?.sizeOfStones ||
     cholecystectomy?.procedure?.approach?.length > 0 ||
     cholecystectomy?.procedure?.numberOfPortsInserted ||
     cholecystectomy?.procedure?.adhesiolysis ||
@@ -172,6 +170,9 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
     cholecystectomy?.intraoperative?.typeOfStonesOther
   );
   const sizeOfStones = toArray(cholecystectomy?.intraoperative?.sizeOfStones);
+  const hasStonesPresent =
+    cholecystectomy?.intraoperative?.stonesPresent === "Solitary Stones" ||
+    cholecystectomy?.intraoperative?.stonesPresent === "Multiple Stones";
   const approach = toArray(cholecystectomy?.procedure?.approach);
   const conversionReasons = renderSelection(
     toArray(cholecystectomy?.procedure?.reasonForConversion),
@@ -208,6 +209,10 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
   const hemostasis = renderSelection(
     toArray(cholecystectomy?.procedure?.hemostasis),
     cholecystectomy?.procedure?.hemostasisOther
+  );
+  const decompressionFluidType = renderSelection(
+    toArray(cholecystectomy?.procedure?.decompressionFluidType),
+    cholecystectomy?.procedure?.decompressionFluidTypeOther
   );
   const additionalProcedures = renderSelection(
     toArray(cholecystectomy?.procedure?.additionalProcedures),
@@ -391,12 +396,12 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               {cholecystectomy.intraoperative.stonesPresent}
             </div>
           )}
-          {typeOfStones.length > 0 && (
+          {hasStonesPresent && typeOfStones.length > 0 && (
             <div>
               <span className="font-medium">Type of Stones:</span> {typeOfStones.join(", ")}
             </div>
           )}
-          {sizeOfStones.length > 0 && (
+          {hasStonesPresent && sizeOfStones.length > 0 && (
             <div>
               <span className="font-medium">Size of Stones:</span> {sizeOfStones.join(", ")}
             </div>
@@ -468,6 +473,13 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               {cholecystectomy.procedure.gallbladderDecompressionRequired}
             </div>
           )}
+          {cholecystectomy?.procedure?.gallbladderDecompressionRequired === "Yes" &&
+            decompressionFluidType.length > 0 && (
+              <div>
+                <span className="font-medium">Type of Fluid Drained from Gall Bladder:</span>{" "}
+                {decompressionFluidType.join(", ")}
+              </div>
+            )}
           {criticalViewSafetyConfirmation.length > 0 && (
             <div>
               <span className="font-medium">Critical View of Safety Confirmation:</span>{" "}
