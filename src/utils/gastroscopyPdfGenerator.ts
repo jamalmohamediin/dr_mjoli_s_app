@@ -14,7 +14,10 @@ import {
 
 const hasSelection = (values: unknown, option: string) => toArray(values).includes(option);
 
-const toCsv = (values: unknown) => toArray(values).join(", ");
+const toCsv = (values: unknown, titleCase = true) =>
+  toArray(values)
+    .map((value) => (titleCase ? toUiTitleCase(value) : value))
+    .join(", ");
 
 const addLine = (list: string[], label: string, value: unknown) => {
   const csv = toCsv(value);
@@ -23,12 +26,19 @@ const addLine = (list: string[], label: string, value: unknown) => {
   }
 };
 
-const formatValue = (value: unknown) => {
+const formatValue = (value: unknown, titleCase = true) => {
   if (Array.isArray(value)) {
-    return toArray(value).join(", ");
+    return toArray(value)
+      .map((entry) => (titleCase ? toUiTitleCase(entry) : entry))
+      .join(", ");
   }
 
-  return String(value || "").trim();
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return titleCase ? toUiTitleCase(normalized) : normalized;
 };
 
 const detectImageFormat = (value: string): "PNG" | "JPEG" => {
@@ -280,8 +290,13 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     });
   };
 
-  const drawEntryRow = (label: string, value: unknown, drawWhenEmpty = false) => {
-    const normalized = formatValue(value);
+  const drawEntryRow = (
+    label: string,
+    value: unknown,
+    drawWhenEmpty = false,
+    titleCaseValue = true,
+  ) => {
+    const normalized = formatValue(value, titleCaseValue);
     if (!normalized && !drawWhenEmpty) return;
     drawSingleRow(`${toUiTitleCase(label)}: ${normalized}`);
   };
@@ -358,9 +373,9 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   }
 
   drawSectionTitle("Preoperative Information");
-  drawEntryRow("Endoscopist", toArray(preoperative.endoscopists).join(", "));
-  drawEntryRow("Surgeon", toArray(preoperative.surgeons).join(", "));
-  drawEntryRow("Anesthetist", toArray(preoperative.anaesthetists).join(", "));
+  drawEntryRow("Endoscopist", toArray(preoperative.endoscopists).join(", "), false, false);
+  drawEntryRow("Surgeon", toArray(preoperative.surgeons).join(", "), false, false);
+  drawEntryRow("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false, false);
   drawEntryRow("Procedure Urgency", preoperative.procedureUrgency);
   drawEntryRow(
     "Preoperative Imaging",
@@ -374,8 +389,8 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   drawEntryRow("Extent Of Examination", toArray(preoperative.extentOfExamination).join(", "));
 
   const leftFindingLines: string[] = [];
-  const appendFindingLine = (label: string, value: unknown) => {
-    const normalized = formatValue(value);
+  const appendFindingLine = (label: string, value: unknown, titleCaseValue = true) => {
+    const normalized = formatValue(value, titleCaseValue);
     if (normalized) {
       leftFindingLines.push(`${toUiTitleCase(label)}: ${normalized}`);
     }
@@ -391,12 +406,14 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     pharynxLarynx.pharynxStatus === "Abnormal"
       ? `Abnormal: ${pharynxLarynx.pharynxAbnormality || ""}`
       : pharynxLarynx.pharynxStatus,
+    false,
   );
   appendFindingLine(
     "Vocal Cords",
     pharynxLarynx.vocalCordsStatus === "Abnormal"
       ? `Abnormal: ${pharynxLarynx.vocalCordsAbnormality || ""}`
       : pharynxLarynx.vocalCordsStatus,
+    false,
   );
   appendFindingLine("Oesophagus Findings", toCsv(oesophagus.findings));
   appendFindingDetails("Oesophagus Details", oesophagusDetails);
@@ -508,9 +525,9 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
 
   drawSectionTitle("Interventions / Therapy and Diagnosis");
   drawEntryRow("Interventions / Therapy", toArray(interventions.interventions).join(", "));
-  drawEntryRow("Intervention Details", interventionDetails.join(" | "));
+  drawEntryRow("Intervention Details", interventionDetails.join(" | "), false, false);
   drawEntryRow("Final Endoscopic Diagnosis", toArray(diagnosis.diagnoses).join(", "));
-  drawEntryRow("Other Diagnosis", diagnosis.diagnosisOther);
+  drawEntryRow("Other Diagnosis", diagnosis.diagnosisOther, false, false);
 
   drawSectionTitle("SPECIMEN");
   drawEntryRow("Specimen Sent For Pathology", additionalInfo.specimenSentForPathology, true);
@@ -521,19 +538,20 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
       ? additionalInfo.laboratorySentTo
       : "",
     true,
+    false,
   );
 
   drawSectionTitle("CONCLUSION");
-  drawEntryRow("Conclusion", additionalInfo.conclusion, true);
+  drawEntryRow("Conclusion", additionalInfo.conclusion, true, false);
 
   drawSectionTitle("FOLLOW UP");
   drawEntryRow("Follow Up", followUpValue, true);
 
   drawSectionTitle("ADDITIONAL NOTES");
-  drawEntryRow("Additional Notes", additionalInfo.additionalNotes, true);
+  drawEntryRow("Additional Notes", additionalInfo.additionalNotes, true, false);
 
   drawSectionTitle("POST OPERATIVE MANAGEMENT");
-  drawEntryRow("Post Operative Management", additionalInfo.postOperativeManagement, true);
+  drawEntryRow("Post Operative Management", additionalInfo.postOperativeManagement, true, false);
 
   ensureSpace(24, 18);
   drawSectionTitle("Signature");
@@ -548,4 +566,3 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   const blob = pdf.output("blob");
   return { success: true as const, blob };
 };
-

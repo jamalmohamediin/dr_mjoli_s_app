@@ -36,6 +36,14 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   const operativeEvents = data?.operativeEvents || {};
   const specimen = data?.specimen || {};
   const additionalInfo = data?.additionalInfo || {};
+  const surgeonSignatureValue = titleCase(
+    additionalInfo.doctorSignature ||
+      additionalInfo.surgeonSignature ||
+      additionalInfo.surgeonSignatureText,
+  );
+  const signatureDateTimeValue = String(
+    additionalInfo.dateTime || additionalInfo.date || "",
+  ).trim();
   const lesionSize =
     operativeFindings.lesionSizeLength || operativeFindings.lesionSizeWidth
       ? `${operativeFindings.lesionSizeLength || ""} x ${operativeFindings.lesionSizeWidth || ""} Cm`
@@ -186,8 +194,14 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     {
       title: "SURGEON'S SIGNATURE",
       entries: [
-        { label: "Surgeon's Signature", value: titleCase(additionalInfo.doctorSignature) },
-        { label: "Date And Time", value: String(additionalInfo.dateTime || "").trim() },
+        {
+          label: "Surgeon's Signature",
+          value: asSingleLineEntry(surgeonSignatureValue || "________________"),
+        },
+        {
+          label: "Date And Time",
+          value: asSingleLineEntry(signatureDateTimeValue || "________________"),
+        },
       ],
     },
   ];

@@ -34,6 +34,7 @@ interface StructuredTemplatePdfOptions {
     text?: string;
     imageData?: string;
     dateTime?: string;
+    alwaysShow?: boolean;
   };
 }
 
@@ -357,7 +358,14 @@ export const generateStructuredTemplatePdf = async ({
     y += 80;
   }
 
-  if (signature && (hasText(signature.text) || hasText(signature.imageData) || hasText(signature.dateTime))) {
+  const shouldRenderSignatureSection =
+    Boolean(signature) &&
+    (Boolean(signature?.alwaysShow) ||
+      hasText(signature?.text) ||
+      hasText(signature?.imageData) ||
+      hasText(signature?.dateTime));
+
+  if (shouldRenderSignatureSection) {
     y += 2;
     ensureSpace(30, 20);
     drawRule();
@@ -368,23 +376,27 @@ export const generateStructuredTemplatePdf = async ({
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    if (hasText(signature.text)) {
-      pdf.text(`Name: ${signature.text}`, margin, y);
+    const signatureName = hasText(signature?.text) ? signature?.text : "";
+    if (hasText(signatureName) || signature?.alwaysShow) {
+      pdf.text(`Name: ${signatureName}`, margin, y);
       y += lineHeight;
     }
 
-    if (hasText(signature.imageData)) {
-      const { width, height } = await calculateSignatureDimensions(signature.imageData as string);
-      pdf.addImage(signature.imageData as string, "PNG", margin, y, width, height);
+    if (hasText(signature?.imageData)) {
+      const { width, height } = await calculateSignatureDimensions(signature?.imageData as string);
+      pdf.addImage(signature?.imageData as string, "PNG", margin, y, width, height);
       y += height + 3;
     }
 
-    if (hasText(signature.dateTime)) {
+    if (hasText(signature?.dateTime)) {
       pdf.text(
-        `Date: ${formatDateTimeDDMMYYYYWithDashes(signature.dateTime || "") || signature.dateTime}`,
+        `Date: ${formatDateTimeDDMMYYYYWithDashes(signature?.dateTime || "") || signature?.dateTime}`,
         margin,
         y,
       );
+      y += lineHeight;
+    } else if (signature?.alwaysShow) {
+      pdf.text("Date:", margin, y);
       y += lineHeight;
     }
   }

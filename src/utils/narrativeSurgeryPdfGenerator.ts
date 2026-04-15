@@ -39,6 +39,17 @@ const stringifyValue = (value: unknown) => {
   return String(value || "").trim();
 };
 
+const formatAnswerValue = (value: unknown) => toUiTitleCase(stringifyValue(value));
+
+const formatLabeledValue = (
+  label: string,
+  value: unknown,
+  options: { titleCaseValue?: boolean } = {},
+) => {
+  const rawValue = options.titleCaseValue === false ? stringifyValue(value) : formatAnswerValue(value);
+  return rawValue ? `${toUiTitleCase(label)}: ${rawValue}` : `${toUiTitleCase(label)}:`;
+};
+
 const generateOpenGeneralSurgeryPdf = async (
   title: string,
   narrativeData: any,
@@ -95,6 +106,42 @@ const generateOpenGeneralSurgeryPdf = async (
     }
   };
 
+  const drawMultiColumnRow = (
+    entries: Array<{ label: string; value: unknown }>,
+    columnCount: 2 | 3,
+  ) => {
+    const gap = 4;
+    const contentWidth = pageWidth - margin * 2;
+    const columnWidth = (contentWidth - gap * (columnCount - 1)) / columnCount;
+    const rowEntries = entries.slice(0, columnCount);
+    while (rowEntries.length < columnCount) {
+      rowEntries.push({ label: "", value: "" });
+    }
+
+    const lineGroups = rowEntries.map((entry) => {
+      if (!entry.label) {
+        return [];
+      }
+      return pdf.splitTextToSize(formatLabeledValue(entry.label, entry.value), columnWidth);
+    });
+
+    const lineCount = Math.max(1, ...lineGroups.map((lines) => lines.length));
+    ensureSpace(lineCount * lineHeight + 1);
+
+    for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+      rowEntries.forEach((_, columnIndex) => {
+        const line = lineGroups[columnIndex][lineIndex];
+        if (!line) {
+          return;
+        }
+
+        const x = margin + columnIndex * (columnWidth + gap);
+        pdf.text(line, x, y);
+      });
+      y += lineHeight;
+    }
+  };
+
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "bold");
   pdf.text("Dr. Monde Mjoli", margin, y);
@@ -135,10 +182,13 @@ const generateOpenGeneralSurgeryPdf = async (
   const gender = formatPatientGender(info);
   const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
 
-  drawTwoColRow(`Patient Name: ${info.name || ""}`, `Patient ID: ${info.patientId || ""}`);
+  drawTwoColRow(
+    `Patient Name: ${formatAnswerValue(info.name || "")}`,
+    `Patient ID: ${stringifyValue(info.patientId || "")}`,
+  );
   drawTwoColRow(
     `Date of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
-    `Age / Sex: ${[info.age, gender].filter(Boolean).join(" / ")}`,
+    `Age / Sex: ${formatAnswerValue([info.age, gender].filter(Boolean).join(" / "))}`,
   );
   drawTwoColRow(
     `Weight / Height: ${[info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
@@ -146,46 +196,50 @@ const generateOpenGeneralSurgeryPdf = async (
       .join(" / ")}`,
     `BMI: ${info.bmi || ""}`,
   );
-  drawTwoColRow(`ASA Score: ${asaText}`, hasText(info.asaNotes) ? `ASA Notes: ${info.asaNotes}` : "");
+  drawTwoColRow(
+    `ASA Score: ${formatAnswerValue(asaText)}`,
+    hasText(info.asaNotes) ? `ASA Notes: ${formatAnswerValue(info.asaNotes)}` : "",
+  );
 
-  const preoperativeEntries = [
-    { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
-    { label: "Assistant", value: toArray(preoperative.assistants).join(", ") },
-    { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", ") },
-    { label: "Start Time", value: preoperative.startTime },
-    { label: "End Time", value: preoperative.endTime },
-    {
-      label: "Duration of Procedure",
-      value: preoperative.duration ? `${preoperative.duration} min` : "",
-    },
-    {
-      label: "Pre-Operative Imaging",
-      value: joinSelections(preoperative.imaging, preoperative.imagingOther),
-    },
-    { label: "Urgency", value: preoperative.urgency },
-  ].filter((entry) => hasText(stringifyValue(entry.value)));
+  y += 2;
+  ensureSpace(20);
+  drawRule();
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("Preoperative Information", margin, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
 
-  if (preoperativeEntries.length > 0) {
-    y += 2;
-    ensureSpace(16);
-    drawRule();
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("Preoperative Information", margin, y);
-    y += 7;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-
-    for (let index = 0; index < preoperativeEntries.length; index += 2) {
-      const leftEntry = preoperativeEntries[index];
-      const rightEntry = preoperativeEntries[index + 1];
-      const leftValue = `${toUiTitleCase(leftEntry.label)}: ${stringifyValue(leftEntry.value)}`;
-      const rightValue = rightEntry
-        ? `${toUiTitleCase(rightEntry.label)}: ${stringifyValue(rightEntry.value)}`
-        : "";
-      drawTwoColRow(leftValue, rightValue);
-    }
-  }
+  drawMultiColumnRow(
+    [
+      { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
+      { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", ") },
+      { label: "Assistant", value: toArray(preoperative.assistants).join(", ") },
+    ],
+    3,
+  );
+  drawMultiColumnRow(
+    [
+      { label: "Start Time", value: preoperative.startTime },
+      { label: "End Time", value: preoperative.endTime },
+      {
+        label: "Duration of Procedure",
+        value: preoperative.duration ? `${preoperative.duration} min` : "",
+      },
+    ],
+    3,
+  );
+  drawMultiColumnRow(
+    [
+      { label: "Urgency", value: preoperative.urgency },
+      {
+        label: "Pre-Operative Imaging",
+        value: joinSelections(preoperative.imaging, preoperative.imagingOther),
+      },
+    ],
+    2,
+  );
 
   const narrativeEntries = [
     { label: "Operation Done", value: narrative.operationDone },
@@ -195,7 +249,7 @@ const generateOpenGeneralSurgeryPdf = async (
     { label: "Points of Difficulty", value: narrative.pointsOfDifficulty },
     { label: "Intra-Operative Complications", value: narrative.intraoperativeComplications },
     { label: "Post-Operative Management", value: narrative.postOperativeManagement },
-  ].filter((entry) => hasText(stringifyValue(entry.value)));
+  ].filter((entry) => hasText(formatAnswerValue(entry.value)));
 
   if (narrativeEntries.length > 0 || diagramImageData) {
     y += 2;
@@ -210,7 +264,7 @@ const generateOpenGeneralSurgeryPdf = async (
 
     let narrativeY = y;
     narrativeEntries.forEach((entry) => {
-      const textValue = `${toUiTitleCase(entry.label)}: ${stringifyValue(entry.value)}`;
+      const textValue = formatLabeledValue(entry.label, entry.value);
       const lines = pdf.splitTextToSize(textValue, leftColumnWidth);
       lines.forEach((line: string) => {
         pdf.text(line, margin, narrativeY);
@@ -241,7 +295,7 @@ const generateOpenGeneralSurgeryPdf = async (
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   drawTwoColRow(
-    `Doctor: ${String(additionalInfo.doctorName || "").trim()}`,
+    `Doctor: ${formatAnswerValue(additionalInfo.doctorName || "")}`,
     `Date and Time: ${
       formatDateTimeDDMMYYYYWithDashes(additionalInfo.dateTime || "") || additionalInfo.dateTime || ""
     }`,
@@ -289,8 +343,13 @@ const drawPromptLineSection = (
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
 
-  if (hasText(value)) {
-    const lines = pdf.splitTextToSize(`${toUiTitleCase(label)}: ${value}`, pageWidth - margin * 2);
+  const normalizedValue = formatAnswerValue(value);
+
+  if (hasText(normalizedValue)) {
+    const lines = pdf.splitTextToSize(
+      `${toUiTitleCase(label)}: ${normalizedValue}`,
+      pageWidth - margin * 2,
+    );
     lines.forEach((line: string) => {
       pdf.text(line, margin, yRef.value);
       yRef.value += lineHeight;
@@ -364,6 +423,42 @@ const generateOpenAbdominalSurgeryPdf = async (
     }
   };
 
+  const drawMultiColumnRow = (
+    entries: Array<{ label: string; value: unknown }>,
+    columnCount: 2 | 3,
+  ) => {
+    const gap = 4;
+    const contentWidth = pageWidth - margin * 2;
+    const columnWidth = (contentWidth - gap * (columnCount - 1)) / columnCount;
+    const rowEntries = entries.slice(0, columnCount);
+    while (rowEntries.length < columnCount) {
+      rowEntries.push({ label: "", value: "" });
+    }
+
+    const lineGroups = rowEntries.map((entry) => {
+      if (!entry.label) {
+        return [];
+      }
+      return pdf.splitTextToSize(formatLabeledValue(entry.label, entry.value), columnWidth);
+    });
+
+    const lineCount = Math.max(1, ...lineGroups.map((lines) => lines.length));
+    ensureSpace(lineCount * lineHeight + 1);
+
+    for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+      rowEntries.forEach((_, columnIndex) => {
+        const line = lineGroups[columnIndex][lineIndex];
+        if (!line) {
+          return;
+        }
+
+        const x = margin + columnIndex * (columnWidth + gap);
+        pdf.text(line, x, y);
+      });
+      y += lineHeight;
+    }
+  };
+
   const drawSection = (sectionTitle: string, entries: { label: string; value: unknown }[]) => {
     const filteredEntries = entries.filter((entry) => hasText(stringifyValue(entry.value)));
     if (filteredEntries.length === 0) {
@@ -383,9 +478,9 @@ const generateOpenAbdominalSurgeryPdf = async (
     for (let index = 0; index < filteredEntries.length; index += 2) {
       const leftEntry = filteredEntries[index];
       const rightEntry = filteredEntries[index + 1];
-      const leftValue = `${toUiTitleCase(leftEntry.label)}: ${stringifyValue(leftEntry.value)}`;
+      const leftValue = formatLabeledValue(leftEntry.label, leftEntry.value);
       const rightValue = rightEntry
-        ? `${toUiTitleCase(rightEntry.label)}: ${stringifyValue(rightEntry.value)}`
+        ? formatLabeledValue(rightEntry.label, rightEntry.value)
         : "";
       drawTwoColRow(leftValue, rightValue);
     }
@@ -431,10 +526,13 @@ const generateOpenAbdominalSurgeryPdf = async (
   const gender = formatPatientGender(info);
   const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
 
-  drawTwoColRow(`Patient Name: ${info.name || ""}`, `Patient ID: ${info.patientId || ""}`);
+  drawTwoColRow(
+    `Patient Name: ${formatAnswerValue(info.name || "")}`,
+    `Patient ID: ${stringifyValue(info.patientId || "")}`,
+  );
   drawTwoColRow(
     `Date of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
-    `Age / Sex: ${[info.age, gender].filter(Boolean).join(" / ")}`,
+    `Age / Sex: ${formatAnswerValue([info.age, gender].filter(Boolean).join(" / "))}`,
   );
   drawTwoColRow(
     `Weight / Height: ${[info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
@@ -442,24 +540,50 @@ const generateOpenAbdominalSurgeryPdf = async (
       .join(" / ")}`,
     `BMI: ${info.bmi || ""}`,
   );
-  drawTwoColRow(`ASA Score: ${asaText}`, hasText(info.asaNotes) ? `ASA Notes: ${info.asaNotes}` : "");
+  drawTwoColRow(
+    `ASA Score: ${formatAnswerValue(asaText)}`,
+    hasText(info.asaNotes) ? `ASA Notes: ${formatAnswerValue(info.asaNotes)}` : "",
+  );
 
-  drawSection("Preoperative Information", [
-    { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
-    { label: "Assistant", value: toArray(preoperative.assistants).join(", ") },
-    { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", ") },
-    { label: "Start Time", value: preoperative.startTime },
-    { label: "End Time", value: preoperative.endTime },
-    {
-      label: "Duration of Procedure",
-      value: preoperative.duration ? `${preoperative.duration} min` : "",
-    },
-    {
-      label: "Pre-Operative Imaging",
-      value: joinSelections(preoperative.imaging, preoperative.imagingOther),
-    },
-    { label: "Urgency", value: preoperative.urgency },
-  ]);
+  y += 2;
+  ensureSpace(20);
+  drawRule();
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("Preoperative Information", margin, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  drawMultiColumnRow(
+    [
+      { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
+      { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", ") },
+      { label: "Assistant", value: toArray(preoperative.assistants).join(", ") },
+    ],
+    3,
+  );
+  drawMultiColumnRow(
+    [
+      { label: "Start Time", value: preoperative.startTime },
+      { label: "End Time", value: preoperative.endTime },
+      {
+        label: "Duration of Procedure",
+        value: preoperative.duration ? `${preoperative.duration} min` : "",
+      },
+    ],
+    3,
+  );
+  drawMultiColumnRow(
+    [
+      { label: "Urgency", value: preoperative.urgency },
+      {
+        label: "Pre-Operative Imaging",
+        value: joinSelections(preoperative.imaging, preoperative.imagingOther),
+      },
+    ],
+    2,
+  );
 
   drawSection("Abdominal Access and Incisions", [
     { label: "Approach", value: access.approach },
@@ -481,7 +605,7 @@ const generateOpenAbdominalSurgeryPdf = async (
       label: "Points of Difficulty",
       value: joinSelections(narrative.pointsOfDifficulty, narrative.pointsOfDifficultyOther),
     },
-  ].filter((entry) => hasText(stringifyValue(entry.value)));
+  ].filter((entry) => hasText(formatAnswerValue(entry.value)));
 
   if (narrativeEntries.length > 0 || diagramImageData) {
     y += 2;
@@ -496,7 +620,7 @@ const generateOpenAbdominalSurgeryPdf = async (
 
     let narrativeY = y;
     narrativeEntries.forEach((entry) => {
-      const textValue = `${toUiTitleCase(entry.label)}: ${stringifyValue(entry.value)}`;
+      const textValue = formatLabeledValue(entry.label, entry.value);
       const lines = pdf.splitTextToSize(textValue, leftColumnWidth);
       lines.forEach((line: string) => {
         pdf.text(line, margin, narrativeY);
@@ -521,7 +645,7 @@ const generateOpenAbdominalSurgeryPdf = async (
     (entry) => entry !== "Other",
   );
   if (hasText(narrative.intraoperativeComplicationsOther)) {
-    complicationEntries.push(`Details: ${stringifyValue(narrative.intraoperativeComplicationsOther)}`);
+    complicationEntries.push(`Details: ${formatAnswerValue(narrative.intraoperativeComplicationsOther)}`);
   }
 
   const yRef = { value: y };
@@ -570,7 +694,7 @@ const generateOpenAbdominalSurgeryPdf = async (
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
   drawTwoColRow(
-    `Doctor: ${String(additionalInfo.doctorName || "").trim()}`,
+    `Doctor: ${formatAnswerValue(additionalInfo.doctorName || "")}`,
     `Date and Time: ${
       formatDateTimeDDMMYYYYWithDashes(additionalInfo.dateTime || "") || additionalInfo.dateTime || ""
     }`,

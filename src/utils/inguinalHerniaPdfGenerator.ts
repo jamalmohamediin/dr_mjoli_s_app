@@ -271,7 +271,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
           value: withLaparoscopicSectionVisibility(formatChoiceList(procedure.landmarks)),
         },
         {
-          label: "Fascial Closure (≥10 Mm Ports)",
+          label: "Fascial Closure (>=10 Mm Ports)",
           value: withLaparoscopicSectionVisibility(formatChoice(closure.fascialClosurePorts)),
         },
         {
@@ -353,6 +353,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
     signature: {
       text: additionalInfo.surgeonSignatureText,
       dateTime: additionalInfo.dateTime,
+      alwaysShow: true,
     },
   });
 };
