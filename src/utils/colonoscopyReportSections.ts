@@ -39,9 +39,6 @@ const appendTextLine = (
   }
 };
 
-const hasAnyTextValue = (values: unknown[]) =>
-  values.some((value) => hasText(String(value || "").trim()));
-
 export const buildColonoscopyReportSections = (
   template: any,
   options: BuildColonoscopyReportSectionsOptions = {},
@@ -66,6 +63,14 @@ export const buildColonoscopyReportSections = (
   const additionalInfo = template?.additionalInfo || {};
 
   const selectedFindings = toArray(findingsSummary.findings);
+  const selectedDepth = toArray(procedureDetails.depthOfExamination);
+  const selectedCaecalLandmarks = toArray(procedureDetails.caecalLandmarks);
+  const reachedTerminalOrCaecum =
+    selectedDepth.includes("Terminal Ileum") || selectedDepth.includes("Caecum");
+  const showCaecalLandmarks = reachedTerminalOrCaecum;
+  const showCaecumNotReachedReasons =
+    selectedCaecalLandmarks.includes("Not Reached") ||
+    !reachedTerminalOrCaecum;
 
   const medicationLines = [
     preoperative.medications?.midazolamDose
@@ -148,18 +153,22 @@ export const buildColonoscopyReportSections = (
     },
     {
       label: "Caecal Intubation Landmarks Identified",
-      value: joinSelections(
-        procedureDetails.caecalLandmarks,
-        procedureDetails.caecalLandmarksOther,
-      ),
+      value: showCaecalLandmarks
+        ? joinSelections(
+            procedureDetails.caecalLandmarks,
+            procedureDetails.caecalLandmarksOther,
+          )
+        : "",
       fullWidth: true,
     },
     {
       label: "Reason For Not Reaching Caecum",
-      value: joinSelections(
-        procedureDetails.reasonsCaecumNotReached,
-        procedureDetails.reasonsCaecumNotReachedOther,
-      ),
+      value: showCaecumNotReachedReasons
+        ? joinSelections(
+            procedureDetails.reasonsCaecumNotReached,
+            procedureDetails.reasonsCaecumNotReachedOther,
+          )
+        : "",
       fullWidth: true,
     },
     { label: "Difficulty", value: procedureDetails.difficulty },
@@ -185,10 +194,7 @@ export const buildColonoscopyReportSections = (
 
   const detailedFindingSections: ColonoscopyReportSection[] = [];
 
-  const showHaemorrhoids =
-    hasSelection(selectedFindings, "Haemorrhoids") ||
-    toArray(haemorrhoids.grades).length > 0 ||
-    toArray(haemorrhoids.bleedingStatus).length > 0;
+  const showHaemorrhoids = hasSelection(selectedFindings, "Haemorrhoids");
   if (showHaemorrhoids) {
     detailedFindingSections.push({
       title: "Haemorrhoids",
@@ -204,12 +210,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showInflammation =
-    hasSelection(selectedFindings, "Inflammation") ||
-    toArray(inflammation.description).length > 0 ||
-    hasAnyTextValue([inflammation.severity, inflammation.ulcerBurden]) ||
-    toArray(inflammation.ulcerFeatures).length > 0 ||
-    toArray(inflammation.endoscopicImpression).length > 0;
+  const showInflammation = hasSelection(selectedFindings, "Inflammation");
   if (showInflammation) {
     detailedFindingSections.push({
       title: "Inflammation",
@@ -223,7 +224,10 @@ export const buildColonoscopyReportSections = (
         { label: "Presence of Ulcers", value: inflammation.ulcerBurden },
         {
           label: "Ulcer Features",
-          value: joinSelections(inflammation.ulcerFeatures, inflammation.ulcerFeaturesOther),
+          value:
+            hasText(inflammation.ulcerBurden) && inflammation.ulcerBurden !== "None"
+              ? joinSelections(inflammation.ulcerFeatures, inflammation.ulcerFeaturesOther)
+              : "",
           fullWidth: true,
         },
         {
@@ -235,12 +239,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showStricture =
-    hasSelection(selectedFindings, "Stricture (Benign/Malignant)") ||
-    hasAnyTextValue([stricture.number, stricture.multipleNumber, stricture.length]) ||
-    toArray(stricture.severityOfNarrowing).length > 0 ||
-    toArray(stricture.morphology).length > 0 ||
-    toArray(stricture.endoscopicImpression).length > 0;
+  const showStricture = hasSelection(selectedFindings, "Stricture (Benign/Malignant)");
   if (showStricture) {
     const strictureNumber =
       stricture.number === "Multiple" && hasText(stricture.multipleNumber)
@@ -273,17 +272,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showPolyps =
-    hasSelection(selectedFindings, "Polyp(s)") ||
-    hasAnyTextValue([
-      polyps.number,
-      polyps.largestDiameterLength,
-      polyps.largestDiameterWidth,
-      polyps.rangeFrom,
-      polyps.rangeTo,
-    ]) ||
-    toArray(polyps.size).length > 0 ||
-    toArray(polyps.morphology).length > 0;
+  const showPolyps = hasSelection(selectedFindings, "Polyp(s)");
   if (showPolyps) {
     const largestDiameter =
       hasText(polyps.largestDiameterLength) || hasText(polyps.largestDiameterWidth)
@@ -316,12 +305,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showTumour =
-    hasSelection(selectedFindings, "Tumour") ||
-    hasAnyTextValue([tumour.length]) ||
-    toArray(tumour.circumferentialInvolvement).length > 0 ||
-    toArray(tumour.lumenNarrowing).length > 0 ||
-    toArray(tumour.endoscopicImpression).length > 0;
+  const showTumour = hasSelection(selectedFindings, "Tumour");
   if (showTumour) {
     detailedFindingSections.push({
       title: "Tumour",
@@ -349,11 +333,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showDiverticula =
-    hasSelection(selectedFindings, "Diverticula") ||
-    hasAnyTextValue([diverticula.number, diverticula.size]) ||
-    toArray(diverticula.distributionPattern).length > 0 ||
-    toArray(diverticula.morphology).length > 0;
+  const showDiverticula = hasSelection(selectedFindings, "Diverticula");
   if (showDiverticula) {
     detailedFindingSections.push({
       title: "Diverticula",
@@ -375,13 +355,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showAvMalformation =
-    hasSelection(selectedFindings, "AV Malformation") ||
-    hasAnyTextValue([avMalformation.number, avMalformation.size, avMalformation.burden, avMalformation.bleedingRisk]) ||
-    toArray(avMalformation.morphology).length > 0 ||
-    toArray(avMalformation.colorAppearance).length > 0 ||
-    toArray(avMalformation.bleedingStatus).length > 0 ||
-    toArray(avMalformation.distributionPattern).length > 0;
+  const showAvMalformation = hasSelection(selectedFindings, "AV Malformation");
   if (showAvMalformation) {
     detailedFindingSections.push({
       title: "AV Malformation",
@@ -418,11 +392,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showRadiationProctitis =
-    hasSelection(selectedFindings, "Radiation Proctitis") ||
-    hasAnyTextValue([radiationProctitis.extentFromAnalVerge, radiationProctitis.severity]) ||
-    toArray(radiationProctitis.distribution).length > 0 ||
-    toArray(radiationProctitis.mucosalFindings).length > 0;
+  const showRadiationProctitis = hasSelection(selectedFindings, "Radiation Proctitis");
   if (showRadiationProctitis) {
     detailedFindingSections.push({
       title: "Radiation Proctitis",
@@ -450,28 +420,7 @@ export const buildColonoscopyReportSections = (
     });
   }
 
-  const showUlcer =
-    hasSelection(selectedFindings, "Ulcer (s)") ||
-    hasAnyTextValue([
-      ulcer.number,
-      ulcer.approximateNumberIfMultiple,
-      ulcer.largestDiameterLength,
-      ulcer.largestDiameterWidth,
-      ulcer.rangeFrom,
-      ulcer.rangeTo,
-    ]) ||
-    toArray(ulcer.distribution).length > 0 ||
-    toArray(ulcer.shape).length > 0 ||
-    toArray(ulcer.depth).length > 0 ||
-    toArray(ulcer.edges).length > 0 ||
-    toArray(ulcer.base).length > 0 ||
-    toArray(ulcer.orientation).length > 0 ||
-    toArray(ulcer.bleedingStigmata).length > 0 ||
-    toArray(ulcer.surroundingMucosa).length > 0 ||
-    toArray(ulcer.associatedFindings).length > 0 ||
-    toArray(ulcer.suspectedEtiology).length > 0 ||
-    toArray(ulcer.ibdType).length > 0 ||
-    toArray(ulcer.infectiveEtiology).length > 0;
+  const showUlcer = hasSelection(selectedFindings, "Ulcer (s)");
   if (showUlcer) {
     const ulcerLargestDiameter =
       hasText(ulcer.largestDiameterLength) || hasText(ulcer.largestDiameterWidth)
@@ -538,13 +487,17 @@ export const buildColonoscopyReportSections = (
         },
         {
           label: "Inflammatory Bowel Disease Type",
-          value: ulcer.ibdType,
+          value: hasSelection(ulcer.suspectedEtiology, "Inflammatory Bowel Disease")
+            ? ulcer.ibdType
+            : [],
           badges: true,
           fullWidth: true,
         },
         {
           label: "Infective Etiology",
-          value: joinSelections(ulcer.infectiveEtiology, ulcer.etiologyOther),
+          value: hasSelection(ulcer.suspectedEtiology, "Infective")
+            ? joinSelections(ulcer.infectiveEtiology, ulcer.etiologyOther)
+            : "",
           fullWidth: true,
         },
       ],

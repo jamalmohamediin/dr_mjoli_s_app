@@ -11,11 +11,13 @@ import { hasText, toArray } from "@/utils/templateDataHelpers";
 export interface StructuredTemplatePdfEntry {
   label: string;
   value?: string | string[];
+  fullWidth?: boolean;
 }
 
 export interface StructuredTemplatePdfSection {
   title: string;
   entries: StructuredTemplatePdfEntry[];
+  layout?: "default" | "colonoscopy-preoperative";
 }
 
 interface StructuredTemplatePdfOptions {
@@ -128,8 +130,65 @@ export const generateStructuredTemplatePdf = async ({
     });
   };
 
+  const drawThreeColRow = (first: string, second: string, third: string) => {
+    if (!first && !second && !third) return;
+    const gap = 4;
+    const threeColWidth = (contentWidth - gap * 2) / 3;
+    const firstLines = pdf.splitTextToSize(first, threeColWidth);
+    const secondLines = pdf.splitTextToSize(second, threeColWidth);
+    const thirdLines = pdf.splitTextToSize(third, threeColWidth);
+    const lineCount = Math.max(firstLines.length, secondLines.length, thirdLines.length, 1);
+    ensureSpace(lineCount * lineHeight + 1);
+
+    for (let index = 0; index < lineCount; index += 1) {
+      if (firstLines[index]) {
+        pdf.text(firstLines[index], margin, y);
+      }
+      if (secondLines[index]) {
+        pdf.text(secondLines[index], margin + threeColWidth + gap, y);
+      }
+      if (thirdLines[index]) {
+        pdf.text(thirdLines[index], margin + (threeColWidth + gap) * 2, y);
+      }
+      y += lineHeight;
+    }
+  };
+
+  const toEntryValue = (entry: StructuredTemplatePdfEntry) =>
+    Array.isArray(entry.value) ? toArray(entry.value).join(", ") : entry.value || "";
+
   const toEntryText = (entry: StructuredTemplatePdfEntry) =>
-    `${entry.label}: ${Array.isArray(entry.value) ? toArray(entry.value).join(", ") : entry.value || ""}`;
+    `${entry.label}: ${toEntryValue(entry)}`;
+
+  const renderColonoscopyPreoperativeSection = (entries: StructuredTemplatePdfEntry[]) => {
+    const valueByLabel = new Map<string, string>();
+    entries.forEach((entry) => {
+      valueByLabel.set(entry.label, toEntryValue(entry));
+    });
+
+    const formatEntry = (label: string) => {
+      const value = valueByLabel.get(label) || "";
+      return value ? `${label}: ${value}` : "";
+    };
+
+    drawThreeColRow(
+      formatEntry("Endoscopist"),
+      formatEntry("Assistant"),
+      formatEntry("Anaesthetist"),
+    );
+    drawThreeColRow(
+      formatEntry("Start Time"),
+      formatEntry("End Time"),
+      formatEntry("Total Duration (Min)"),
+    );
+    drawSingleRow(formatEntry("Caecal Intubation Time"));
+    drawSingleRow(formatEntry("Start of Withdrawal Time"));
+    drawSingleRow(formatEntry("Duration of Withdrawal (Min)"));
+    drawSingleRow(formatEntry("Procedure Urgency"));
+    drawSingleRow(formatEntry("Preoperative Imaging"));
+    drawSingleRow(formatEntry("Indication for Colonoscopy"));
+    drawSingleRow(formatEntry("Signs & Symptoms"));
+  };
 
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "bold");
@@ -245,32 +304,40 @@ export const generateStructuredTemplatePdf = async ({
       return;
     }
 
-    for (let index = 0; index < section.entries.length; index += 2) {
-      const leftEntry = section.entries[index];
-      const rightEntry = section.entries[index + 1];
-      const leftValue = `${leftEntry.label}: ${
-        Array.isArray(leftEntry.value) ? toArray(leftEntry.value).join(", ") : leftEntry.value || ""
-      }`;
-      const rightValue = rightEntry
-        ? `${rightEntry.label}: ${
-            Array.isArray(rightEntry.value)
-              ? toArray(rightEntry.value).join(", ")
-              : rightEntry.value || ""
-          }`
-        : "";
+    if (section.layout === "colonoscopy-preoperative") {
+      renderColonoscopyPreoperativeSection(section.entries);
+      return;
+    }
 
-      const useSingleRow =
-        leftValue.length > 110 ||
-        rightValue.length > 110;
+    let index = 0;
+    while (index < section.entries.length) {
+      const leftEntry = section.entries[index];
+
+      if (leftEntry.fullWidth) {
+        drawSingleRow(toEntryText(leftEntry));
+        index += 1;
+        continue;
+      }
+
+      const rightEntry = section.entries[index + 1];
+      if (!rightEntry || rightEntry.fullWidth) {
+        drawTwoColRow(toEntryText(leftEntry), "");
+        index += 1;
+        continue;
+      }
+
+      const leftValue = toEntryText(leftEntry);
+      const rightValue = toEntryText(rightEntry);
+      const useSingleRow = leftValue.length > 110 || rightValue.length > 110;
 
       if (useSingleRow) {
         drawSingleRow(leftValue);
-        if (rightValue) {
-          drawSingleRow(rightValue);
-        }
+        drawSingleRow(rightValue);
       } else {
         drawTwoColRow(leftValue, rightValue);
       }
+
+      index += 2;
     }
   });
 

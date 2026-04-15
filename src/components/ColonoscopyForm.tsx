@@ -161,20 +161,36 @@ export const ColonoscopyForm = ({
 
   const selectedDepth = toArray(procedureDetails.depthOfExamination);
   const selectedCaecalLandmarks = toArray(procedureDetails.caecalLandmarks);
-  const selectedCaecumNotReachedReasons = toArray(procedureDetails.reasonsCaecumNotReached);
   const reachedTerminalOrCaecum =
     selectedDepth.includes("Terminal Ileum") || selectedDepth.includes("Caecum");
-  const showCaecalLandmarks =
-    reachedTerminalOrCaecum ||
-    selectedCaecalLandmarks.length > 0 ||
-    String(procedureDetails.caecalLandmarksOther || "").trim().length > 0;
+  const showCaecalLandmarks = reachedTerminalOrCaecum;
   const showCaecumNotReachedReasons =
     selectedCaecalLandmarks.includes("Not Reached") ||
-    (selectedDepth.length > 0 && !reachedTerminalOrCaecum) ||
-    selectedCaecumNotReachedReasons.length > 0 ||
-    String(procedureDetails.reasonsCaecumNotReachedOther || "").trim().length > 0;
+    !reachedTerminalOrCaecum;
 
   const selectedFindings = toArray(findingsSummary.findings);
+  const showHaemorrhoids = selectedFindings.includes("Haemorrhoids");
+  const showInflammation = selectedFindings.includes("Inflammation");
+  const showStricture = selectedFindings.includes("Stricture (Benign/Malignant)");
+  const showPolyps = selectedFindings.includes("Polyp(s)");
+  const showDiverticula = selectedFindings.includes("Diverticula");
+  const showTumour = selectedFindings.includes("Tumour");
+  const showAvMalformation = selectedFindings.includes("AV Malformation");
+  const showRadiationProctitis = selectedFindings.includes("Radiation Proctitis");
+  const showUlcer = selectedFindings.includes("Ulcer (s)");
+  const showInflammationUlcerFeatures =
+    Boolean(inflammation.ulcerBurden) && inflammation.ulcerBurden !== "None";
+
+  const [collapsedFindingsSections, setCollapsedFindingsSections] = React.useState<Record<string, boolean>>({});
+
+  const isFindingSectionExpanded = (sectionKey: string) => !collapsedFindingsSections[sectionKey];
+
+  const toggleFindingSection = (sectionKey: string) => {
+    setCollapsedFindingsSections((prev) => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey],
+    }));
+  };
 
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
@@ -389,113 +405,266 @@ export const ColonoscopyForm = ({
           <OptionalOtherInput enabled={toArray(findingsSummary.sitesOfAbnormality).includes("Other")} value={findingsSummary.siteOther || ""} placeholder="Specify other site" onChange={(value) => updateTemplate("findingsSummary", "siteOther", value)} />
           <LabeledTextarea label="Description of findings" value={findingsSummary.descriptionOfFindings || ""} onChange={(value) => updateTemplate("findingsSummary", "descriptionOfFindings", value)} rows={4} />
 
-          {selectedFindings.includes("Haemorrhoids") || toArray(haemorrhoids.grades).length > 0 || toArray(haemorrhoids.bleedingStatus).length > 0 ? (
-            <div className="space-y-4 border-t pt-4">
-              <h3 className="text-sm font-semibold text-gray-800">Haemorrhoids</h3>
-              <CheckboxGrid label="Haemorrhoid Grade" options={["Grade I", "Grade II", "Grade III", "Grade IV", "Internal And External Haemorrhoids"]} values={haemorrhoids.grades} onChange={(value) => updateTemplate("haemorrhoids", "grades", value)} />
-              <CheckboxGrid label="Bleeding Status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={haemorrhoids.bleedingStatus} onChange={(value) => updateTemplate("haemorrhoids", "bleedingStatus", value)} />
-            </div>
-          ) : null}
-
-          {selectedFindings.includes("Inflammation") || toArray(inflammation.description).length > 0 || String(inflammation.ulcerBurden || "").trim().length > 0 ? (
-            <div className="space-y-4 border-t pt-4">
-              <h3 className="text-sm font-semibold text-gray-800">Inflammation</h3>
-              <CheckboxGrid label="Description Of Inflammation" options={["Pancolitis", "Segmental", "Patchy (Skip Lesions)", "Continuous", "Presence Of Pseudopolyps", "Cobblestoning", "Presence Of Exudate / Slough", "Strictures", "Peri-Appendiceal Patch", "Backwash Ileitis", "Other"]} values={inflammation.description} onChange={(value) => updateTemplate("inflammation", "description", value)} />
-              <OptionalOtherInput enabled={toArray(inflammation.description).includes("Other")} value={inflammation.descriptionOther || ""} placeholder="Specify other inflammation description" onChange={(value) => updateTemplate("inflammation", "descriptionOther", value)} />
-              <RadioGrid label="Severity Of Inflammation" options={["Mild", "Moderate", "Severe"]} value={inflammation.severity || ""} onChange={(value) => updateTemplate("inflammation", "severity", value)} columns="grid-cols-3" />
-              <RadioGrid label="Presence Of Ulcers" options={["None", "<10%", "10-30%", ">30%"]} value={inflammation.ulcerBurden || ""} onChange={(value) => updateTemplate("inflammation", "ulcerBurden", value)} columns="grid-cols-2 md:grid-cols-4" />
-              {inflammation.ulcerBurden && inflammation.ulcerBurden !== "None" ? (
-                <>
-                  <CheckboxGrid label="Ulcer Features" options={["Superficial Ulcers", "Deep Ulcers", "Linear Ulcers", "Aphthous Ulcers", "Serpiginous Ulcers", "Confluent Ulceration", "Other"]} values={inflammation.ulcerFeatures} onChange={(value) => updateTemplate("inflammation", "ulcerFeatures", value)} />
-                  <OptionalOtherInput enabled={toArray(inflammation.ulcerFeatures).includes("Other")} value={inflammation.ulcerFeaturesOther || ""} placeholder="Specify other ulcer feature" onChange={(value) => updateTemplate("inflammation", "ulcerFeaturesOther", value)} />
-                </>
+          {showHaemorrhoids ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("haemorrhoids")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Haemorrhoids</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("haemorrhoids") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("haemorrhoids") ? (
+                <div className="mt-4 space-y-4">
+                  <CheckboxGrid label="Haemorrhoid Grade" options={["Grade I", "Grade II", "Grade III", "Grade IV", "Internal And External Haemorrhoids"]} values={haemorrhoids.grades} onChange={(value) => updateTemplate("haemorrhoids", "grades", value)} />
+                  <CheckboxGrid label="Bleeding Status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={haemorrhoids.bleedingStatus} onChange={(value) => updateTemplate("haemorrhoids", "bleedingStatus", value)} />
+                </div>
               ) : null}
-              <CheckboxGrid label="Endoscopic Impression" options={["Features Suggestive Of Ulcerative Colitis", "Features Suggestive Of Crohn's Disease", "Features Suggestive Of Infectious Colitis", "Features Suggestive Of Ischemic Colitis", "Nonspecific Colitis", "Nonspecific Colon Ulcer", "Other"]} values={inflammation.endoscopicImpression} onChange={(value) => updateTemplate("inflammation", "endoscopicImpression", value)} />
-              <OptionalOtherInput enabled={toArray(inflammation.endoscopicImpression).includes("Other")} value={inflammation.impressionOther || ""} placeholder="Specify other inflammation impression" onChange={(value) => updateTemplate("inflammation", "impressionOther", value)} />
             </div>
           ) : null}
 
-          {selectedFindings.includes("Stricture (Benign/Malignant)") || selectedFindings.includes("Polyp(s)") || selectedFindings.includes("Tumour") || String(stricture.number || "").trim().length > 0 || String(polyps.number || "").trim().length > 0 || String(tumour.length || "").trim().length > 0 ? (
-            <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Stricture / Polyps / Tumour</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <RadioGrid label="Number Of Strictures" options={["Single", "Multiple"]} value={stricture.number || ""} onChange={(value) => updateTemplate("stricture", "number", value)} columns="grid-cols-2" />
-              {stricture.number === "Multiple" ? (
-                <LabeledInput label="Multiple (Number)" value={stricture.multipleNumber || ""} onChange={(value) => updateTemplate("stricture", "multipleNumber", value)} />
-              ) : <div />}
-              <RadioGrid label="Length Of Stricture" options={["<1 Cm", "Short Segment (1 - 3 Cm)", "Intermediate (3-5 Cm)", "Long Segment (>5 Cm)"]} value={stricture.length || ""} onChange={(value) => updateTemplate("stricture", "length", value)} />
-              <CheckboxGrid label="Severity Of Narrowing" options={["Mild (<50%)", "Moderate (50-75%)", "Severe (>75%)", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={stricture.severityOfNarrowing} onChange={(value) => updateTemplate("stricture", "severityOfNarrowing", value)} columns="grid-cols-2 md:grid-cols-3" />
-              <RadioGrid label="Polyp Number" options={["1", "1 - 5", "5 - 10", "10 - 20", "20 - 50", "50 - 100", "> 100"]} value={polyps.number || ""} onChange={(value) => updateTemplate("polyps", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
-              <CheckboxGrid label="Polyp Size" options={["Diminutive (<=5 Mm)", "Small (6-9 Mm)", "Large (>=10 Mm)", "Advanced (>=20 Mm)"]} values={polyps.size} onChange={(value) => updateTemplate("polyps", "size", value)} columns="grid-cols-2 md:grid-cols-4" />
-              <LabeledInput label="Largest polyp diameter length (mm)" value={polyps.largestDiameterLength || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterLength", value)} />
-              <LabeledInput label="Largest polyp diameter width (mm)" value={polyps.largestDiameterWidth || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterWidth", value)} />
-              <LabeledInput label="Range (if multiple) from mm" value={polyps.rangeFrom || ""} onChange={(value) => updateTemplate("polyps", "rangeFrom", value)} />
-              <LabeledInput label="Range (if multiple) to mm" value={polyps.rangeTo || ""} onChange={(value) => updateTemplate("polyps", "rangeTo", value)} />
-              <LabeledInput label="Tumour length (cm)" value={tumour.length || ""} onChange={(value) => updateTemplate("tumour", "length", value)} />
-              <CheckboxGrid label="Circumferential involvement" options={["<25%", "25-50%", "50-75%", ">75%", "Circumferential"]} values={tumour.circumferentialInvolvement} onChange={(value) => updateTemplate("tumour", "circumferentialInvolvement", value)} />
-            </div>
-            <CheckboxGrid label="Stricture morphology" options={["Normal Mucosa", "Smooth / Regular", "Erythema", "Irregular / Nodular", "Shouldered Edges", "Concentric Narrowing", "Eccentric Narrowing", "Ulcerated", "Mass Lesion Suspected", "Other"]} values={stricture.morphology} onChange={(value) => updateTemplate("stricture", "morphology", value)} />
-            <OptionalOtherInput enabled={toArray(stricture.morphology).includes("Other")} value={stricture.morphologyOther || ""} placeholder="Specify other morphology" onChange={(value) => updateTemplate("stricture", "morphologyOther", value)} />
-            <CheckboxGrid label="Stricture endoscopic impression" options={["Suspicious For Malignancy", "Benign Stricture", "Inflammatory Stricture (E.G. Crohn's Disease)", "Post-Inflammatory / Fibrosis", "Ischemic Stricture (Ischemic Colitis)", "Post-Surgical / Anastomotic Stricture", "Radiation-Induced", "Indeterminate"]} values={stricture.endoscopicImpression} onChange={(value) => updateTemplate("stricture", "endoscopicImpression", value)} />
-            <CheckboxGrid label="Polyp morphology" options={["Pedunculated", "Sessile", "Slightly Elevated", "Flat", "Depressed", "Excavated", "Pseudopolyps", "Other"]} values={polyps.morphology} onChange={(value) => updateTemplate("polyps", "morphology", value)} />
-            <OptionalOtherInput enabled={toArray(polyps.morphology).includes("Other")} value={polyps.morphologyOther || ""} placeholder="Specify other polyp morphology" onChange={(value) => updateTemplate("polyps", "morphologyOther", value)} />
-            <CheckboxGrid label="Tumour lumen narrowing" options={["No Narrowing", "Partial Obstruction", "Significant Narrowing", "Complete Obstruction", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={tumour.lumenNarrowing} onChange={(value) => updateTemplate("tumour", "lumenNarrowing", value)} />
-            <CheckboxGrid label="Tumour endoscopic Impression" options={["Highly Suspicious For Malignancy", "Likely Malignant Tumour", "Early Cancer (Superficial)", "Benign Tumour (E.G. Lipoma)", "Indeterminate"]} values={tumour.endoscopicImpression} onChange={(value) => updateTemplate("tumour", "endoscopicImpression", value)} />
+          {showInflammation ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("inflammation")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Inflammation</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("inflammation") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("inflammation") ? (
+                <div className="mt-4 space-y-4">
+                  <CheckboxGrid label="Description Of Inflammation" options={["Pancolitis", "Segmental", "Patchy (Skip Lesions)", "Continuous", "Presence Of Pseudopolyps", "Cobblestoning", "Presence Of Exudate / Slough", "Strictures", "Peri-Appendiceal Patch", "Backwash Ileitis", "Other"]} values={inflammation.description} onChange={(value) => updateTemplate("inflammation", "description", value)} />
+                  <OptionalOtherInput enabled={toArray(inflammation.description).includes("Other")} value={inflammation.descriptionOther || ""} placeholder="Specify other inflammation description" onChange={(value) => updateTemplate("inflammation", "descriptionOther", value)} />
+                  <RadioGrid label="Severity Of Inflammation" options={["Mild", "Moderate", "Severe"]} value={inflammation.severity || ""} onChange={(value) => updateTemplate("inflammation", "severity", value)} columns="grid-cols-3" />
+                  <RadioGrid label="Presence Of Ulcers" options={["None", "<10%", "10-30%", ">30%"]} value={inflammation.ulcerBurden || ""} onChange={(value) => updateTemplate("inflammation", "ulcerBurden", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  {showInflammationUlcerFeatures ? (
+                    <>
+                      <CheckboxGrid label="Ulcer Features" options={["Superficial Ulcers", "Deep Ulcers", "Linear Ulcers", "Aphthous Ulcers", "Serpiginous Ulcers", "Confluent Ulceration", "Other"]} values={inflammation.ulcerFeatures} onChange={(value) => updateTemplate("inflammation", "ulcerFeatures", value)} />
+                      <OptionalOtherInput enabled={toArray(inflammation.ulcerFeatures).includes("Other")} value={inflammation.ulcerFeaturesOther || ""} placeholder="Specify other ulcer feature" onChange={(value) => updateTemplate("inflammation", "ulcerFeaturesOther", value)} />
+                    </>
+                  ) : null}
+                  <CheckboxGrid label="Endoscopic Impression" options={["Features Suggestive Of Ulcerative Colitis", "Features Suggestive Of Crohn's Disease", "Features Suggestive Of Infectious Colitis", "Features Suggestive Of Ischemic Colitis", "Nonspecific Colitis", "Nonspecific Colon Ulcer", "Other"]} values={inflammation.endoscopicImpression} onChange={(value) => updateTemplate("inflammation", "endoscopicImpression", value)} />
+                  <OptionalOtherInput enabled={toArray(inflammation.endoscopicImpression).includes("Other")} value={inflammation.impressionOther || ""} placeholder="Specify other inflammation impression" onChange={(value) => updateTemplate("inflammation", "impressionOther", value)} />
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          {selectedFindings.includes("Diverticula") || selectedFindings.includes("AV Malformation") || selectedFindings.includes("Radiation Proctitis") || selectedFindings.includes("Ulcer (s)") || String(diverticula.number || "").trim().length > 0 || String(avMalformation.number || "").trim().length > 0 || String(radiationProctitis.extentFromAnalVerge || "").trim().length > 0 || String(ulcer.number || "").trim().length > 0 ? (
-            <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Diverticula / AV Malformation / Radiation Proctitis / Ulcer</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <RadioGrid label="Diverticula Number" options={["Single", "Few", "Multiple", "Extensive"]} value={diverticula.number || ""} onChange={(value) => updateTemplate("diverticula", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
-              <RadioGrid label="Diverticula Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={diverticula.size || ""} onChange={(value) => updateTemplate("diverticula", "size", value)} columns="grid-cols-3" />
-              <CheckboxGrid label="Diverticula Distribution Pattern" options={["Focal", "Segmental", "Diffuse", "Pan Colonic"]} values={diverticula.distributionPattern} onChange={(value) => updateTemplate("diverticula", "distributionPattern", value)} columns="grid-cols-2 md:grid-cols-4" />
-              <RadioGrid label="AV Malformation Number" options={["Single", "Multiple (<=5)", "Numerous (>5)"]} value={avMalformation.number || ""} onChange={(value) => updateTemplate("avMalformation", "number", value)} columns="grid-cols-3" />
-              <RadioGrid label="AV Malformation Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={avMalformation.size || ""} onChange={(value) => updateTemplate("avMalformation", "size", value)} columns="grid-cols-3" />
-              <RadioGrid label="AV Malformation Burden" options={["Mild", "Moderate", "Severe"]} value={avMalformation.burden || ""} onChange={(value) => updateTemplate("avMalformation", "burden", value)} columns="grid-cols-3" />
-              <RadioGrid label="Risk Of Bleeding" options={["Low", "Moderate", "High"]} value={avMalformation.bleedingRisk || ""} onChange={(value) => updateTemplate("avMalformation", "bleedingRisk", value)} columns="grid-cols-3" />
-              <LabeledInput label="Extent from anal verge (cm)" value={radiationProctitis.extentFromAnalVerge || ""} onChange={(value) => updateTemplate("radiationProctitis", "extentFromAnalVerge", value)} />
-              <RadioGrid label="Radiation proctitis severity" options={["Mild", "Moderate", "Severe"]} value={radiationProctitis.severity || ""} onChange={(value) => updateTemplate("radiationProctitis", "severity", value)} columns="grid-cols-3" />
-              <RadioGrid label="Ulcer Number" options={["Single", "Multiple"]} value={ulcer.number || ""} onChange={(value) => updateTemplate("ulcer", "number", value)} columns="grid-cols-2" />
-              {ulcer.number === "Multiple" ? (
-                <LabeledInput label="Approximate ulcer count if multiple" value={ulcer.approximateNumberIfMultiple || ""} onChange={(value) => updateTemplate("ulcer", "approximateNumberIfMultiple", value)} />
-              ) : <div />}
-              <CheckboxGrid label="Ulcer Distribution" options={["Focal", "Segmental", "Diffuse"]} values={ulcer.distribution} onChange={(value) => updateTemplate("ulcer", "distribution", value)} columns="grid-cols-3" />
-              <LabeledInput label="Largest Ulcer Diameter (mm) - Length" value={ulcer.largestDiameterLength || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterLength", value)} />
-              <LabeledInput label="Largest Ulcer Diameter (mm) - Width" value={ulcer.largestDiameterWidth || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterWidth", value)} />
-              <LabeledInput label="Range (if multiple) from mm" value={ulcer.rangeFrom || ""} onChange={(value) => updateTemplate("ulcer", "rangeFrom", value)} />
-              <LabeledInput label="Range (if multiple) to mm" value={ulcer.rangeTo || ""} onChange={(value) => updateTemplate("ulcer", "rangeTo", value)} />
+          {showStricture ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("stricture")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Stricture (Benign/Malignant)</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("stricture") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("stricture") ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <RadioGrid label="Number Of Strictures" options={["Single", "Multiple"]} value={stricture.number || ""} onChange={(value) => updateTemplate("stricture", "number", value)} columns="grid-cols-2" />
+                    {stricture.number === "Multiple" ? (
+                      <LabeledInput label="Multiple (Number)" value={stricture.multipleNumber || ""} onChange={(value) => updateTemplate("stricture", "multipleNumber", value)} />
+                    ) : <div />}
+                  </div>
+                  <RadioGrid label="Length Of Stricture" options={["<1 Cm", "Short Segment (1 - 3 Cm)", "Intermediate (3-5 Cm)", "Long Segment (>5 Cm)"]} value={stricture.length || ""} onChange={(value) => updateTemplate("stricture", "length", value)} />
+                  <CheckboxGrid label="Severity Of Narrowing" options={["Mild (<50%)", "Moderate (50-75%)", "Severe (>75%)", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={stricture.severityOfNarrowing} onChange={(value) => updateTemplate("stricture", "severityOfNarrowing", value)} columns="grid-cols-2 md:grid-cols-3" />
+                  <CheckboxGrid label="Morphology Mucosal Appearance" options={["Normal Mucosa", "Smooth / Regular", "Erythema", "Irregular / Nodular", "Shouldered Edges", "Concentric Narrowing", "Eccentric Narrowing", "Ulcerated", "Mass Lesion Suspected", "Other"]} values={stricture.morphology} onChange={(value) => updateTemplate("stricture", "morphology", value)} />
+                  <OptionalOtherInput enabled={toArray(stricture.morphology).includes("Other")} value={stricture.morphologyOther || ""} placeholder="Specify other morphology" onChange={(value) => updateTemplate("stricture", "morphologyOther", value)} />
+                  <CheckboxGrid label="Endoscopic Impression" options={["Suspicious For Malignancy", "Benign Stricture", "Inflammatory Stricture (E.G. Crohn's Disease)", "Post-Inflammatory / Fibrosis", "Ischemic Stricture (Ischemic Colitis)", "Post-Surgical / Anastomotic Stricture", "Radiation-Induced", "Indeterminate"]} values={stricture.endoscopicImpression} onChange={(value) => updateTemplate("stricture", "endoscopicImpression", value)} />
+                </div>
+              ) : null}
             </div>
-            <CheckboxGrid label="Diverticula morphology" options={["Normal Mucosa", "Simple", "Containing Fecolith", "Erythematous", "Inflamed", "Ulcerated", "Associated Colitis", "Other"]} values={diverticula.morphology} onChange={(value) => updateTemplate("diverticula", "morphology", value)} />
-            <OptionalOtherInput enabled={toArray(diverticula.morphology).includes("Other")} value={diverticula.morphologyOther || ""} placeholder="Specify other diverticula morphology" onChange={(value) => updateTemplate("diverticula", "morphologyOther", value)} />
-            <CheckboxGrid label="AV malformation morphology" options={["Flat", "Raised", "Clustered", "Solitary"]} values={avMalformation.morphology} onChange={(value) => updateTemplate("avMalformation", "morphology", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="AV malformation color appearance" options={["Reddish", "Purple", "Tortuous Vessels", "Erythematous Patch"]} values={avMalformation.colorAppearance} onChange={(value) => updateTemplate("avMalformation", "colorAppearance", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="AV malformation bleeding status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={avMalformation.bleedingStatus} onChange={(value) => updateTemplate("avMalformation", "bleedingStatus", value)} />
-            <CheckboxGrid label="AV malformation distribution" options={["Focal", "Segmental", "Diffuse", "Pancolonic"]} values={avMalformation.distributionPattern} onChange={(value) => updateTemplate("avMalformation", "distributionPattern", value)} />
-            <CheckboxGrid label="Radiation proctitis distribution" options={["Rectum Only", "Rectosigmoid Involvement", "Segmental", "Diffuse", "Patchy", "Circumferential"]} values={radiationProctitis.distribution} onChange={(value) => updateTemplate("radiationProctitis", "distribution", value)} />
-            <CheckboxGrid label="Radiation proctitis mucosal findings" options={["Erythema", "Telangiectasia", "Edema", "Friable / Contact Bleeding", "Spontaneous Bleeding", "Pallor / Atrophy", "Necrosis", "Stricture", "Fistula", "Ulceration", "Ectatic Vessels", "Angiodysplasia-Like Lesions", "Other"]} values={radiationProctitis.mucosalFindings} onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindings", value)} />
-            <OptionalOtherInput enabled={toArray(radiationProctitis.mucosalFindings).includes("Other")} value={radiationProctitis.mucosalFindingsOther || ""} placeholder="Specify other mucosal finding" onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindingsOther", value)} />
-            <CheckboxGrid label="Ulcer shape" options={["Round", "Oval", "Linear", "Irregular", "Serpiginous"]} values={ulcer.shape} onChange={(value) => updateTemplate("ulcer", "shape", value)} columns="grid-cols-2 md:grid-cols-5" />
-            <CheckboxGrid label="Ulcer depth" options={["Superficial", "Deep", "Excavated"]} values={ulcer.depth} onChange={(value) => updateTemplate("ulcer", "depth", value)} columns="grid-cols-3" />
-            <CheckboxGrid label="Ulcer edges" options={["Regular", "Irregular", "Undermined", "Raised"]} values={ulcer.edges} onChange={(value) => updateTemplate("ulcer", "edges", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="Ulcer base" options={["Clean", "Fibrinous", "Necrotic", "Granular"]} values={ulcer.base} onChange={(value) => updateTemplate("ulcer", "base", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <CheckboxGrid label="Ulcer orientation" options={["Longitudinal", "Circumferential", "Along folds"]} values={ulcer.orientation} onChange={(value) => updateTemplate("ulcer", "orientation", value)} columns="grid-cols-3" />
-            <CheckboxGrid label="Bleeding Stigmata" options={["None", "Contact bleeding", "Active bleeding", "Visible vessel", "Adherent clot"]} values={ulcer.bleedingStigmata} onChange={(value) => updateTemplate("ulcer", "bleedingStigmata", value)} />
-            <CheckboxGrid label="Surrounding mucosa" options={["Normal", "Erythematous", "Oedematous", "Friable", "Nodular", "Inflamed", "Other"]} values={ulcer.surroundingMucosa} onChange={(value) => updateTemplate("ulcer", "surroundingMucosa", value)} />
-            <OptionalOtherInput enabled={toArray(ulcer.surroundingMucosa).includes("Other")} value={ulcer.surroundingMucosaOther || ""} placeholder="Specify other surrounding mucosa" onChange={(value) => updateTemplate("ulcer", "surroundingMucosaOther", value)} />
-            <CheckboxGrid label="Associated Findings" options={["Inflammation", "Stricture", "Mass lesion", "Fistula opening", "Perianal disease", "Diverticulosis nearby", "Other"]} values={ulcer.associatedFindings} onChange={(value) => updateTemplate("ulcer", "associatedFindings", value)} />
-            <OptionalOtherInput enabled={toArray(ulcer.associatedFindings).includes("Other")} value={ulcer.associatedFindingsOther || ""} placeholder="Specify other associated finding" onChange={(value) => updateTemplate("ulcer", "associatedFindingsOther", value)} />
-            <CheckboxGrid label="Suspected Etiology (Endoscopic)" options={["Inflammatory Bowel Disease", "Infective", "Ischaemic Colitis", "Drug-Induced (E.G. Nsaids)", "Malignancy-Related", "Radiation Colitis", "Indeterminate"]} values={ulcer.suspectedEtiology} onChange={(value) => updateTemplate("ulcer", "suspectedEtiology", value)} />
-            {toArray(ulcer.suspectedEtiology).includes("Inflammatory Bowel Disease") ? (
-              <CheckboxGrid label="Inflammatory Bowel Disease" options={["Crohn's Disease", "Ulcerative Colitis"]} values={ulcer.ibdType} onChange={(value) => updateTemplate("ulcer", "ibdType", value)} columns="grid-cols-2" />
-            ) : null}
-            {toArray(ulcer.suspectedEtiology).includes("Infective") ? (
-              <>
-                <CheckboxGrid label="Infective" options={["Cytomegalovirus Colitis", "Tuberculosis", "Other"]} values={ulcer.infectiveEtiology} onChange={(value) => updateTemplate("ulcer", "infectiveEtiology", value)} columns="grid-cols-3" />
-                <OptionalOtherInput enabled={toArray(ulcer.infectiveEtiology).includes("Other")} value={ulcer.etiologyOther || ""} placeholder="Specify other infective etiology" onChange={(value) => updateTemplate("ulcer", "etiologyOther", value)} />
-              </>
-            ) : null}
+          ) : null}
+
+          {showPolyps ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("polyps")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Polyp(s)</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("polyps") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("polyps") ? (
+                <div className="mt-4 space-y-4">
+                  <RadioGrid label="Polyp Number" options={["1", "1 - 5", "5 - 10", "10 - 20", "20 - 50", "50 - 100", "> 100"]} value={polyps.number || ""} onChange={(value) => updateTemplate("polyps", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Size" options={["Diminutive (<=5 Mm)", "Small (6-9 Mm)", "Large (>=10 Mm)", "Advanced (>=20 Mm)"]} values={polyps.size} onChange={(value) => updateTemplate("polyps", "size", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <LabeledInput label="Largest Polyp Diameter (mm) - Length" value={polyps.largestDiameterLength || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterLength", value)} />
+                    <LabeledInput label="Largest Polyp Diameter (mm) - Width" value={polyps.largestDiameterWidth || ""} onChange={(value) => updateTemplate("polyps", "largestDiameterWidth", value)} />
+                    <LabeledInput label="Range (If Multiple) From mm" value={polyps.rangeFrom || ""} onChange={(value) => updateTemplate("polyps", "rangeFrom", value)} />
+                    <LabeledInput label="Range (If Multiple) To mm" value={polyps.rangeTo || ""} onChange={(value) => updateTemplate("polyps", "rangeTo", value)} />
+                  </div>
+                  <CheckboxGrid label="Morphology" options={["Pedunculated", "Sessile", "Slightly Elevated", "Flat", "Depressed", "Excavated", "Pseudopolyps", "Other"]} values={polyps.morphology} onChange={(value) => updateTemplate("polyps", "morphology", value)} />
+                  <OptionalOtherInput enabled={toArray(polyps.morphology).includes("Other")} value={polyps.morphologyOther || ""} placeholder="Specify other polyp morphology" onChange={(value) => updateTemplate("polyps", "morphologyOther", value)} />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showTumour ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("tumour")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Tumour</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("tumour") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("tumour") ? (
+                <div className="mt-4 space-y-4">
+                  <LabeledInput label="Estimated Length Of Tumour (cm)" value={tumour.length || ""} onChange={(value) => updateTemplate("tumour", "length", value)} />
+                  <CheckboxGrid label="Circumferential Involvement" options={["<25%", "25-50%", "50-75%", ">75%", "Circumferential"]} values={tumour.circumferentialInvolvement} onChange={(value) => updateTemplate("tumour", "circumferentialInvolvement", value)} />
+                  <CheckboxGrid label="Lumen Narrowing" options={["No Narrowing", "Partial Obstruction", "Significant Narrowing", "Complete Obstruction", "Easily Traversed", "Traversed With Difficulty", "Not Traversable"]} values={tumour.lumenNarrowing} onChange={(value) => updateTemplate("tumour", "lumenNarrowing", value)} />
+                  <CheckboxGrid label="Endoscopic Impression" options={["Highly Suspicious For Malignancy", "Likely Malignant Tumour", "Early Cancer (Superficial)", "Benign Tumour (E.G. Lipoma)", "Indeterminate"]} values={tumour.endoscopicImpression} onChange={(value) => updateTemplate("tumour", "endoscopicImpression", value)} />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showDiverticula ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("diverticula")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Diverticula</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("diverticula") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("diverticula") ? (
+                <div className="mt-4 space-y-4">
+                  <RadioGrid label="Number" options={["Single", "Few", "Multiple", "Extensive"]} value={diverticula.number || ""} onChange={(value) => updateTemplate("diverticula", "number", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <RadioGrid label="Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={diverticula.size || ""} onChange={(value) => updateTemplate("diverticula", "size", value)} columns="grid-cols-3" />
+                  <CheckboxGrid label="Distribution Pattern" options={["Focal", "Segmental", "Diffuse", "Pan Colonic"]} values={diverticula.distributionPattern} onChange={(value) => updateTemplate("diverticula", "distributionPattern", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Morphology" options={["Normal Mucosa", "Simple", "Containing Fecolith", "Erythematous", "Inflamed", "Ulcerated", "Associated Colitis", "Other"]} values={diverticula.morphology} onChange={(value) => updateTemplate("diverticula", "morphology", value)} />
+                  <OptionalOtherInput enabled={toArray(diverticula.morphology).includes("Other")} value={diverticula.morphologyOther || ""} placeholder="Specify other diverticula morphology" onChange={(value) => updateTemplate("diverticula", "morphologyOther", value)} />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showAvMalformation ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("avMalformation")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">AV Malformation</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("avMalformation") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("avMalformation") ? (
+                <div className="mt-4 space-y-4">
+                  <RadioGrid label="Number" options={["Single", "Multiple (<=5)", "Numerous (>5)"]} value={avMalformation.number || ""} onChange={(value) => updateTemplate("avMalformation", "number", value)} columns="grid-cols-3" />
+                  <RadioGrid label="Size" options={["Small (<5 Mm)", "Medium (5-10 Mm)", "Large (>10 Mm)"]} value={avMalformation.size || ""} onChange={(value) => updateTemplate("avMalformation", "size", value)} columns="grid-cols-3" />
+                  <CheckboxGrid label="Morphology" options={["Flat", "Raised", "Clustered", "Solitary"]} values={avMalformation.morphology} onChange={(value) => updateTemplate("avMalformation", "morphology", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Color Appearance" options={["Reddish", "Purple", "Tortuous Vessels", "Erythematous Patch"]} values={avMalformation.colorAppearance} onChange={(value) => updateTemplate("avMalformation", "colorAppearance", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Bleeding Status" options={["No Bleeding", "Stigmata Of Recent Bleeding", "Active Bleeding", "No Recent Stigmata Of Recent Bleed"]} values={avMalformation.bleedingStatus} onChange={(value) => updateTemplate("avMalformation", "bleedingStatus", value)} />
+                  <CheckboxGrid label="Distribution Pattern" options={["Focal", "Segmental", "Diffuse", "Pancolonic"]} values={avMalformation.distributionPattern} onChange={(value) => updateTemplate("avMalformation", "distributionPattern", value)} />
+                  <RadioGrid label="AV Malformation Burden" options={["Mild", "Moderate", "Severe"]} value={avMalformation.burden || ""} onChange={(value) => updateTemplate("avMalformation", "burden", value)} columns="grid-cols-3" />
+                  <RadioGrid label="Risk Of Bleeding" options={["Low", "Moderate", "High"]} value={avMalformation.bleedingRisk || ""} onChange={(value) => updateTemplate("avMalformation", "bleedingRisk", value)} columns="grid-cols-3" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showRadiationProctitis ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("radiationProctitis")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Radiation Proctitis</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("radiationProctitis") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("radiationProctitis") ? (
+                <div className="mt-4 space-y-4">
+                  <LabeledInput label="Extent From Anal Verge (cm)" value={radiationProctitis.extentFromAnalVerge || ""} onChange={(value) => updateTemplate("radiationProctitis", "extentFromAnalVerge", value)} />
+                  <CheckboxGrid label="Distribution" options={["Rectum Only", "Rectosigmoid Involvement", "Segmental", "Diffuse", "Patchy", "Circumferential"]} values={radiationProctitis.distribution} onChange={(value) => updateTemplate("radiationProctitis", "distribution", value)} />
+                  <RadioGrid label="Severity" options={["Mild", "Moderate", "Severe"]} value={radiationProctitis.severity || ""} onChange={(value) => updateTemplate("radiationProctitis", "severity", value)} columns="grid-cols-3" />
+                  <CheckboxGrid label="Mucosal Findings" options={["Erythema", "Telangiectasia", "Edema", "Friable / Contact Bleeding", "Spontaneous Bleeding", "Pallor / Atrophy", "Necrosis", "Stricture", "Fistula", "Ulceration", "Ectatic Vessels", "Angiodysplasia-Like Lesions", "Other"]} values={radiationProctitis.mucosalFindings} onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindings", value)} />
+                  <OptionalOtherInput enabled={toArray(radiationProctitis.mucosalFindings).includes("Other")} value={radiationProctitis.mucosalFindingsOther || ""} placeholder="Specify other mucosal finding" onChange={(value) => updateTemplate("radiationProctitis", "mucosalFindingsOther", value)} />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {showUlcer ? (
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() => toggleFindingSection("ulcer")}
+              >
+                <h3 className="text-sm font-semibold text-gray-800">Ulcer (s)</h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {isFindingSectionExpanded("ulcer") ? "−" : "+"}
+                </span>
+              </button>
+              {isFindingSectionExpanded("ulcer") ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <RadioGrid label="Number Of Ulcers" options={["Single", "Multiple"]} value={ulcer.number || ""} onChange={(value) => updateTemplate("ulcer", "number", value)} columns="grid-cols-2" />
+                    {ulcer.number === "Multiple" ? (
+                      <LabeledInput label="Approximate Number If Multiple" value={ulcer.approximateNumberIfMultiple || ""} onChange={(value) => updateTemplate("ulcer", "approximateNumberIfMultiple", value)} />
+                    ) : <div />}
+                  </div>
+                  <CheckboxGrid label="Distribution" options={["Focal", "Segmental", "Diffuse"]} values={ulcer.distribution} onChange={(value) => updateTemplate("ulcer", "distribution", value)} columns="grid-cols-3" />
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <LabeledInput label="Largest Ulcer Diameter (mm) - Length" value={ulcer.largestDiameterLength || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterLength", value)} />
+                    <LabeledInput label="Largest Ulcer Diameter (mm) - Width" value={ulcer.largestDiameterWidth || ""} onChange={(value) => updateTemplate("ulcer", "largestDiameterWidth", value)} />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <LabeledInput label="Range (If Multiple) From mm" value={ulcer.rangeFrom || ""} onChange={(value) => updateTemplate("ulcer", "rangeFrom", value)} />
+                    <LabeledInput label="Range (If Multiple) To mm" value={ulcer.rangeTo || ""} onChange={(value) => updateTemplate("ulcer", "rangeTo", value)} />
+                  </div>
+                  <CheckboxGrid label="Shape" options={["Round", "Oval", "Linear", "Irregular", "Serpiginous"]} values={ulcer.shape} onChange={(value) => updateTemplate("ulcer", "shape", value)} columns="grid-cols-2 md:grid-cols-5" />
+                  <CheckboxGrid label="Depth" options={["Superficial", "Deep", "Excavated"]} values={ulcer.depth} onChange={(value) => updateTemplate("ulcer", "depth", value)} columns="grid-cols-3" />
+                  <CheckboxGrid label="Edges" options={["Regular", "Irregular", "Undermined", "Raised"]} values={ulcer.edges} onChange={(value) => updateTemplate("ulcer", "edges", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Base" options={["Clean", "Fibrinous", "Necrotic", "Granular"]} values={ulcer.base} onChange={(value) => updateTemplate("ulcer", "base", value)} columns="grid-cols-2 md:grid-cols-4" />
+                  <CheckboxGrid label="Orientation" options={["Longitudinal", "Circumferential", "Along folds"]} values={ulcer.orientation} onChange={(value) => updateTemplate("ulcer", "orientation", value)} columns="grid-cols-3" />
+                  <CheckboxGrid label="Bleeding Stigmata" options={["None", "Contact bleeding", "Active bleeding", "Visible vessel", "Adherent clot"]} values={ulcer.bleedingStigmata} onChange={(value) => updateTemplate("ulcer", "bleedingStigmata", value)} />
+                  <CheckboxGrid label="Surrounding Mucosa" options={["Normal", "Erythematous", "Oedematous", "Friable", "Nodular", "Inflamed", "Other"]} values={ulcer.surroundingMucosa} onChange={(value) => updateTemplate("ulcer", "surroundingMucosa", value)} />
+                  <OptionalOtherInput enabled={toArray(ulcer.surroundingMucosa).includes("Other")} value={ulcer.surroundingMucosaOther || ""} placeholder="Specify other surrounding mucosa" onChange={(value) => updateTemplate("ulcer", "surroundingMucosaOther", value)} />
+                  <CheckboxGrid label="Associated Findings" options={["Inflammation", "Stricture", "Mass lesion", "Fistula opening", "Perianal disease", "Diverticulosis nearby", "Other"]} values={ulcer.associatedFindings} onChange={(value) => updateTemplate("ulcer", "associatedFindings", value)} />
+                  <OptionalOtherInput enabled={toArray(ulcer.associatedFindings).includes("Other")} value={ulcer.associatedFindingsOther || ""} placeholder="Specify other associated finding" onChange={(value) => updateTemplate("ulcer", "associatedFindingsOther", value)} />
+                  <CheckboxGrid label="Suspected Etiology (Endoscopic)" options={["Inflammatory Bowel Disease", "Infective", "Ischaemic Colitis", "Drug-Induced (E.G. Nsaids)", "Malignancy-Related", "Radiation Colitis", "Indeterminate"]} values={ulcer.suspectedEtiology} onChange={(value) => updateTemplate("ulcer", "suspectedEtiology", value)} />
+                  {toArray(ulcer.suspectedEtiology).includes("Inflammatory Bowel Disease") ? (
+                    <CheckboxGrid label="Inflammatory Bowel Disease" options={["Crohn's Disease", "Ulcerative Colitis"]} values={ulcer.ibdType} onChange={(value) => updateTemplate("ulcer", "ibdType", value)} columns="grid-cols-2" />
+                  ) : null}
+                  {toArray(ulcer.suspectedEtiology).includes("Infective") ? (
+                    <>
+                      <CheckboxGrid label="Infective" options={["Cytomegalovirus Colitis", "Tuberculosis", "Other"]} values={ulcer.infectiveEtiology} onChange={(value) => updateTemplate("ulcer", "infectiveEtiology", value)} columns="grid-cols-3" />
+                      <OptionalOtherInput enabled={toArray(ulcer.infectiveEtiology).includes("Other")} value={ulcer.etiologyOther || ""} placeholder="Specify other infective etiology" onChange={(value) => updateTemplate("ulcer", "etiologyOther", value)} />
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </CardContent>
