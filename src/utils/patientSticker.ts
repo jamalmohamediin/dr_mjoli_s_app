@@ -201,6 +201,26 @@ export const normalizePatientInfo = (patientInfo?: any) => {
   return normalized;
 };
 
+export const getPdfSafePatientInfo = (patientInfo?: any) => {
+  const info = normalizePatientInfo(patientInfo);
+
+  return {
+    ...info,
+    medicalAidName: "",
+    medicalAidNumber: "",
+    mainMember: "",
+    mainMemberId: "",
+    workNumber: "",
+    homeNumber: "",
+    authorization: "",
+    dependCode: "",
+    hospitalName: "",
+    hospitalVisitNumber: "",
+    doctorName: "",
+    doctorPracticeNumber: "",
+  };
+};
+
 export const hasMeaningfulPatientInfoSyncData = (patientInfo?: any) => {
   const info = normalizePatientInfo(patientInfo);
   return PATIENT_STICKER_SHARED_SYNC_KEYS.some((key) => hasTextValue(info[key]));
@@ -540,7 +560,7 @@ export const getPatientInfoPdfSections = (
   fallbackName = "",
   fallbackPatientId = "",
 ) => {
-  const info = normalizePatientInfo(patientInfo);
+  const info = getPdfSafePatientInfo(patientInfo);
   const gender = formatPatientGender(info);
 
   if (hasPatientStickerMode(info)) {
@@ -558,41 +578,11 @@ export const getPatientInfoPdfSections = (
             `Date Of Birth: ${formatPatientStickerDate(info.dateOfBirth)}`,
             `Address: ${txt(info.address)}`,
           ],
-        ]),
-      },
-      {
-        title: "Medical Aid Details",
-        rows: filterPatientPdfRows([
-          [
-            `Medical Aid Name: ${txt(info.medicalAidName)}`,
-            `Medical Aid Number: ${txt(info.medicalAidNumber)}`,
-            `Main Member: ${txt(info.mainMember)}`,
-          ],
-          [
-            `Main Member ID: ${txt(info.mainMemberId)}`,
-            `Work Number: ${txt(info.workNumber)}`,
-            `Home Number: ${txt(info.homeNumber)}`,
-          ],
-          [
-            `Authorization: ${txt(info.authorization)}`,
-            `Depend Code: ${txt(info.dependCode)}`,
-            "",
-          ],
-        ]),
-      },
-      {
-        title: "Hospital Details",
-        rows: filterPatientPdfRows([
-          [`Hospital Name: ${txt(info.hospitalName)}`, "", ""],
-          [`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`, "", ""],
-          [`Doctor's Name: ${txt(info.doctorName)}`, "", ""],
-          [`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`, "", ""],
           [
             `ASA Physical Status Classification: ${info.asaScore ? getFullASAText(info.asaScore) : ""}`,
-            "",
+            `ASA Notes: ${txt(info.asaNotes)}`,
             "",
           ],
-          [`ASA Notes: ${txt(info.asaNotes)}`, "", ""],
           [
             `Weight: ${txt(info.weight)}`,
             `Height: ${txt(info.height)}`,

@@ -10,6 +10,7 @@ export interface ColonoscopyReportSectionEntry {
 export interface ColonoscopyReportSection {
   title: string;
   entries: ColonoscopyReportSectionEntry[];
+  layout?: "default" | "colonoscopy-preoperative";
 }
 
 interface BuildColonoscopyReportSectionsOptions {
@@ -70,7 +71,7 @@ export const buildColonoscopyReportSections = (
   const showCaecalLandmarks = reachedTerminalOrCaecum;
   const showCaecumNotReachedReasons =
     selectedCaecalLandmarks.includes("Not Reached") ||
-    !reachedTerminalOrCaecum;
+    (selectedDepth.length > 0 && !reachedTerminalOrCaecum);
 
   const medicationLines = [
     preoperative.medications?.midazolamDose
@@ -508,6 +509,7 @@ export const buildColonoscopyReportSections = (
     {
       title: "Preoperative Information",
       entries: preoperativeEntries,
+      layout: "colonoscopy-preoperative",
     },
     {
       title: "Bowel Preparation and Procedure Details",
@@ -607,16 +609,6 @@ export const buildColonoscopyReportSections = (
     {
       title: "Conclusion",
       entries: [{ label: "Conclusion", value: additionalInfo.conclusion, fullWidth: true }],
-    },
-    {
-      title: "Follow Up",
-      entries: [
-        {
-          label: "Follow-up",
-          value: joinSelections(additionalInfo.followUpOptions, additionalInfo.followUpOther),
-          fullWidth: true,
-        },
-      ],
     },
     {
       title: "Additional Notes",

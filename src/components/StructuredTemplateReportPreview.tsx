@@ -24,6 +24,7 @@ interface StructuredTemplateReportPreviewProps {
     title: string;
     imageData?: string;
     alt: string;
+    maxHeightPx?: number;
   };
   signature?: {
     label?: string;
@@ -160,6 +161,7 @@ export const StructuredTemplateReportPreview = ({
                 src={diagram?.imageData}
                 alt={diagram?.alt}
                 className="w-full h-auto object-contain"
+                style={{ maxHeight: diagram?.maxHeightPx ? `${diagram.maxHeightPx}px` : undefined }}
               />
             </div>
           </div>

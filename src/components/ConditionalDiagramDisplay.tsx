@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AnatomyDiagram } from "./AnatomyDiagram";
 import { Stethoscope, Save, Trash2 } from "lucide-react";
 import { SurgicalDiagram } from "./SurgicalDiagram";
+import { PeriAnalSurgicalDiagram } from "./PeriAnalSurgicalDiagram";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import {
   createInitialPeriAnalDiagramMarkings,
@@ -15,6 +16,7 @@ import {
 interface SurgicalDiagramState {
   activeVariant: string;
   markingsByVariant: Record<string, any[]>;
+  visibleVariants?: string[];
 }
 
 interface ConditionalDiagramDisplayProps {
@@ -104,23 +106,41 @@ export const ConditionalDiagramDisplay = ({
         : {};
 
     if (currentSurgicalDiagramState) {
+      const currentMarkingsByVariant = {
+        ...defaultMarkings,
+        ...(currentSurgicalDiagramState.markingsByVariant || {}),
+      };
+      const visibleVariants =
+        activeSurgicalProcedureName === "Peri-Anal"
+          ? Array.isArray(currentSurgicalDiagramState.visibleVariants)
+            ? currentSurgicalDiagramState.visibleVariants.filter((key) =>
+                variantKeys.includes(key),
+              )
+            : variantKeys.filter(
+                (variantKey) =>
+                  Array.isArray(currentMarkingsByVariant[variantKey]) &&
+                  currentMarkingsByVariant[variantKey].length > 0,
+              )
+          : undefined;
+
       return {
         activeVariant:
           currentSurgicalDiagramState.activeVariant || activeDiagramVariant || variantKeys[0] || "default",
-        markingsByVariant: {
-          ...defaultMarkings,
-          ...(currentSurgicalDiagramState.markingsByVariant || {}),
-        },
+        markingsByVariant: currentMarkingsByVariant,
+        visibleVariants,
       };
     }
 
     const defaultVariant = activeDiagramVariant || variantKeys[0] || "default";
+    const initialVisibleVariants =
+      activeSurgicalProcedureName === "Peri-Anal" ? [] : undefined;
     return {
       activeVariant: defaultVariant,
       markingsByVariant: {
         ...defaultMarkings,
         [defaultVariant]: readLegacyMarkings(),
       },
+      visibleVariants: initialVisibleVariants,
     };
   };
 
@@ -195,6 +215,15 @@ export const ConditionalDiagramDisplay = ({
     const currentDiagramImage =
       diagramVariants[currentVariant] || diagramVariants[variantKeys[0]] || surgicalProceduresMap[activeSurgicalProcedureName];
     const renderAllVariants = Boolean(showAllSurgicalDiagramVariants && variantKeys.length > 1);
+    const isPeriAnalMultiVariant =
+      activeSurgicalProcedureName === "Peri-Anal" && renderAllVariants;
+    const diagramDescription =
+      activeSurgicalProcedureName === "Peri-Anal"
+        ? "Select A Diagram Title To Open It, Then Use Draw, Textbox, Or Erase."
+        : `Mark Ports, Stomas, and Incisions on the diagram${renderAllVariants ? "s" : ""} below.`;
+    const visibleVariants = Array.isArray(diagramState.visibleVariants)
+      ? diagramState.visibleVariants.filter((variantKey) => variantKeys.includes(variantKey))
+      : [];
     const variantLabels =
       surgicalDiagramVariantLabels && Object.keys(surgicalDiagramVariantLabels).length > 0
         ? surgicalDiagramVariantLabels
@@ -208,11 +237,73 @@ export const ConditionalDiagramDisplay = ({
             {activeSurgicalProcedureName === "Appendectomy" ? "Appendicectomy" : activeSurgicalProcedureName} {renderAllVariants ? "Diagrams" : "Diagram"}
           </CardTitle>
           <CardDescription className="mx-auto max-w-md sm:mx-0">
-            Mark Ports, Stomas, and Incisions on the diagram{renderAllVariants ? "s" : ""} below.
+            {diagramDescription}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 pb-4 sm:px-6">
-          {renderAllVariants ? (
+          {isPeriAnalMultiVariant ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {variantKeys.map((variantKey) => {
+                  const isSelected = visibleVariants.includes(variantKey);
+                  return (
+                    <Button
+                      key={variantKey}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      className="w-full justify-start text-left"
+                      onClick={() => {
+                        const nextVisibleVariants = isSelected
+                          ? visibleVariants.filter((value) => value !== variantKey)
+                          : [...visibleVariants, variantKey];
+                        const nextState = {
+                          activeVariant: variantKey,
+                          markingsByVariant: diagramState.markingsByVariant,
+                          visibleVariants: nextVisibleVariants,
+                        };
+                        setActiveDiagramVariant(variantKey);
+                        emitSurgicalState(nextState);
+                      }}
+                    >
+                      {variantLabels[variantKey] || variantKey}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              {visibleVariants.length === 0 ? (
+                <p className="text-sm text-gray-600">
+                  Select one of the diagram titles above to open it.
+                </p>
+              ) : (
+                <div className="space-y-6">
+                  {visibleVariants.map((variantKey) => (
+                    <div key={variantKey} className="space-y-3">
+                      <p className="text-sm font-medium text-gray-700">
+                        {variantLabels[variantKey] || variantKey}
+                      </p>
+                      <PeriAnalSurgicalDiagram
+                        key={`${activeSurgicalProcedureName}-${variantKey}`}
+                        diagramImage={diagramVariants[variantKey]}
+                        initialMarkings={diagramState.markingsByVariant[variantKey] || []}
+                        markingScale={diagramMarkingScale}
+                        onUpdate={(markings) => {
+                          emitSurgicalState({
+                            activeVariant: variantKey,
+                            markingsByVariant: {
+                              ...diagramState.markingsByVariant,
+                              [variantKey]: markings,
+                            },
+                            visibleVariants,
+                          });
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : renderAllVariants ? (
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               {variantKeys.map((variantKey) => (
                 <div key={variantKey} className="space-y-3">

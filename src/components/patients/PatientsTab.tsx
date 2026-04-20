@@ -2,6 +2,12 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { generateSavedRecordPdfBlob } from "@/utils/exportSavedRecord";
 import {
@@ -134,6 +140,22 @@ const getRowTint = (index: number) => {
 
   return tints[index % tints.length];
 };
+
+const toSortableTimestamp = (value: string) => {
+  const parsed = dateFromIso(value);
+  return parsed ? parsed.getTime() : 0;
+};
+
+const getPatientRecencyTimestamp = (patient: PatientSummary) =>
+  Math.max(
+    toSortableTimestamp(patient.latestRecordDate),
+    toSortableTimestamp(patient.updatedAt),
+    toSortableTimestamp(patient.createdAt),
+  );
+
+const sortRecordsByRecency = (left: PatientRecord, right: PatientRecord) =>
+  (right.updatedAt || "").localeCompare(left.updatedAt || "") ||
+  (right.recordDate || "").localeCompare(left.recordDate || "");
 
 const SummaryValue = ({
   label,
@@ -321,61 +343,70 @@ export const PatientsTab = ({
 
   const visiblePatients = useMemo(
     () =>
-      patients.filter((patient) => {
-        if (showRecycleBin ? !patient.deletedAt : Boolean(patient.deletedAt)) {
-          return false;
-        }
+      patients
+        .filter((patient) => {
+          if (showRecycleBin ? !patient.deletedAt : Boolean(patient.deletedAt)) {
+            return false;
+          }
 
-        if (deferredSearchTerm && !patient.searchText.includes(deferredSearchTerm)) {
-          return false;
-        }
+          if (deferredSearchTerm && !patient.searchText.includes(deferredSearchTerm)) {
+            return false;
+          }
 
-        const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin);
+          const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin);
 
-        if (procedureFilter) {
-          const matchesProcedure = patientRecords.some((record) => {
-            const procedureNames = Array.isArray(record.procedureNames) ? record.procedureNames : [];
-            return (
-              record.templateType === procedureFilter ||
-              record.templateLabel === procedureFilter ||
-              procedureNames.includes(procedureFilter)
-            );
+          if (procedureFilter) {
+            const matchesProcedure = patientRecords.some((record) => {
+              const procedureNames = Array.isArray(record.procedureNames) ? record.procedureNames : [];
+              return (
+                record.templateType === procedureFilter ||
+                record.templateLabel === procedureFilter ||
+                procedureNames.includes(procedureFilter)
+              );
+            });
+
+            if (!matchesProcedure) {
+              return false;
+            }
+          }
+
+          if (dateFilter === "all") {
+            return true;
+          }
+
+          return patientRecords.some((record) => {
+            const recordDate = dateFromIso(record.recordDate || record.updatedAt);
+            if (!recordDate) {
+              return false;
+            }
+
+            if (dateFilter === "today") {
+              return sameDay(recordDate, today);
+            }
+
+            if (dateFilter === "week") {
+              return recordDate >= weekStart;
+            }
+
+            if (dateFilter === "month") {
+              return recordDate >= monthStart;
+            }
+
+            if (dateFilter === "date" && selectedDate) {
+              return (record.recordDate || "").slice(0, 10) === selectedDate;
+            }
+
+            return true;
           });
-
-          if (!matchesProcedure) {
-            return false;
-          }
-        }
-
-        if (dateFilter === "all") {
-          return true;
-        }
-
-        return patientRecords.some((record) => {
-          const recordDate = dateFromIso(record.recordDate || record.updatedAt);
-          if (!recordDate) {
-            return false;
+        })
+        .sort((left, right) => {
+          const recencyDiff = getPatientRecencyTimestamp(right) - getPatientRecencyTimestamp(left);
+          if (recencyDiff !== 0) {
+            return recencyDiff;
           }
 
-          if (dateFilter === "today") {
-            return sameDay(recordDate, today);
-          }
-
-          if (dateFilter === "week") {
-            return recordDate >= weekStart;
-          }
-
-          if (dateFilter === "month") {
-            return recordDate >= monthStart;
-          }
-
-          if (dateFilter === "date" && selectedDate) {
-            return (record.recordDate || "").slice(0, 10) === selectedDate;
-          }
-
-          return true;
-        });
-      }),
+          return detailText(left.name).localeCompare(detailText(right.name));
+        }),
     [
       dateFilter,
       deferredSearchTerm,
@@ -615,8 +646,8 @@ export const PatientsTab = ({
               onChange={(event) => setProcedureFilter(event.target.value)}
             >
               <option value="">All Operations / Procedures</option>
-              {procedureOptions.map((option) => (
-                <option key={option} value={option}>
+              {procedureOptions.map((option, optionIndex) => (
+                <option key={`${option}-${optionIndex}`} value={option}>
                   {getProcedureFilterLabel(option)}
                 </option>
               ))}
@@ -706,7 +737,9 @@ export const PatientsTab = ({
           ) : (
             <>
               {visiblePatients.map((patient, index) => {
-                const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin);
+                const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin).sort(
+                  sortRecordsByRecency,
+                );
                 const latestRecord =
                   patientRecords.find((record) => record.id === patient.latestRecordId) ||
                   patientRecords[0] ||
@@ -737,7 +770,7 @@ export const PatientsTab = ({
 
                 return (
                   <div
-                    key={patient.id}
+                    key={`${patient.id || "patient"}-${index}`}
                     className={`rounded-2xl border border-white/50 p-4 shadow-sm transition ${getRowTint(index)}`}
                   >
                     <div
@@ -791,48 +824,6 @@ export const PatientsTab = ({
                                   )}
                                 />
                               </div>
-
-                              <div className="grid gap-x-6 gap-y-2 md:grid-cols-[1.7fr,1fr,1.4fr]">
-                                <SummaryValue
-                                  label="ID:"
-                                  value={detailText(patient.patientId)}
-                                />
-                                <SummaryValue
-                                  label="DOB:"
-                                  value={detailText(formatDisplayDate(patient.dateOfBirth))}
-                                />
-                                <SummaryValue label="Hospital:" value={detailText(patient.hospitalName)} />
-                              </div>
-
-                              <div className="grid gap-x-6 gap-y-2 md:grid-cols-[1.7fr,1fr,1.4fr]">
-                                <SummaryValue
-                                  label="Medical Aid:"
-                                  value={detailText(patient.medicalAidName)}
-                                />
-                                <SummaryValue
-                                  label="Med. Aid No.:"
-                                  value={detailText(patient.medicalAidNumber)}
-                                />
-                                <SummaryValue
-                                  label="Main Member:"
-                                  value={detailText(patient.mainMember)}
-                                />
-                              </div>
-
-                              <div className="grid gap-x-6 gap-y-2 md:grid-cols-[1.7fr,1fr,1.4fr]">
-                                <SummaryValue
-                                  label="Work No.:"
-                                  value={detailText(patient.workNumber)}
-                                />
-                                <SummaryValue
-                                  label="Home No.:"
-                                  value={detailText(patient.homeNumber)}
-                                />
-                                <SummaryValue
-                                  label="Address:"
-                                  value={detailText(patient.address)}
-                                />
-                              </div>
                             </div>
 
                             {isExpanded ? (
@@ -869,16 +860,51 @@ export const PatientsTab = ({
                               >
                                 Saved Records
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onOpenRecord(latestRecord);
-                                }}
-                              >
-                                Open Template
-                              </Button>
+                              {patientRecords.length > 1 ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      Open Template
+                                      <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="start"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    {patientRecords.map((record, recordIndex) => (
+                                      <DropdownMenuItem
+                                        key={`${record.id || "record"}-${recordIndex}`}
+                                        onSelect={() => onOpenRecord(record)}
+                                        className="flex max-w-[24rem] flex-col items-start"
+                                      >
+                                        <span className="font-medium text-gray-900">
+                                          {detailText(record.primaryProcedureName, record.templateLabel)}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                          {record.templateLabel} |{" "}
+                                          {formatDisplayDate(record.recordDate || record.updatedAt)}
+                                        </span>
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onOpenRecord(latestRecord);
+                                  }}
+                                >
+                                  Open Template
+                                </Button>
+                              )}
                               <div onClick={(event) => event.stopPropagation()}>
                                 <input
                                   id={`patient-attachments-${patient.id}`}
@@ -1037,9 +1063,9 @@ export const PatientsTab = ({
                                 </p>
                               ) : (
                                 <div className="grid gap-4 lg:grid-cols-2">
-                                  {patientAttachments.map((attachment) => (
+                                  {patientAttachments.map((attachment, attachmentIndex) => (
                                     <div
-                                      key={attachment.id}
+                                      key={`${attachment.id || attachment.storagePath || "attachment"}-${attachmentIndex}`}
                                       className="space-y-3 rounded-xl border border-white/50 bg-white/70 p-4"
                                     >
                                       {renderAttachmentPreview(
@@ -1127,9 +1153,37 @@ export const PatientsTab = ({
                               Add New Entry From Latest
                             </Button>
                             {latestRecord ? (
-                              <Button size="sm" onClick={() => onOpenRecord(latestRecord)}>
-                                Open Latest Template
-                              </Button>
+                              patientRecords.length > 1 ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm">
+                                      Open Template
+                                      <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    {patientRecords.map((record, recordIndex) => (
+                                      <DropdownMenuItem
+                                        key={`${record.id || "record"}-${recordIndex}`}
+                                        onSelect={() => onOpenRecord(record)}
+                                        className="flex max-w-[24rem] flex-col items-start"
+                                      >
+                                        <span className="font-medium text-gray-900">
+                                          {detailText(record.primaryProcedureName, record.templateLabel)}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                          {record.templateLabel} |{" "}
+                                          {formatDisplayDate(record.recordDate || record.updatedAt)}
+                                        </span>
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : (
+                                <Button size="sm" onClick={() => onOpenRecord(latestRecord)}>
+                                  Open Template
+                                </Button>
+                              )
                             ) : null}
                           </div>
                         ) : null}
@@ -1140,9 +1194,9 @@ export const PatientsTab = ({
                             {patientRecords.length === 0 ? (
                               <p className="text-sm text-gray-600">No saved records for this patient.</p>
                             ) : (
-                              patientRecords.map((record) => (
+                              patientRecords.map((record, recordIndex) => (
                                 <div
-                                  key={record.id}
+                                  key={`${record.id || "record"}-${recordIndex}`}
                                   className="rounded-xl border border-white/50 bg-white/55 p-4"
                                 >
                                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

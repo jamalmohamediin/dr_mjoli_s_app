@@ -1,7 +1,7 @@
 import sagittalDiagram from "@/assets/peri-anal-sagittal-replacement.png";
-import externalDiagram from "@/assets/peri-anal-external-replacement.png";
-import lithotomyDiagram from "@/assets/peri-anal-lithotomy-replacement.png";
-import clockDiagram from "@/assets/peri-anal-clock-replacement.png";
+import externalDiagram from "@/assets/peri-anal-external-perianal-docx.png";
+import lithotomyDiagram from "@/assets/peri-anal-external-replacement.png";
+import clockDiagram from "@/assets/peri-anal-anal-clock-docx.png";
 
 export const PERI_ANAL_DIAGRAM_VARIANTS = [
   {
@@ -21,7 +21,7 @@ export const PERI_ANAL_DIAGRAM_VARIANTS = [
   },
   {
     key: "analClock",
-    label: "Anal Clock Diagram",
+    label: "Coronal View of the Anus",
     image: clockDiagram,
   },
 ] as const;

@@ -77,6 +77,7 @@ import {
   getTemplateLabel,
   getTemplatePatientInfo,
   getTemplateTypeFromTab,
+  normalizePatientDatabaseCache,
   PatientDatabaseCache,
   PatientAttachment,
   PatientRecord,
@@ -107,6 +108,7 @@ import {
 import {
   createInitialPatientInfoState,
   createPatientStickerSyncSnapshot,
+  getPdfSafePatientInfo,
   getPatientStickerSyncSignature,
   getPatientStickerSyncTimestamp,
   hasExtractedPatientStickerData,
@@ -1405,8 +1407,9 @@ const Index = () => {
   };
 
   const persistPatientCache = (nextCache: PatientDatabaseCache) => {
-    setPatientDatabaseCache(nextCache);
-    savePatientDatabaseCache(nextCache);
+    const normalizedCache = normalizePatientDatabaseCache(nextCache);
+    setPatientDatabaseCache(normalizedCache);
+    savePatientDatabaseCache(normalizedCache);
   };
 
   const syncPatientDatabase = async (showSuccessToast = false) => {
@@ -3821,7 +3824,230 @@ const Index = () => {
     const localEditAtIso = new Date().toISOString();
     const nextTab = getCurrentTabForTemplate(record.templateType) || record.currentTab || "gastroscopy";
 
-    setCurrentReport(restoredReport);
+    const cloneValue = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+    const applyPatientAndPreoperativeOnly = (previousReport: any) => {
+      const nextPatientInfo = createInitialPatientInfoState(
+        getTemplatePatientInfo(restoredReport, record.templateType) || record.patientInfo,
+      );
+
+      switch (record.templateType) {
+        case "procedure": {
+          const initialGastroscopy = createInitialGastroscopyState();
+          const initialColonoscopy = createInitialColonoscopyState();
+          return {
+            ...previousReport,
+            patientInfo: nextPatientInfo,
+            gastroscopy: {
+              ...initialGastroscopy,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.gastroscopy?.preoperative || initialGastroscopy.preoperative,
+              ),
+            },
+            colonoscopy: {
+              ...initialColonoscopy,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.colonoscopy?.preoperative || initialColonoscopy.preoperative,
+              ),
+            },
+          };
+        }
+        case "gastroscopy": {
+          const initial = createInitialGastroscopyState();
+          return {
+            ...previousReport,
+            gastroscopy: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.gastroscopy?.preoperative || initial.preoperative,
+              ),
+            },
+          };
+        }
+        case "colonoscopy": {
+          const initial = createInitialColonoscopyState();
+          return {
+            ...previousReport,
+            colonoscopy: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.colonoscopy?.preoperative || initial.preoperative,
+              ),
+            },
+          };
+        }
+        case "appendectomy":
+          return {
+            ...previousReport,
+            appendectomy: {
+              ...previousReport.appendectomy,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.appendectomy?.preoperative ||
+                  previousReport?.appendectomy?.preoperative,
+              ),
+            },
+          };
+        case "ventralHernia":
+          return {
+            ...previousReport,
+            ventralHernia: {
+              ...previousReport.ventralHernia,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.ventralHernia?.preoperative ||
+                  previousReport?.ventralHernia?.preoperative,
+              ),
+            },
+          };
+        case "rectalCancer":
+          return {
+            ...previousReport,
+            rectalCancer: {
+              ...previousReport.rectalCancer,
+              patientInfo: nextPatientInfo,
+              surgicalTeam: cloneValue(
+                restoredReport?.rectalCancer?.surgicalTeam ||
+                  previousReport?.rectalCancer?.surgicalTeam,
+              ),
+              procedureDetails: cloneValue(
+                restoredReport?.rectalCancer?.procedureDetails ||
+                  previousReport?.rectalCancer?.procedureDetails,
+              ),
+            },
+          };
+        case "smallBowel":
+          return {
+            ...previousReport,
+            smallBowel: {
+              ...previousReport.smallBowel,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.smallBowel?.preoperative ||
+                  previousReport?.smallBowel?.preoperative,
+              ),
+            },
+          };
+        case "cholecystectomy":
+          return {
+            ...previousReport,
+            cholecystectomy: {
+              ...previousReport.cholecystectomy,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.cholecystectomy?.preoperative ||
+                  previousReport?.cholecystectomy?.preoperative,
+              ),
+            },
+          };
+        case "periAnal":
+          return {
+            ...previousReport,
+            periAnal: {
+              ...previousReport.periAnal,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.periAnal?.preoperative || previousReport?.periAnal?.preoperative,
+              ),
+            },
+          };
+        case "inguinalHernia": {
+          const initial = createInitialInguinalHerniaState();
+          return {
+            ...previousReport,
+            inguinalHernia: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.inguinalHernia?.preoperative || initial.preoperative,
+              ),
+            },
+          };
+        }
+        case "transanalMinimallyInvasiveSurgery": {
+          const initial = createInitialTransanalMinimallyInvasiveSurgeryState();
+          return {
+            ...previousReport,
+            transanalMinimallyInvasiveSurgery: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.transanalMinimallyInvasiveSurgery?.preoperative ||
+                  initial.preoperative,
+              ),
+            },
+          };
+        }
+        case "openGeneralSurgery": {
+          const initial = createInitialNarrativeSurgeryState("general");
+          return {
+            ...previousReport,
+            openGeneralSurgery: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.openGeneralSurgery?.preoperative || initial.preoperative,
+              ),
+            },
+          };
+        }
+        case "openAbdominalSurgery": {
+          const initial = createInitialNarrativeSurgeryState("abdominal");
+          return {
+            ...previousReport,
+            openAbdominalSurgery: {
+              ...initial,
+              patientInfo: nextPatientInfo,
+              preoperative: cloneValue(
+                restoredReport?.openAbdominalSurgery?.preoperative || initial.preoperative,
+              ),
+            },
+          };
+        }
+        default:
+          return previousReport;
+      }
+    };
+
+    if (createNewEntry) {
+      switch (record.templateType) {
+        case "procedure":
+          clearAllEndoscopyData(false);
+          break;
+        case "appendectomy":
+          clearAllAppendectomyData(false);
+          break;
+        case "ventralHernia":
+          clearAllVentralHerniaData(false);
+          break;
+        case "rectalCancer":
+          clearAllRectalCancerData(false);
+          break;
+        case "smallBowel":
+          clearAllSmallBowelData(false);
+          break;
+        case "cholecystectomy":
+          clearAllCholecystectomyData(false);
+          break;
+        case "periAnal":
+          clearAllPeriAnalData(false);
+          break;
+        default:
+          clearAllNewTemplateData(false);
+          break;
+      }
+
+      setCurrentReport((previousReport) =>
+        normalizeReportPatientInfos(applyPatientAndPreoperativeOnly(previousReport)),
+      );
+    } else {
+      setCurrentReport(restoredReport);
+    }
+
     setCurrentTab(nextTab === "procedure" ? "gastroscopy" : nextTab);
     setCurrentExtractedPatientInfo(createInitialPatientInfoState(record.patientInfo));
     setEditingPatientContext(
@@ -4087,18 +4313,27 @@ const Index = () => {
   };
 
   const handlePermanentlyDeletePatients = async (patientIds: string[]) => {
-    if (patientIds.length === 0) {
+    const normalizedPatientIds = Array.from(
+      new Set(patientIds.map((patientId) => String(patientId ?? "").trim()).filter(Boolean)),
+    );
+
+    if (normalizedPatientIds.length === 0) {
       return;
     }
 
-    const nextCache = removePatientsFromCache(patientDatabaseCache, patientIds);
-    const patientIdSet = new Set(patientIds);
-    const recordIds = patientDatabaseCache.records
-      .filter((record) => patientIdSet.has(record.patientDocId))
-      .map((record) => record.id);
+    const nextCache = removePatientsFromCache(patientDatabaseCache, normalizedPatientIds);
+    const patientIdSet = new Set(normalizedPatientIds);
+    const recordIds = Array.from(
+      new Set(
+        patientDatabaseCache.records
+          .filter((record) => patientIdSet.has(record.patientDocId))
+          .map((record) => String(record.id ?? "").trim())
+          .filter(Boolean),
+      ),
+    );
 
     persistPatientCache(nextCache);
-    setPendingPatientSyncCount(queuePermanentPatientDeleteSync(patientIds, recordIds));
+    setPendingPatientSyncCount(queuePermanentPatientDeleteSync(normalizedPatientIds, recordIds));
 
     if (
       editingPatientContext &&
@@ -4112,7 +4347,7 @@ const Index = () => {
     }
 
     toast.success(
-      patientIds.length === 1
+      normalizedPatientIds.length === 1
         ? "Patient deleted permanently."
         : "Selected patients deleted permanently.",
     );
@@ -4923,6 +5158,8 @@ const Index = () => {
       const exportPatientInfo = createInitialPatientInfoState(
         getTemplatePatientInfo(currentReport, exportTemplateType),
       );
+      const toPdfSafePatientInfo = (source: any) =>
+        getPdfSafePatientInfo(createInitialPatientInfoState(source));
       if (
         String(exportPatientInfo.name || "").trim() &&
         String(exportPatientInfo.dateOfBirth || "").trim()
@@ -4954,9 +5191,25 @@ const Index = () => {
       toast.info("Starting PDF generation... Please allow downloads if prompted.");
 
       if (exportSection === "gastroscopy") {
+        const gastroscopyExportData = {
+          ...(currentReport.gastroscopy || {}),
+          diagram: {
+            ...(currentReport.gastroscopy?.diagram || {}),
+            canvasImageData:
+              currentReport.gastroscopy?.diagram?.canvasImageData ||
+              currentReport.gastroscopyCanvasData ||
+              currentReport.gastroscopyFindings?.canvasImageData ||
+              "",
+            findings:
+              currentReport.gastroscopy?.diagram?.findings ||
+              currentReport.gastroscopyFindings?.findings ||
+              [],
+          },
+        };
+
         const result = await generateGastroscopyPDF(
-          currentReport.gastroscopy,
-          currentReport.gastroscopy?.patientInfo,
+          gastroscopyExportData,
+          toPdfSafePatientInfo(currentReport.gastroscopy?.patientInfo),
         );
 
         if (result.success && result.blob) {
@@ -5008,7 +5261,7 @@ const Index = () => {
 
         const result = await generateColonoscopyPDF(
           colonoscopyExportData,
-          currentReport.colonoscopy?.patientInfo,
+          toPdfSafePatientInfo(currentReport.colonoscopy?.patientInfo),
         );
 
         if (result.success && result.blob) {
@@ -5066,7 +5319,10 @@ const Index = () => {
           currentReport.appendectomy?.patientInfo?.name || 'Unknown Patient',
           currentReport.appendectomy?.patientInfo?.patientId || 'N/A',
           surgicalMarkings, // Pass surgical markings
-          currentReport.appendectomy // Pass appendectomy data
+          {
+            ...(currentReport.appendectomy || {}),
+            patientInfo: toPdfSafePatientInfo(currentReport.appendectomy?.patientInfo),
+          } // Pass appendectomy data
         );
         
         if (result.success && result.blob) {
@@ -5121,7 +5377,7 @@ const Index = () => {
           currentReport.rectalCancer?.patientInfo?.patientId || currentReport.patientInfo?.patientId || 'N/A',
           surgicalMarkings, // Pass surgical markings
           currentReport.rectalCancer, // Pass rectal cancer data
-          currentReport.rectalCancer?.patientInfo || currentReport.patientInfo // Pass patient info
+          toPdfSafePatientInfo(currentReport.rectalCancer?.patientInfo || currentReport.patientInfo) // Pass patient info
         );
         
         if (result.success && result.blob) {
@@ -5165,7 +5421,7 @@ const Index = () => {
           currentReport.smallBowel?.patientInfo?.patientId || 'N/A',
           surgicalMarkings,
           currentReport.smallBowel,
-          currentReport.smallBowel?.patientInfo
+          toPdfSafePatientInfo(currentReport.smallBowel?.patientInfo)
         );
 
         if (result.success && result.blob) {
@@ -5216,7 +5472,7 @@ const Index = () => {
           currentReport.cholecystectomy?.patientInfo?.patientId || 'N/A',
           surgicalMarkings,
           currentReport.cholecystectomy,
-          currentReport.cholecystectomy?.patientInfo
+          toPdfSafePatientInfo(currentReport.cholecystectomy?.patientInfo)
         );
 
         if (result.success && result.blob) {
@@ -5254,7 +5510,7 @@ const Index = () => {
           currentReport.periAnal?.patientInfo?.name || 'Unknown Patient',
           currentReport.periAnal?.patientInfo?.patientId || 'N/A',
           currentReport.periAnal,
-          currentReport.periAnal?.patientInfo
+          toPdfSafePatientInfo(currentReport.periAnal?.patientInfo)
         );
 
         if (result.success && result.blob) {
@@ -5290,7 +5546,7 @@ const Index = () => {
 
         const result = await generateInguinalHerniaPDF(
           currentReport.inguinalHernia,
-          currentReport.inguinalHernia?.patientInfo,
+          toPdfSafePatientInfo(currentReport.inguinalHernia?.patientInfo),
         );
 
         if (result.success && result.blob) {
@@ -5333,7 +5589,7 @@ const Index = () => {
 
         const result = await generateTransanalMinimallyInvasiveSurgeryPDF(
           currentReport.transanalMinimallyInvasiveSurgery,
-          currentReport.transanalMinimallyInvasiveSurgery?.patientInfo,
+          toPdfSafePatientInfo(currentReport.transanalMinimallyInvasiveSurgery?.patientInfo),
         );
 
         if (result.success && result.blob) {
@@ -5373,10 +5629,23 @@ const Index = () => {
         console.log("📋 Exporting open general surgery narrative live report");
         console.log("Open general surgery data:", currentReport.openGeneralSurgery);
 
+        const openGeneralSurgeryData = {
+          ...(currentReport.openGeneralSurgery || createInitialNarrativeSurgeryState("general")),
+          additionalInfo: {
+            ...(
+              currentReport.openGeneralSurgery?.additionalInfo ||
+              createInitialNarrativeSurgeryState("general").additionalInfo
+            ),
+            dateTime:
+              String(currentReport.openGeneralSurgery?.additionalInfo?.dateTime || "").trim() ||
+              getLocalDateTimeValue(),
+          },
+        };
+
         const result = await generateNarrativeSurgeryPDF(
-          "OPEN GENERAL SURGERY NARRATIVE REPORT",
-          currentReport.openGeneralSurgery,
-          currentReport.openGeneralSurgery?.patientInfo,
+          "NARRATIVE GENERAL SURGERY REPORT",
+          openGeneralSurgeryData,
+          toPdfSafePatientInfo(currentReport.openGeneralSurgery?.patientInfo),
           "general",
         );
 
@@ -5415,10 +5684,24 @@ const Index = () => {
         console.log("📋 Exporting open abdominal surgery narrative live report");
         console.log("Open abdominal surgery data:", currentReport.openAbdominalSurgery);
 
+        const openAbdominalSurgeryData = {
+          ...(currentReport.openAbdominalSurgery || createInitialNarrativeSurgeryState("abdominal")),
+          additionalInfo: {
+            ...(
+              currentReport.openAbdominalSurgery?.additionalInfo ||
+              createInitialNarrativeSurgeryState("abdominal").additionalInfo
+            ),
+            dateTime:
+              String(currentReport.openAbdominalSurgery?.additionalInfo?.dateTime || "").trim() ||
+              String((currentReport.openAbdominalSurgery as any)?.signature?.dateTime || "").trim() ||
+              getLocalDateTimeValue(),
+          },
+        };
+
         const result = await generateNarrativeSurgeryPDF(
           "OPEN ABDOMINAL SURGERY NARRATIVE REPORT",
-          currentReport.openAbdominalSurgery,
-          currentReport.openAbdominalSurgery?.patientInfo,
+          openAbdominalSurgeryData,
+          toPdfSafePatientInfo(currentReport.openAbdominalSurgery?.patientInfo),
           "abdominal",
         );
 
@@ -5476,7 +5759,10 @@ const Index = () => {
           currentReport.ventralHernia?.patientInfo?.name || 'Unknown Patient',
           currentReport.ventralHernia?.patientInfo?.patientId || 'N/A',
           surgicalMarkings, // Pass surgical markings
-          currentReport.ventralHernia // Pass ventral hernia data
+          {
+            ...(currentReport.ventralHernia || {}),
+            patientInfo: toPdfSafePatientInfo(currentReport.ventralHernia?.patientInfo),
+          } // Pass ventral hernia data
         );
         
         if (result.success && result.blob) {
@@ -5542,7 +5828,10 @@ const Index = () => {
         currentReport.patientInfo?.name || '',
         currentReport.patientInfo?.patientId || '',
         finalDiagrams.length > 0 ? finalDiagrams : undefined,
-        currentReport
+        {
+          ...currentReport,
+          patientInfo: toPdfSafePatientInfo(currentReport.patientInfo),
+        }
       );
       
       console.log("🎉 PDF Generation Result:", result);
@@ -11142,10 +11431,13 @@ const Index = () => {
                                 markingsByVariant:
                                   currentReport.periAnal?.procedureFindings?.diagramMarkingsByVariant ||
                                   createInitialPeriAnalDiagramMarkings(),
+                                visibleVariants:
+                                  currentReport.periAnal?.procedureFindings?.visibleDiagramVariants || [],
                               }}
                               onSurgicalDiagramStateChange={(state) => {
                                 updatePeriAnal('procedureFindings', 'activeDiagramVariant', state.activeVariant);
                                 updatePeriAnal('procedureFindings', 'diagramMarkingsByVariant', state.markingsByVariant);
+                                updatePeriAnal('procedureFindings', 'visibleDiagramVariants', state.visibleVariants || []);
                                 updatePeriAnal('procedureFindings', 'findings', JSON.stringify(state.markingsByVariant || {}));
                               }}
                               surgicalDiagramVariants={periAnalDiagramImages}
@@ -11382,20 +11674,6 @@ const Index = () => {
                           }
                           onClearPatientData={() => clearSimpleTemplateData("openGeneralSurgery")}
                           isGeneratingPDF={isGeneratingPDF}
-                          diagramElement={
-                            <ConditionalDiagramDisplay
-                              selectedProcedures={["Open General Surgery"]}
-                              onGastroscopyUpdate={() => {}}
-                              onColonoscopyUpdate={() => {}}
-                              onProcedureFindingsUpdate={(data) => {
-                                updateSimpleTemplateSection("openGeneralSurgery", "procedureFindings", "findings", data.findings);
-                                updateSimpleTemplateSection("openGeneralSurgery", "procedureFindings", "additionalNotes", data.additionalNotes || "");
-                              }}
-                              currentProcedureFindings={currentReport.openGeneralSurgery?.procedureFindings || { findings: "", additionalNotes: "" }}
-                              diagramMarkingScale={1.5}
-                              customImage={appendectomyImage}
-                            />
-                          }
                         />
                       </div>
                       <div className="2xl:col-span-1">

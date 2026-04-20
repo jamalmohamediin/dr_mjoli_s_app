@@ -182,7 +182,7 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
       ],
     },
     {
-      title: "Specimen, Conclusion and Follow-up",
+      title: "Specimen, Conclusion and Notes",
       entries: [
         { label: "Specimen Sent for Pathology", value: additionalInfo.specimenSentForPathology },
         {
@@ -194,7 +194,6 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
         },
         { label: "Other Specimens Taken", value: additionalInfo.otherSpecimensTaken === "Yes" ? `Yes - ${additionalInfo.otherSpecimensDetails || ""}` : additionalInfo.otherSpecimensTaken },
         { label: "Conclusion", value: additionalInfo.conclusion, fullWidth: true },
-        { label: "Follow-up", value: joinSelections(additionalInfo.followUp, additionalInfo.followUpOther), fullWidth: true },
         { label: "Additional Notes", value: additionalInfo.additionalNotes, fullWidth: true },
         { label: "Post Operative Management", value: additionalInfo.postOperativeManagement, fullWidth: true },
       ],
@@ -210,6 +209,7 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
         title: "Gastroscopy Diagram",
         imageData: diagram.canvasImageData,
         alt: "Gastroscopy anatomy diagram",
+        maxHeightPx: 240,
       }}
       signature={{
         label: "Surgeon's Signature",

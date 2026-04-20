@@ -2,6 +2,10 @@ import {
   StructuredTemplatePdfSection,
   generateStructuredTemplatePdf,
 } from "@/utils/structuredTemplatePdf";
+import {
+  formatDateTimeDDMMYYYYWithDashes,
+  getLocalDateTimeValue,
+} from "@/utils/dateFormatter";
 import { joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
 
 const titleCase = (value: unknown) =>
@@ -41,9 +45,13 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
       additionalInfo.surgeonSignature ||
       additionalInfo.surgeonSignatureText,
   );
-  const signatureDateTimeValue = String(
+  const signatureDateTimeRaw = String(
     additionalInfo.dateTime || additionalInfo.date || "",
   ).trim();
+  const signatureDateTimeValue =
+    formatDateTimeDDMMYYYYWithDashes(signatureDateTimeRaw || getLocalDateTimeValue()) ||
+    signatureDateTimeRaw ||
+    getLocalDateTimeValue();
   const lesionSize =
     operativeFindings.lesionSizeLength || operativeFindings.lesionSizeWidth
       ? `${operativeFindings.lesionSizeLength || ""} x ${operativeFindings.lesionSizeWidth || ""} Cm`
@@ -58,6 +66,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   const sections: StructuredTemplatePdfSection[] = [
     {
       title: "Preoperative Information",
+      layout: "label-value-table",
       entries: [
         { label: "Surgeon", value: formatSelectionList(preoperative.surgeons) },
         { label: "Assistant", value: formatSelectionList(preoperative.assistants) },
@@ -77,6 +86,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "Operative Findings",
+      layout: "label-value-table",
       entries: [
         { label: "Operative Findings", value: titleCase(operativeFindings.findings) },
         {
@@ -100,6 +110,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "Procedure Details",
+      layout: "label-value-table",
       entries: [
         {
           label: "Equipment Used",
@@ -131,11 +142,6 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
           label: "Suture Material",
           value: formatSelectionListWithOther(procedure.sutureMaterial, procedure.sutureMaterialOther),
         },
-      ],
-    },
-    {
-      title: "Operative Events",
-      entries: [
         {
           label: "Intra-Operative Difficulties",
           value: formatSelectionListWithOther(
@@ -154,6 +160,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "SPECIMEN",
+      layout: "label-value-table",
       entries: [
         {
           label: "Specimen Retrieved",
@@ -167,7 +174,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
           label: "Specify Laboratory Sent To",
           value: asSingleLineEntry(
             specimen.specimenRetrieved === "Yes"
-              ? titleCase(specimen.laboratorySentTo)
+              ? titleCase(specimen.laboratorySentTo) || "________________"
               : "",
           ),
         },
@@ -175,6 +182,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "ADDITIONAL NOTES",
+      layout: "label-value-table",
       entries: [
         {
           label: "Additional Notes",
@@ -184,6 +192,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "POST OPERATIVE MANAGEMENT",
+      layout: "label-value-table",
       entries: [
         {
           label: "Post Operative Management",
@@ -193,6 +202,8 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
     },
     {
       title: "SURGEON'S SIGNATURE",
+      layout: "label-value-table",
+      columns: 2,
       entries: [
         {
           label: "Surgeon's Signature",

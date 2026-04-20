@@ -10,7 +10,7 @@ import {
   OptionalOtherInput,
   RadioGrid,
 } from "@/components/TemplateFormHelpers";
-import { DateTimeDDMMYYYY24HourInput } from "@/components/Time24HourInput";
+import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
 import { createInitialInguinalHerniaState } from "@/utils/inguinalHernia";
 import { toArray } from "@/utils/templateDataHelpers";
@@ -37,6 +37,7 @@ const indicationOptions = [
   "Irreducible hernia",
   "Other",
 ];
+const preoperativeImagingOptions = ["None", "Ultrasound", "CT Scan", "MRI", "Other"];
 const urgencyOptions = ["Elective", "Semi-elective", "Semi-urgent", "Emergency"];
 const typeOptions = ["Indirect", "Direct", "Pantaloon", "Femoral", "Sliding", "Obturator", "Other"];
 const sideOptions = ["Right", "Left", "Bilateral"];
@@ -207,6 +208,70 @@ export const InguinalHerniaRepairForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Preoperative Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <LabeledInput
+              label="Surgeon"
+              value={preoperative.surgeon || ""}
+              onChange={(value) => updateTemplate("preoperative", "surgeon", value)}
+              placeholder="Enter surgeon name"
+            />
+            <LabeledInput
+              label="Assistant"
+              value={preoperative.assistant || ""}
+              onChange={(value) => updateTemplate("preoperative", "assistant", value)}
+              placeholder="Enter assistant name"
+            />
+            <LabeledInput
+              label="Anaesthetist"
+              value={preoperative.anaesthetist || ""}
+              onChange={(value) => updateTemplate("preoperative", "anaesthetist", value)}
+              placeholder="Enter anaesthetist name"
+            />
+          </div>
+          <CheckboxGrid
+            label="Preoperative Imaging"
+            options={preoperativeImagingOptions}
+            values={preoperative.preoperativeImaging}
+            onChange={(value) => updateTemplate("preoperative", "preoperativeImaging", value)}
+          />
+          <OptionalOtherInput
+            enabled={toArray(preoperative.preoperativeImaging).includes("Other")}
+            value={preoperative.preoperativeImagingOther || ""}
+            placeholder="Specify other preoperative imaging"
+            onChange={(value) => updateTemplate("preoperative", "preoperativeImagingOther", value)}
+          />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Start Time (24-hour)</label>
+              <Time24HourInput
+                value={preoperative.startTime || ""}
+                onChange={(value) => updateTemplate("preoperative", "startTime", value)}
+                hourAriaLabel="Start hour"
+                minuteAriaLabel="Start minute"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">End Time (24-hour)</label>
+              <Time24HourInput
+                value={preoperative.endTime || ""}
+                onChange={(value) => updateTemplate("preoperative", "endTime", value)}
+                hourAriaLabel="End hour"
+                minuteAriaLabel="End minute"
+              />
+            </div>
+            <LabeledInput
+              label="Duration Of Operation (In Minutes)"
+              value={preoperative.duration || ""}
+              onChange={(value) => updateTemplate("preoperative", "duration", value)}
+              placeholder="Enter duration in minutes"
+            />
+          </div>
+          <LabeledTextarea
+            label="Operation Description"
+            value={preoperative.operationDescription || ""}
+            onChange={(value) => updateTemplate("preoperative", "operationDescription", value)}
+            rows={3}
+          />
           <CheckboxGrid
             label="Indication for Surgery"
             options={indicationOptions}

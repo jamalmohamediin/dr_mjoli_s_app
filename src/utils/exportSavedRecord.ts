@@ -11,6 +11,7 @@ import { generateRectalCancerPDF } from "@/utils/rectalCancerPdfGenerator";
 import { generateSmallBowelSurgeryPDF } from "@/utils/smallBowelSurgeryPdfGenerator";
 import { generateTransanalMinimallyInvasiveSurgeryPDF } from "@/utils/transanalMinimallyInvasiveSurgeryPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
+import { getPdfSafePatientInfo } from "@/utils/patientSticker";
 import { PatientRecord, TemplateType } from "@/utils/patientRecords";
 
 const sanitizeFilenamePart = (value: string, fallback: string) =>
@@ -72,6 +73,9 @@ const buildFinalDiagrams = (reportSnapshot: any): FinalDiagramCapture[] => {
 export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   const reportSnapshot = record.reportSnapshot || {};
   const patientInfo = record.patientInfo || {};
+  const safePatientInfo = getPdfSafePatientInfo(patientInfo);
+  const safeTemplatePatientInfo = (templateInfo: any) =>
+    getPdfSafePatientInfo(templateInfo || patientInfo);
   const patientName = patientInfo.name || "patient";
   const patientId = patientInfo.patientId || "unknown";
   const cleanPatientName = sanitizeFilenamePart(patientName, "patient");
@@ -83,7 +87,10 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientName,
       patientId,
       buildFinalDiagrams(reportSnapshot),
-      reportSnapshot,
+      {
+        ...reportSnapshot,
+        patientInfo: safePatientInfo,
+      },
       undefined,
       { returnBlob: true },
     );
@@ -103,7 +110,10 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientName,
       patientId,
       parseSurgicalMarkings(reportSnapshot?.appendectomy?.procedureFindings?.findings || ""),
-      reportSnapshot?.appendectomy,
+      {
+        ...(reportSnapshot?.appendectomy || {}),
+        patientInfo: safeTemplatePatientInfo(reportSnapshot?.appendectomy?.patientInfo),
+      },
     );
 
     if (result.success && result.blob) {
@@ -117,9 +127,25 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   }
 
   if (record.templateType === "gastroscopy") {
+    const gastroscopyTemplateData = {
+      ...(reportSnapshot?.gastroscopy || {}),
+      diagram: {
+        ...(reportSnapshot?.gastroscopy?.diagram || {}),
+        canvasImageData:
+          reportSnapshot?.gastroscopy?.diagram?.canvasImageData ||
+          reportSnapshot?.gastroscopyCanvasData ||
+          reportSnapshot?.gastroscopyFindings?.canvasImageData ||
+          "",
+        findings:
+          reportSnapshot?.gastroscopy?.diagram?.findings ||
+          reportSnapshot?.gastroscopyFindings?.findings ||
+          [],
+      },
+    };
+
     const result = await generateGastroscopyPDF(
-      reportSnapshot?.gastroscopy,
-      reportSnapshot?.gastroscopy?.patientInfo || patientInfo,
+      gastroscopyTemplateData,
+      safeTemplatePatientInfo(reportSnapshot?.gastroscopy?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -156,7 +182,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
 
     const result = await generateColonoscopyPDF(
       colonoscopyTemplateData,
-      reportSnapshot?.colonoscopy?.patientInfo || patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.colonoscopy?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -174,7 +200,10 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientName,
       patientId,
       parseSurgicalMarkings(reportSnapshot?.ventralHernia?.procedureFindings?.findings || ""),
-      reportSnapshot?.ventralHernia,
+      {
+        ...(reportSnapshot?.ventralHernia || {}),
+        patientInfo: safeTemplatePatientInfo(reportSnapshot?.ventralHernia?.patientInfo),
+      },
     );
 
     if (result.success && result.blob) {
@@ -193,7 +222,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientId,
       parseSurgicalMarkings(reportSnapshot?.rectalCancer?.procedureFindings?.findings || ""),
       reportSnapshot?.rectalCancer,
-      patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.rectalCancer?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -212,7 +241,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientId,
       parseSurgicalMarkings(reportSnapshot?.smallBowel?.procedureFindings?.findings || ""),
       reportSnapshot?.smallBowel,
-      patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.smallBowel?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -231,7 +260,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
       patientId,
       parseSurgicalMarkings(reportSnapshot?.cholecystectomy?.procedureFindings?.findings || ""),
       reportSnapshot?.cholecystectomy,
-      patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.cholecystectomy?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -245,7 +274,12 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   }
 
   if (record.templateType === "periAnal") {
-    const result = await generatePeriAnalPDF(patientName, patientId, reportSnapshot?.periAnal, patientInfo);
+    const result = await generatePeriAnalPDF(
+      patientName,
+      patientId,
+      reportSnapshot?.periAnal,
+      safeTemplatePatientInfo(reportSnapshot?.periAnal?.patientInfo),
+    );
 
     if (result.success && result.blob) {
       return {
@@ -260,7 +294,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   if (record.templateType === "inguinalHernia") {
     const result = await generateInguinalHerniaPDF(
       reportSnapshot?.inguinalHernia,
-      reportSnapshot?.inguinalHernia?.patientInfo || patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.inguinalHernia?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -276,7 +310,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
   if (record.templateType === "transanalMinimallyInvasiveSurgery") {
     const result = await generateTransanalMinimallyInvasiveSurgeryPDF(
       reportSnapshot?.transanalMinimallyInvasiveSurgery,
-      reportSnapshot?.transanalMinimallyInvasiveSurgery?.patientInfo || patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.transanalMinimallyInvasiveSurgery?.patientInfo),
     );
 
     if (result.success && result.blob) {
@@ -291,9 +325,9 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
 
   if (record.templateType === "openGeneralSurgery") {
     const result = await generateNarrativeSurgeryPDF(
-      "OPEN GENERAL SURGERY NARRATIVE REPORT",
+      "NARRATIVE GENERAL SURGERY REPORT",
       reportSnapshot?.openGeneralSurgery,
-      reportSnapshot?.openGeneralSurgery?.patientInfo || patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.openGeneralSurgery?.patientInfo),
       "general",
     );
 
@@ -311,7 +345,7 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
     const result = await generateNarrativeSurgeryPDF(
       "OPEN ABDOMINAL SURGERY NARRATIVE REPORT",
       reportSnapshot?.openAbdominalSurgery,
-      reportSnapshot?.openAbdominalSurgery?.patientInfo || patientInfo,
+      safeTemplatePatientInfo(reportSnapshot?.openAbdominalSurgery?.patientInfo),
       "abdominal",
     );
 

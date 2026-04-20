@@ -82,6 +82,33 @@ const SurgicalDiagramDisplay = ({
           ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
+        } else if (marking.type === "drawStroke") {
+          const points = Array.isArray(marking.points) ? marking.points : [];
+          if (points.length === 0) return;
+          ctx.save();
+          ctx.strokeStyle = marking.color || "#111111";
+          ctx.lineWidth = Number(marking.width) > 0 ? Number(marking.width) : 3;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let index = 1; index < points.length; index += 1) {
+            ctx.lineTo(points[index].x, points[index].y);
+          }
+          if (points.length === 1) {
+            ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+          }
+          ctx.stroke();
+          ctx.restore();
+        } else if (marking.type === "textBox") {
+          if (!marking?.text?.trim()) return;
+          const textSize = Number(marking.size) > 0 ? Number(marking.size) : 20;
+          ctx.save();
+          ctx.fillStyle = marking.color || "#111111";
+          ctx.font = `${textSize}px Arial`;
+          ctx.textBaseline = "top";
+          ctx.fillText(marking.text, marking.x, marking.y);
+          ctx.restore();
         }
       });
     };
@@ -127,9 +154,11 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
   const periAnal = report.periAnal;
   const patientEntries = getPatientInfoDisplayEntries(periAnal?.patientInfo);
   const diagramState = parsePeriAnalDiagramState(periAnal?.procedureFindings);
-  const hasDiagramMarkings = PERI_ANAL_DIAGRAM_VARIANTS.some(
-    (variant) => (diagramState.markingsByVariant?.[variant.key] || []).length > 0,
-  );
+  const visibleDiagramVariants = PERI_ANAL_DIAGRAM_VARIANTS.filter((variant) => {
+    const markings = diagramState.markingsByVariant?.[variant.key] || [];
+    return markings.length > 0;
+  });
+  const hasDiagramMarkings = visibleDiagramVariants.length > 0;
 
   const hasData =
     patientEntries.length > 0 ||
@@ -228,7 +257,8 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
         </div>
       )}
 
-      <>
+      {hasDiagramMarkings && (
+        <>
         <Separator />
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-gray-600">Peri-Anal Diagrams</h5>
@@ -237,24 +267,21 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
             <div className="grid grid-cols-1 gap-1 text-gray-600">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-black"></div>
-                <span>Ports (With Size Label)</span>
+                <span>Draw: Freehand Markings</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 border-2 border-amber-500 rounded-full" style={{ borderStyle: "dashed" }}></div>
-                <span>Ileostomy (Dashed Yellow Circle)</span>
+                <div className="w-4 h-4 border border-gray-500 rounded-sm flex items-center justify-center text-[8px] font-semibold text-gray-700 bg-white">
+                  T
+                </div>
+                <span>Textbox: Placed Text Notes</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-green-600 rounded-full"></div>
-                <span>Colostomy (Solid Green Circle)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-red-900" style={{ backgroundImage: "repeating-linear-gradient(90deg, #7f1d1d 0, #7f1d1d 4px, transparent 4px, transparent 8px)" }}></div>
-                <span>Incisions (Dashed Dark Red Line)</span>
+                <span>Any Color/Thickness Selected In Draw Tool Is Preserved</span>
               </div>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {PERI_ANAL_DIAGRAM_VARIANTS.map((variant) => (
+            {visibleDiagramVariants.map((variant) => (
               <div key={variant.key} className="space-y-2 rounded-lg border bg-white p-3">
                 <h6 className="text-xs font-medium text-gray-700">{variant.label}</h6>
                 <SurgicalDiagramDisplay
@@ -266,6 +293,7 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
           </div>
         </div>
       </>
+      )}
 
       {findingSections.map((section) => (
         <React.Fragment key={section.title}>

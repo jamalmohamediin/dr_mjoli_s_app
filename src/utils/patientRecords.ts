@@ -163,6 +163,29 @@ const PATIENT_IDENTITY_FIELDS = [
 
 const text = (value: any) => String(value || "").trim();
 
+const normalizeIdentityDate = (value: string) => {
+  const raw = text(value);
+  if (!raw) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const ddmmyyyy = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    return `${ddmmyyyy[3]}-${ddmmyyyy[2]}-${ddmmyyyy[1]}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 const buildSearchText = (values: any[]) =>
   values
     .flatMap((value) =>
@@ -311,10 +334,163 @@ export const getTemplateRecordDate = (
 };
 
 const sortRecords = (records: PatientRecord[]) =>
-  [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  [...records].sort((left, right) =>
+    (right.updatedAt || "").localeCompare(left.updatedAt || ""),
+  );
 
 const sortPatients = (patients: PatientSummary[]) =>
-  [...patients].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  [...patients].sort((left, right) =>
+    (right.updatedAt || "").localeCompare(left.updatedAt || ""),
+  );
+
+const parseIsoTimestamp = (value: string) => {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sortPatientsForMerge = (patients: PatientSummary[]) =>
+  [...patients].sort((left, right) => {
+    const deletedStateDiff = Number(Boolean(left.deletedAt)) - Number(Boolean(right.deletedAt));
+    if (deletedStateDiff !== 0) {
+      return deletedStateDiff;
+    }
+
+    const updatedAtDiff = parseIsoTimestamp(right.updatedAt) - parseIsoTimestamp(left.updatedAt);
+    if (updatedAtDiff !== 0) {
+      return updatedAtDiff;
+    }
+
+    return text(left.id).localeCompare(text(right.id));
+  });
+
+const isSamePatientIdentity = (left: PatientSummary, right: PatientSummary) => {
+  const leftName = text(left.name).toLowerCase();
+  const rightName = text(right.name).toLowerCase();
+  const leftPatientId = text(left.patientId).toLowerCase();
+  const rightPatientId = text(right.patientId).toLowerCase();
+  const leftDob = normalizeIdentityDate(left.dateOfBirth);
+  const rightDob = normalizeIdentityDate(right.dateOfBirth);
+
+  if (leftPatientId && rightPatientId && leftPatientId === rightPatientId) {
+    if (!leftDob || !rightDob || leftDob === rightDob) {
+      return true;
+    }
+  }
+
+  if (leftName && rightName && leftName === rightName) {
+    if (leftDob && rightDob && leftDob === rightDob) {
+      return true;
+    }
+
+    if (leftPatientId && rightPatientId && leftPatientId === rightPatientId) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const mergePatientSummaries = (
+  candidates: PatientSummary[],
+  canonicalPatientId: string,
+): PatientSummary | null => {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const sortedCandidates = sortPatientsForMerge(candidates);
+  const primary = sortedCandidates[0];
+  const attachmentMap = new Map<string, PatientAttachment>();
+
+  sortedCandidates.forEach((candidate) => {
+    (Array.isArray(candidate.attachments) ? candidate.attachments : []).forEach((attachment) => {
+      attachmentMap.set(attachment.id, attachment);
+    });
+  });
+
+  const hasActiveCandidate = sortedCandidates.some((candidate) => !candidate.deletedAt);
+  const earliestCreatedAt = sortedCandidates.reduce((earliest, candidate) => {
+    const candidateTimestamp = parseIsoTimestamp(candidate.createdAt);
+    if (!candidateTimestamp) {
+      return earliest;
+    }
+    if (!earliest) {
+      return candidate.createdAt;
+    }
+    return candidateTimestamp < parseIsoTimestamp(earliest) ? candidate.createdAt : earliest;
+  }, "");
+
+  const latestUpdatedAt = sortedCandidates.reduce((latest, candidate) => {
+    const candidateTimestamp = parseIsoTimestamp(candidate.updatedAt);
+    if (!candidateTimestamp) {
+      return latest;
+    }
+    if (!latest) {
+      return candidate.updatedAt;
+    }
+    return candidateTimestamp > parseIsoTimestamp(latest) ? candidate.updatedAt : latest;
+  }, "");
+
+  return {
+    ...primary,
+    id: canonicalPatientId,
+    attachments: Array.from(attachmentMap.values()).sort((left, right) =>
+      (right.uploadedAt || "").localeCompare(left.uploadedAt || ""),
+    ),
+    createdAt: earliestCreatedAt || primary.createdAt || new Date().toISOString(),
+    updatedAt: latestUpdatedAt || primary.updatedAt || new Date().toISOString(),
+    deletedAt: hasActiveCandidate ? null : primary.deletedAt || null,
+  };
+};
+
+const dedupeRecordsById = (records: PatientRecord[]) => {
+  const latestRecordsById = new Map<string, PatientRecord>();
+
+  records.forEach((record) => {
+    const existingRecord = latestRecordsById.get(record.id);
+    if (!existingRecord) {
+      latestRecordsById.set(record.id, record);
+      return;
+    }
+
+    if ((record.updatedAt || "").localeCompare(existingRecord.updatedAt || "") > 0) {
+      latestRecordsById.set(record.id, record);
+    }
+  });
+
+  return sortRecords(Array.from(latestRecordsById.values()));
+};
+
+const sanitizeId = (value: unknown) => text(value);
+
+const getPatientIdentityKeyFromInfo = (patientInfo: any) => {
+  const info = createPatientStickerSyncSnapshot(patientInfo);
+  const normalizedName = text(info.name).toLowerCase();
+  const normalizedPatientId = text(info.patientId).toLowerCase();
+  const normalizedDob = normalizeIdentityDate(info.dateOfBirth);
+
+  if (normalizedPatientId && normalizedDob) {
+    return `patientId+dob:${normalizedPatientId}|${normalizedDob}`;
+  }
+
+  if (normalizedName && normalizedDob) {
+    return `name+dob:${normalizedName}|${normalizedDob}`;
+  }
+
+  if (normalizedPatientId && normalizedName) {
+    return `patientId+name:${normalizedPatientId}|${normalizedName}`;
+  }
+
+  if (normalizedPatientId) {
+    return `patientId:${normalizedPatientId}`;
+  }
+
+  if (normalizedName) {
+    return `name:${normalizedName}`;
+  }
+
+  return "";
+};
 
 const getPatientSummarySearchText = (summary: PatientSummary, records: PatientRecord[]) =>
   buildSearchText([
@@ -331,22 +507,8 @@ const getPatientSummarySearchText = (summary: PatientSummary, records: PatientRe
 export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: any) => {
   const info = createPatientStickerSyncSnapshot(patientInfo);
   const normalizedName = text(info.name).toLowerCase();
-  const normalizedDob = text(info.dateOfBirth);
+  const normalizedDob = normalizeIdentityDate(info.dateOfBirth);
   const normalizedPatientId = text(info.patientId).toLowerCase();
-
-  const byNameAndDob =
-    normalizedName && normalizedDob
-      ? patients.find(
-          (patient) =>
-            !patient.deletedAt &&
-            text(patient.name).toLowerCase() === normalizedName &&
-            text(patient.dateOfBirth) === normalizedDob,
-        )
-      : null;
-
-  if (byNameAndDob) {
-    return byNameAndDob.id;
-  }
 
   const byNameAndIdAndDob =
     normalizedName && normalizedPatientId && normalizedDob
@@ -355,7 +517,7 @@ export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: a
             !patient.deletedAt &&
             text(patient.name).toLowerCase() === normalizedName &&
             text(patient.patientId).toLowerCase() === normalizedPatientId &&
-            text(patient.dateOfBirth) === normalizedDob,
+            normalizeIdentityDate(patient.dateOfBirth) === normalizedDob,
         )
       : null;
 
@@ -369,12 +531,26 @@ export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: a
           (patient) =>
             !patient.deletedAt &&
             text(patient.patientId).toLowerCase() === normalizedPatientId &&
-            text(patient.dateOfBirth) === normalizedDob,
+            normalizeIdentityDate(patient.dateOfBirth) === normalizedDob,
         )
       : null;
 
   if (byPatientIdAndDob) {
     return byPatientIdAndDob.id;
+  }
+
+  const byNameAndDob =
+    normalizedName && normalizedDob
+      ? patients.find(
+          (patient) =>
+            !patient.deletedAt &&
+            text(patient.name).toLowerCase() === normalizedName &&
+            normalizeIdentityDate(patient.dateOfBirth) === normalizedDob,
+        )
+      : null;
+
+  if (byNameAndDob) {
+    return byNameAndDob.id;
   }
 
   const byPatientId = normalizedPatientId
@@ -385,7 +561,39 @@ export const findMatchingPatientId = (patients: PatientSummary[], patientInfo: a
       )
     : null;
 
-  return byPatientId?.id || null;
+  if (byPatientId) {
+    return byPatientId.id;
+  }
+
+  const byNameAndPatientId =
+    normalizedName && normalizedPatientId
+      ? patients.find(
+          (patient) =>
+            !patient.deletedAt &&
+            text(patient.name).toLowerCase() === normalizedName &&
+            text(patient.patientId).toLowerCase() === normalizedPatientId,
+        )
+      : null;
+
+  if (byNameAndPatientId) {
+    return byNameAndPatientId.id;
+  }
+
+  const byUniqueNameOnly =
+    normalizedName &&
+    !normalizedPatientId &&
+    !normalizedDob
+      ? patients.filter(
+          (patient) =>
+            !patient.deletedAt && text(patient.name).toLowerCase() === normalizedName,
+        )
+      : [];
+
+  if (byUniqueNameOnly.length === 1) {
+    return byUniqueNameOnly[0].id;
+  }
+
+  return null;
 };
 
 export const buildPatientRecord = ({
@@ -498,6 +706,138 @@ export const buildPatientSummary = ({
 
   summary.searchText = getPatientSummarySearchText(summary, visibleRecords);
   return summary;
+};
+
+export const normalizePatientDatabaseCache = (
+  cache?: Partial<PatientDatabaseCache> | null,
+): PatientDatabaseCache => {
+  const cachePatients = cache?.patients;
+  const cacheRecords = cache?.records;
+  const sourcePatients = Array.isArray(cachePatients)
+    ? cachePatients.map((patient, index) => {
+        const safePatient =
+          patient && typeof patient === "object" ? (patient as PatientSummary) : ({} as PatientSummary);
+        const normalizedId = sanitizeId(safePatient?.id) || `patient_recovered_${index + 1}`;
+        return {
+          ...safePatient,
+          id: normalizedId,
+        };
+      })
+    : [];
+  const sourceRecords = Array.isArray(cacheRecords)
+    ? cacheRecords.map((record, index) => {
+        const safeRecord =
+          record && typeof record === "object" ? (record as PatientRecord) : ({} as PatientRecord);
+        return {
+          ...safeRecord,
+          id: sanitizeId(safeRecord?.id) || `record_recovered_${index + 1}`,
+          patientDocId: sanitizeId(safeRecord?.patientDocId),
+        };
+      })
+    : [];
+
+  if (sourcePatients.length === 0 && sourceRecords.length === 0) {
+    return createEmptyPatientDatabaseCache();
+  }
+
+  const aliasToCanonicalPatientId = new Map<string, string>();
+  const canonicalPatients: PatientSummary[] = [];
+
+  sortPatientsForMerge(sourcePatients).forEach((patient) => {
+    const existingCanonicalPatient =
+      canonicalPatients.find((canonicalPatient) =>
+        isSamePatientIdentity(canonicalPatient, patient),
+      ) || null;
+
+    if (existingCanonicalPatient) {
+      aliasToCanonicalPatientId.set(patient.id, existingCanonicalPatient.id);
+      return;
+    }
+
+    canonicalPatients.push(patient);
+    aliasToCanonicalPatientId.set(patient.id, patient.id);
+  });
+
+  const recoveredPatientIdByIdentity = new Map<string, string>();
+  let recoveredPatientCounter = 0;
+  const normalizedRecords = dedupeRecordsById(
+    sourceRecords.map((record) => {
+      const aliasPatientId = sanitizeId(aliasToCanonicalPatientId.get(record.patientDocId));
+      if (aliasPatientId) {
+        return aliasPatientId === record.patientDocId
+          ? record
+          : { ...record, patientDocId: aliasPatientId };
+      }
+
+      const existingPatientId = sanitizeId(record.patientDocId);
+      if (existingPatientId) {
+        const matchedPatientId = sanitizeId(
+          findMatchingPatientId(canonicalPatients, record.patientInfo),
+        );
+        if (matchedPatientId && matchedPatientId !== existingPatientId) {
+          return { ...record, patientDocId: matchedPatientId };
+        }
+
+        return existingPatientId === record.patientDocId
+          ? record
+          : { ...record, patientDocId: existingPatientId };
+      }
+
+      const matchedPatientId = sanitizeId(
+        findMatchingPatientId(canonicalPatients, record.patientInfo),
+      );
+      if (matchedPatientId) {
+        return { ...record, patientDocId: matchedPatientId };
+      }
+
+      const identityKey = getPatientIdentityKeyFromInfo(record.patientInfo);
+      if (identityKey) {
+        const existingRecoveredPatientId = recoveredPatientIdByIdentity.get(identityKey);
+        if (existingRecoveredPatientId) {
+          return { ...record, patientDocId: existingRecoveredPatientId };
+        }
+
+        recoveredPatientCounter += 1;
+        const recoveredPatientId = `patient_recovered_by_identity_${recoveredPatientCounter}`;
+        recoveredPatientIdByIdentity.set(identityKey, recoveredPatientId);
+        return { ...record, patientDocId: recoveredPatientId };
+      }
+
+      return { ...record, patientDocId: `patient_recovered_${record.id}` };
+    }),
+  );
+
+  const groupedPatientsByCanonicalId = new Map<string, PatientSummary[]>();
+  sourcePatients.forEach((patient) => {
+    const canonicalPatientId = aliasToCanonicalPatientId.get(patient.id) || patient.id;
+    const groupedPatients = groupedPatientsByCanonicalId.get(canonicalPatientId) || [];
+    groupedPatientsByCanonicalId.set(canonicalPatientId, [...groupedPatients, patient]);
+  });
+
+  const allPatientIds = new Set<string>([
+    ...Array.from(groupedPatientsByCanonicalId.keys()),
+    ...normalizedRecords
+      .map((record) => sanitizeId(record.patientDocId))
+      .filter(Boolean),
+  ]);
+
+  const normalizedPatients = sortPatients(
+    Array.from(allPatientIds).map((patientId) =>
+      buildPatientSummary({
+        existingPatient: mergePatientSummaries(
+          groupedPatientsByCanonicalId.get(patientId) || [],
+          patientId,
+        ),
+        patientDocId: patientId,
+        records: normalizedRecords,
+      }),
+    ),
+  );
+
+  return {
+    patients: normalizedPatients,
+    records: normalizedRecords,
+  };
 };
 
 export const upsertPatientRecordInCache = (

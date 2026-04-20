@@ -16,6 +16,7 @@ export interface PeriAnalSection {
 export interface PeriAnalDiagramState {
   activeVariant: string;
   markingsByVariant: Record<string, any[]>;
+  visibleVariants: string[];
 }
 
 export const toArray = (value: unknown): string[] => {
@@ -54,26 +55,72 @@ export const parsePeriAnalDiagramState = (procedureFindings: any): PeriAnalDiagr
   const defaultMarkings = createInitialPeriAnalDiagramMarkings();
   const defaultVariantKeys = Object.keys(defaultMarkings);
   const rawMarkings = state.diagramMarkingsByVariant || {};
-  const legacyNeutralMarkings = Array.isArray(rawMarkings.neutral) ? rawMarkings.neutral : [];
-  const legacyFemaleMarkings = Array.isArray(rawMarkings.female) ? rawMarkings.female : [];
+  const parsedLegacyFindings =
+    typeof state.findings === "string" && state.findings.trim()
+      ? (() => {
+          try {
+            const parsed = JSON.parse(state.findings);
+            if (Array.isArray(parsed)) {
+              const activeVariant = defaultVariantKeys.includes(state.activeDiagramVariant)
+                ? state.activeDiagramVariant
+                : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT;
+              return { [activeVariant]: parsed };
+            }
+            if (parsed && typeof parsed === "object") {
+              return parsed as Record<string, any[]>;
+            }
+          } catch (_error) {
+            return {};
+          }
+          return {};
+        })()
+      : {};
+  const rawMarkingKeys = Object.keys(rawMarkings || {});
+  const rawMarkingsHasData = rawMarkingKeys.some((key) => {
+    const value = rawMarkings[key];
+    return Array.isArray(value) && value.length > 0;
+  });
+  const normalizedMarkings = { ...rawMarkings };
+  if (!rawMarkingsHasData) {
+    Object.entries(parsedLegacyFindings || {}).forEach(([key, value]) => {
+      const existing = normalizedMarkings[key];
+      if ((!Array.isArray(existing) || existing.length === 0) && Array.isArray(value)) {
+        normalizedMarkings[key] = value;
+      }
+    });
+  }
+  const legacyNeutralMarkings = Array.isArray(normalizedMarkings.neutral) ? normalizedMarkings.neutral : [];
+  const legacyFemaleMarkings = Array.isArray(normalizedMarkings.female) ? normalizedMarkings.female : [];
   const markingsByVariant = {
     ...defaultMarkings,
-    ...rawMarkings,
+    ...normalizedMarkings,
   };
 
-  if (!Array.isArray(rawMarkings.externalPerianalSkin) && legacyNeutralMarkings.length > 0) {
+  if (!Array.isArray(normalizedMarkings.externalPerianalSkin) && legacyNeutralMarkings.length > 0) {
     markingsByVariant.externalPerianalSkin = legacyNeutralMarkings;
   }
 
-  if (!Array.isArray(rawMarkings.lithotomyPosition) && legacyFemaleMarkings.length > 0) {
+  if (!Array.isArray(normalizedMarkings.lithotomyPosition) && legacyFemaleMarkings.length > 0) {
     markingsByVariant.lithotomyPosition = legacyFemaleMarkings;
   }
+  const rawVisibleVariants = Array.isArray(state.visibleDiagramVariants)
+    ? state.visibleDiagramVariants.filter((key: string) => defaultVariantKeys.includes(key))
+    : [];
+  const visibleVariants =
+    rawVisibleVariants.length > 0
+      ? rawVisibleVariants
+      : defaultVariantKeys.filter(
+          (variantKey) =>
+            Array.isArray(markingsByVariant[variantKey]) &&
+            markingsByVariant[variantKey].length > 0,
+        );
 
   return {
     activeVariant: defaultVariantKeys.includes(state.activeDiagramVariant)
       ? state.activeDiagramVariant
       : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
     markingsByVariant,
+    visibleVariants,
   };
 };
 

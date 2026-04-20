@@ -4,6 +4,15 @@ import { DEFAULT_CLINICIAN_NAME } from "@/utils/clinicianDefaults";
 export const initialInguinalHerniaState = {
   patientInfo: createInitialPatientInfoState(),
   preoperative: {
+    surgeon: "",
+    assistant: "",
+    anaesthetist: "",
+    preoperativeImaging: [] as string[],
+    preoperativeImagingOther: "",
+    startTime: "",
+    endTime: "",
+    duration: "",
+    operationDescription: "",
     indication: [] as string[],
     indicationOther: "",
     urgency: "",

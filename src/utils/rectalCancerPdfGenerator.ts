@@ -7,9 +7,8 @@ import {
   formatPatientStickerDate,
   getPatientInfoPdfSections,
   hasPatientStickerMode,
-  normalizePatientInfo,
+  getPdfSafePatientInfo,
 } from './patientSticker';
-import { getFullASAText } from './asaDescriptions';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
 
 const RECTAL_DIAGRAM_MARKING_SCALE = 1.8;
@@ -317,7 +316,7 @@ export const generateRectalCancerPDF = async (
       });
     };
 
-    const normalizedPatientInfo = normalizePatientInfo(patientInfo);
+    const normalizedPatientInfo = getPdfSafePatientInfo(patientInfo);
     const patientGender = formatPatientGender(normalizedPatientInfo);
     const patientSections = hasPatientStickerMode(normalizedPatientInfo)
       ? [
@@ -333,52 +332,6 @@ export const generateRectalCancerPDF = async (
                 `Patient ID: ${txt(normalizedPatientInfo.patientId || patientId)}`,
                 `Date Of Birth: ${formatPatientStickerDate(normalizedPatientInfo.dateOfBirth)}`,
                 `Address: ${txt(normalizedPatientInfo.address)}`,
-              ],
-            ].filter((row) => row.some((cell) => hasPrintableValue(cell.replace(/^[^:]+:\s*/, '')))),
-          },
-          {
-            title: 'Medical Aid Details',
-            rows: [
-              [
-                `Medical Aid Name: ${txt(normalizedPatientInfo.medicalAidName)}`,
-                `Medical Aid Number: ${txt(normalizedPatientInfo.medicalAidNumber)}`,
-                `Main Member: ${txt(normalizedPatientInfo.mainMember)}`,
-              ],
-              [
-                `Main Member ID: ${txt(normalizedPatientInfo.mainMemberId)}`,
-                `Work Number: ${txt(normalizedPatientInfo.workNumber)}`,
-                `Home Number: ${txt(normalizedPatientInfo.homeNumber)}`,
-              ],
-              [
-                `Authorization: ${txt(normalizedPatientInfo.authorization)}`,
-                `Depend Code: ${txt(normalizedPatientInfo.dependCode)}`,
-                '',
-              ],
-            ].filter((row) => row.some((cell) => hasPrintableValue(cell.replace(/^[^:]+:\s*/, '')))),
-          },
-          {
-            title: 'Hospital Details',
-            rows: [
-              [`Hospital Name: ${txt(normalizedPatientInfo.hospitalName)}`, '', ''],
-              [`Hospital Visit Number: ${txt(normalizedPatientInfo.hospitalVisitNumber)}`, '', ''],
-              [`Doctor's Name: ${txt(normalizedPatientInfo.doctorName)}`, '', ''],
-              [`Doctor's Practice Number: ${txt(normalizedPatientInfo.doctorPracticeNumber)}`, '', ''],
-              [
-                `ASA Physical Status Classification: ${
-                  normalizedPatientInfo.asaScore ? getFullASAText(normalizedPatientInfo.asaScore) : ''
-                }`,
-                '',
-                '',
-              ],
-              [
-                `Weight: ${txt(normalizedPatientInfo.weight)}`,
-                `Height: ${txt(normalizedPatientInfo.height)}`,
-                `BMI: ${txt(normalizedPatientInfo.bmi)}`,
-              ],
-              [
-                `Date: ${formatPatientStickerDate(normalizedPatientInfo.visitDate)}`,
-                `Time: ${txt(normalizedPatientInfo.visitTime)}`,
-                '',
               ],
             ].filter((row) => row.some((cell) => hasPrintableValue(cell.replace(/^[^:]+:\s*/, '')))),
           },

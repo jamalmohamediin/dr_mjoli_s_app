@@ -100,12 +100,16 @@ export const PatientInfoFields = ({
     "/api/patient-sticker-extract";
   const stickerMode = hasPatientStickerMode(normalizedInfo);
   const isExtracting = normalizedInfo.stickerExtractionStatus === "extracting";
+  const showStickerExtendedDetails = hasExtractedPatientStickerData(normalizedInfo);
   const canAutofillExtractedPatient = hasExtractedPatientStickerData(
     normalizedCurrentExtractedPatient,
   );
   const canAutofillSharedPatient = hasMeaningfulPatientInfoSyncData(
     normalizedCurrentExtractedPatient,
   );
+  const showAdministrativeSections =
+    hasExtractedPatientStickerData(normalizedInfo) ||
+    hasExtractedPatientStickerData(normalizedCurrentExtractedPatient);
   const sharedPatientSignature = canAutofillSharedPatient
     ? getPatientStickerSyncSignature(normalizedCurrentExtractedPatient)
     : "";
@@ -503,164 +507,172 @@ export const PatientInfoFields = ({
         )}
       </div>
 
-      <div className="pt-4 border-t space-y-4">
-        <h4 className="text-sm font-semibold text-gray-800">Medical Aid Details</h4>
-        {renderFieldRow(
-          "Medical Aid Name:",
-          "medicalAidName",
-          <Input
-            value={normalizedInfo.medicalAidName}
-            onChange={(event) => handleBaseChange("medicalAidName", event.target.value)}
-            placeholder="Enter Medical Aid Name"
-          />,
-        )}
-        {renderFieldRow(
-          "Medical Aid Number:",
-          "medicalAidNumber",
-          <Input
-            value={normalizedInfo.medicalAidNumber}
-            onChange={(event) => handleBaseChange("medicalAidNumber", event.target.value)}
-            placeholder="Enter Medical Aid Number"
-          />,
-        )}
-        {renderFieldRow(
-          "Main Member:",
-          "mainMember",
-          <Input
-            value={normalizedInfo.mainMember}
-            onChange={(event) => handleBaseChange("mainMember", event.target.value)}
-            placeholder="Enter Main Member"
-          />,
-        )}
-        {renderFieldRow(
-          "Main Member ID:",
-          "mainMemberId",
-          <Input
-            value={normalizedInfo.mainMemberId}
-            onChange={(event) => handleBaseChange("mainMemberId", event.target.value)}
-            placeholder="Enter Main Member ID"
-          />,
-        )}
-        {renderFieldRow(
-          "Authorization:",
-          "authorization",
-          <Input
-            value={normalizedInfo.authorization}
-            onChange={(event) => handleBaseChange("authorization", event.target.value)}
-            placeholder="Enter Authorization"
-          />,
-        )}
-        {renderFieldRow(
-          "Work Number:",
-          "workNumber",
-          <Input
-            value={normalizedInfo.workNumber}
-            onChange={(event) => handleBaseChange("workNumber", event.target.value)}
-            placeholder="Enter Work Number"
-          />,
-        )}
-        {renderFieldRow(
-          "Home Number:",
-          "homeNumber",
-          <Input
-            value={normalizedInfo.homeNumber}
-            onChange={(event) => handleBaseChange("homeNumber", event.target.value)}
-            placeholder="Enter Home Number"
-          />,
-        )}
-        {renderFieldRow(
-          "Depend Code:",
-          "dependCode",
-          <Input
-            value={normalizedInfo.dependCode}
-            onChange={(event) => handleBaseChange("dependCode", event.target.value)}
-            placeholder="Enter Depend Code"
-          />,
-        )}
-      </div>
-
-      <div className="pt-4 border-t space-y-4">
-        <h4 className="text-sm font-semibold text-gray-800">Hospital Details</h4>
-        {renderFieldRow(
-          "Hospital Name:",
-          "hospitalName",
-          <Input
-            value={normalizedInfo.hospitalName}
-            onChange={(event) => handleBaseChange("hospitalName", event.target.value)}
-            placeholder="Enter Hospital Name"
-          />,
-        )}
-        {renderFieldRow(
-          "Hospital Visit Number:",
-          "hospitalVisitNumber",
-          <Input
-            value={normalizedInfo.hospitalVisitNumber}
-            onChange={(event) => handleBaseChange("hospitalVisitNumber", event.target.value)}
-            placeholder="Enter Hospital Visit Number"
-          />,
-        )}
-        {renderFieldRow(
-          "Doctor's Name:",
-          "doctorName",
-          <Input
-            value={normalizedInfo.doctorName}
-            onChange={(event) => handleBaseChange("doctorName", event.target.value)}
-            placeholder="Enter Doctor's Name"
-          />,
-        )}
-        {renderFieldRow(
-          "Doctor's Practice Number:",
-          "doctorPracticeNumber",
-          <Input
-            value={normalizedInfo.doctorPracticeNumber}
-            onChange={(event) => handleBaseChange("doctorPracticeNumber", event.target.value)}
-            placeholder="Enter Doctor's Practice Number"
-          />,
-        )}
-        {renderFieldRow(
-          "Date:",
-          "visitDate",
-          <div className="w-full">
-            {useDashDateInputs ? (
-              <DateDDMMYYYYInput
-                ariaLabel="Visit date"
-                onChange={(value) => handleBaseChange("visitDate", value)}
-                value={normalizedInfo.visitDate}
-              />
-            ) : (
+      {showAdministrativeSections ? (
+        <>
+      {showStickerExtendedDetails && (
+        <>
+          <div className="pt-4 border-t space-y-4">
+            <h4 className="text-sm font-semibold text-gray-800">Medical Aid Details</h4>
+            {renderFieldRow(
+              "Medical Aid Name:",
+              "medicalAidName",
               <Input
-                type="date"
-                lang="en-GB"
-                value={normalizedInfo.visitDate}
-                onChange={(event) => handleBaseChange("visitDate", event.target.value)}
-              />
+                value={normalizedInfo.medicalAidName}
+                onChange={(event) => handleBaseChange("medicalAidName", event.target.value)}
+                placeholder="Enter Medical Aid Name"
+              />,
             )}
-            {normalizedInfo.visitDate && (
-              <p className="text-xs text-gray-500 mt-1">
-                Display format: {formatPatientStickerDate(normalizedInfo.visitDate)}
-              </p>
+            {renderFieldRow(
+              "Medical Aid Number:",
+              "medicalAidNumber",
+              <Input
+                value={normalizedInfo.medicalAidNumber}
+                onChange={(event) => handleBaseChange("medicalAidNumber", event.target.value)}
+                placeholder="Enter Medical Aid Number"
+              />,
             )}
-          </div>,
-        )}
-        {renderFieldRow(
-          "Time:",
-          "visitTime",
-          use24HourTimeInputs ? (
-            <Time24HourInput
-              hourAriaLabel="Visit hour"
-              minuteAriaLabel="Visit minute"
-              onChange={(value) => handleBaseChange("visitTime", value)}
-              value={normalizedInfo.visitTime}
-            />
-          ) : (
-            <Input
-              type="time"
-              value={normalizedInfo.visitTime}
-              onChange={(event) => handleBaseChange("visitTime", event.target.value)}
-            />
-          ),
-        )}
-      </div>
+            {renderFieldRow(
+              "Main Member:",
+              "mainMember",
+              <Input
+                value={normalizedInfo.mainMember}
+                onChange={(event) => handleBaseChange("mainMember", event.target.value)}
+                placeholder="Enter Main Member"
+              />,
+            )}
+            {renderFieldRow(
+              "Main Member ID:",
+              "mainMemberId",
+              <Input
+                value={normalizedInfo.mainMemberId}
+                onChange={(event) => handleBaseChange("mainMemberId", event.target.value)}
+                placeholder="Enter Main Member ID"
+              />,
+            )}
+            {renderFieldRow(
+              "Authorization:",
+              "authorization",
+              <Input
+                value={normalizedInfo.authorization}
+                onChange={(event) => handleBaseChange("authorization", event.target.value)}
+                placeholder="Enter Authorization"
+              />,
+            )}
+            {renderFieldRow(
+              "Work Number:",
+              "workNumber",
+              <Input
+                value={normalizedInfo.workNumber}
+                onChange={(event) => handleBaseChange("workNumber", event.target.value)}
+                placeholder="Enter Work Number"
+              />,
+            )}
+            {renderFieldRow(
+              "Home Number:",
+              "homeNumber",
+              <Input
+                value={normalizedInfo.homeNumber}
+                onChange={(event) => handleBaseChange("homeNumber", event.target.value)}
+                placeholder="Enter Home Number"
+              />,
+            )}
+            {renderFieldRow(
+              "Depend Code:",
+              "dependCode",
+              <Input
+                value={normalizedInfo.dependCode}
+                onChange={(event) => handleBaseChange("dependCode", event.target.value)}
+                placeholder="Enter Depend Code"
+              />,
+            )}
+          </div>
+
+          <div className="pt-4 border-t space-y-4">
+            <h4 className="text-sm font-semibold text-gray-800">Hospital Details</h4>
+            {renderFieldRow(
+              "Hospital Name:",
+              "hospitalName",
+              <Input
+                value={normalizedInfo.hospitalName}
+                onChange={(event) => handleBaseChange("hospitalName", event.target.value)}
+                placeholder="Enter Hospital Name"
+              />,
+            )}
+            {renderFieldRow(
+              "Hospital Visit Number:",
+              "hospitalVisitNumber",
+              <Input
+                value={normalizedInfo.hospitalVisitNumber}
+                onChange={(event) => handleBaseChange("hospitalVisitNumber", event.target.value)}
+                placeholder="Enter Hospital Visit Number"
+              />,
+            )}
+            {renderFieldRow(
+              "Doctor's Name:",
+              "doctorName",
+              <Input
+                value={normalizedInfo.doctorName}
+                onChange={(event) => handleBaseChange("doctorName", event.target.value)}
+                placeholder="Enter Doctor's Name"
+              />,
+            )}
+            {renderFieldRow(
+              "Doctor's Practice Number:",
+              "doctorPracticeNumber",
+              <Input
+                value={normalizedInfo.doctorPracticeNumber}
+                onChange={(event) => handleBaseChange("doctorPracticeNumber", event.target.value)}
+                placeholder="Enter Doctor's Practice Number"
+              />,
+            )}
+            {renderFieldRow(
+              "Date:",
+              "visitDate",
+              <div className="w-full">
+                {useDashDateInputs ? (
+                  <DateDDMMYYYYInput
+                    ariaLabel="Visit date"
+                    onChange={(value) => handleBaseChange("visitDate", value)}
+                    value={normalizedInfo.visitDate}
+                  />
+                ) : (
+                  <Input
+                    type="date"
+                    lang="en-GB"
+                    value={normalizedInfo.visitDate}
+                    onChange={(event) => handleBaseChange("visitDate", event.target.value)}
+                  />
+                )}
+                {normalizedInfo.visitDate && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Display format: {formatPatientStickerDate(normalizedInfo.visitDate)}
+                  </p>
+                )}
+              </div>,
+            )}
+            {renderFieldRow(
+              "Time:",
+              "visitTime",
+              use24HourTimeInputs ? (
+                <Time24HourInput
+                  hourAriaLabel="Visit hour"
+                  minuteAriaLabel="Visit minute"
+                  onChange={(value) => handleBaseChange("visitTime", value)}
+                  value={normalizedInfo.visitTime}
+                />
+              ) : (
+                <Input
+                  type="time"
+                  value={normalizedInfo.visitTime}
+                  onChange={(event) => handleBaseChange("visitTime", event.target.value)}
+                />
+              ),
+            )}
+          </div>
+        </>
+      )}
+        </>
+      ) : null}
     </>
   );
 

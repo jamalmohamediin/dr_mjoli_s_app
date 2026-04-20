@@ -48,6 +48,14 @@ export const InguinalHerniaRepairReportPreview = ({
     {
       title: "Preoperative Information",
       entries: [
+        { label: "Surgeon", value: preoperative.surgeon },
+        { label: "Assistant", value: preoperative.assistant },
+        { label: "Anaesthetist", value: preoperative.anaesthetist },
+        { label: "Preoperative Imaging", value: joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther), fullWidth: true },
+        { label: "Start Time (24-hour)", value: preoperative.startTime },
+        { label: "End Time (24-hour)", value: preoperative.endTime },
+        { label: "Duration of Operation (in minutes)", value: preoperative.duration },
+        { label: "Operation Description", value: preoperative.operationDescription, fullWidth: true },
         { label: "Indication for Surgery", value: joinSelections(preoperative.indication, preoperative.indicationOther), fullWidth: true },
         { label: "Urgency", value: preoperative.urgency },
       ],
@@ -69,12 +77,8 @@ export const InguinalHerniaRepairReportPreview = ({
         { label: "Description of procedure", value: procedure.description, fullWidth: true },
         { label: "Technique used", value: joinSelections(procedure.technique, procedure.techniqueOther), fullWidth: true },
         { label: "Approach", value: procedure.approach },
-        { label: "Reason for conversion", value: joinSelections(procedure.reasonForConversion, procedure.reasonForConversionOther), fullWidth: true },
-      ],
-    },
-    {
-      title: "Open Inguinal Hernia Repair",
-      entries: [
+        { label: "Reason for conversion", value: isConvertedToOpen ? joinSelections(procedure.reasonForConversion, procedure.reasonForConversionOther) : "", fullWidth: true },
+        { label: "Trocar Number", value: isConvertedToOpen ? procedure.trocarNumber : "" },
         { label: "Incision used", value: showOpenRepairSection ? joinSelections(procedure.incisionUsed, procedure.incisionOther) : "", fullWidth: true },
         { label: "Length of incision", value: showOpenRepairSection && procedure.incisionLength ? `${procedure.incisionLength} cm` : "" },
         { label: "External oblique aponeurosis incised", value: showOpenRepairSection ? procedure.externalObliqueAponeurosisIncised : "" },
@@ -90,31 +94,15 @@ export const InguinalHerniaRepairReportPreview = ({
         { label: "Subcutaneous tissue", value: showOpenRepairSection ? closure.subcutaneousTissueClosure : "" },
         { label: "Skin closure", value: showOpenRepairSection ? closure.skinClosureOpen : [], badges: true },
         { label: "Local anaesthetic infiltration", value: showOpenRepairSection ? closure.localAnaestheticOpen : "" },
-      ],
-    },
-    {
-      title: "Tissue Reconstruction",
-      entries: [
         { label: "Posterior wall tissue reconstruction", value: showTissueRepairSection ? joinSelections(procedure.tissueReconstruction, procedure.tissueReconstructionOther) : "", fullWidth: true },
         { label: "Suture material used", value: showTissueRepairSection ? procedure.sutureMaterial : "" },
         { label: "Suture method", value: showTissueRepairSection ? procedure.sutureMethod : "" },
-      ],
-    },
-    {
-      title: "Mesh Repair",
-      entries: [
         { label: "Mesh inserted", value: showMeshRepairSection ? procedure.meshInserted : "" },
         { label: "Mesh size length", value: showMeshRepairSection && procedure.meshSizeLength ? `${procedure.meshSizeLength} cm` : "" },
         { label: "Mesh size width", value: showMeshRepairSection && procedure.meshSizeWidth ? `${procedure.meshSizeWidth} cm` : "" },
         { label: "Mesh positioning", value: showMeshRepairSection ? joinSelections(procedure.meshPositioning, procedure.meshPositioningOther) : "", fullWidth: true },
         { label: "Fixation", value: showMeshRepairSection ? procedure.fixation : [], badges: true },
         { label: "Fixation points", value: showMeshRepairSection ? joinSelections(procedure.fixationPoints, procedure.fixationPointsOther) : "", fullWidth: true },
-      ],
-    },
-    {
-      title: "Laparoscopic Inguinal Hernia Repair (TEP / TAPP)",
-      entries: [
-        { label: "Trocar Number", value: showLaparoscopicRepairSection ? procedure.trocarNumber : "" },
         { label: "Laparoscopic approach", value: showLaparoscopicRepairSection ? procedure.laparoscopicApproach : "" },
         { label: "Method of preperitoneal space developed", value: showLaparoscopicRepairSection ? preperitonealDevelopment : "", fullWidth: true },
         { label: "Landmarks and critical zones identified", value: showLaparoscopicRepairSection ? procedure.landmarks : [], badges: true },
@@ -128,12 +116,12 @@ export const InguinalHerniaRepairReportPreview = ({
         { label: "Fascial closure (≥10 mm ports)", value: showLaparoscopicRepairSection ? closure.fascialClosurePorts : "" },
         { label: "Skin closure (laparoscopic)", value: showLaparoscopicRepairSection ? closure.skinClosureLaparoscopic : [], badges: true },
         { label: "Local anaesthetic infiltration (laparoscopic)", value: showLaparoscopicRepairSection ? closure.localAnaestheticLaparoscopic : "" },
+        { label: "Complications", value: joinSelections(complications.complications, complications.complicationOther), fullWidth: true },
       ],
     },
     {
-      title: "Complications and Additional Information",
+      title: "Additional Information",
       entries: [
-        { label: "Complications", value: joinSelections(complications.complications, complications.complicationOther), fullWidth: true },
         { label: "Additional Notes", value: additionalInfo.additionalNotes, fullWidth: true },
         { label: "Post operative management", value: additionalInfo.postOperativeManagement, fullWidth: true },
       ],

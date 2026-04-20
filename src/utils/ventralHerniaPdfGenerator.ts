@@ -7,7 +7,7 @@ import {
 import {
   formatPatientGender,
   formatPatientStickerDate,
-  normalizePatientInfo,
+  getPdfSafePatientInfo,
 } from "./patientSticker";
 import { getFullASAText } from "./asaDescriptions";
 import { drawRectalStylePortsAndIncisions } from "./pdfPortsAndIncisionsLayout";
@@ -256,7 +256,7 @@ export const generateVentralHerniaPDF = async (
       y += 1.2;
     };
 
-    const patientInfo = normalizePatientInfo(ventralHerniaData?.patientInfo || {});
+    const patientInfo = getPdfSafePatientInfo(ventralHerniaData?.patientInfo || {});
     const gender = formatPatientGender(patientInfo);
     const asaClassification = patientInfo.asaScore
       ? getFullASAText(patientInfo.asaScore)
@@ -313,48 +313,26 @@ export const generateVentralHerniaPDF = async (
       `Address: ${txt(patientInfo.address)}`,
     ]);
 
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Medical Aid Details", margin, y);
-    y += 5;
-    pdf.setFont("helvetica", "normal");
-    drawAdaptiveRow([
-      `Medical Aid Name: ${txt(patientInfo.medicalAidName)}`,
-      `Medical Aid Number: ${txt(patientInfo.medicalAidNumber)}`,
-      `Main Member: ${txt(patientInfo.mainMember)}`,
-    ]);
-    drawAdaptiveRow([
-      `Main Member ID: ${txt(patientInfo.mainMemberId)}`,
-      `Work Number: ${txt(patientInfo.workNumber)}`,
-      `Home Number: ${txt(patientInfo.homeNumber)}`,
-    ]);
-    drawAdaptiveRow([
-      `Authorization: ${txt(patientInfo.authorization)}`,
-      `Depend Code: ${txt(patientInfo.dependCode)}`,
-      "",
-    ]);
-
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Hospital Details", margin, y);
-    y += 5;
-    pdf.setFont("helvetica", "normal");
-    drawAdaptiveRow([`Hospital Name: ${txt(patientInfo.hospitalName)}`]);
-    drawAdaptiveRow([`Hospital Visit Number: ${txt(patientInfo.hospitalVisitNumber)}`]);
-    drawAdaptiveRow([`Doctor's Name: ${txt(patientInfo.doctorName)}`]);
-    drawAdaptiveRow([`Doctor's Practice Number: ${txt(patientInfo.doctorPracticeNumber)}`]);
-    drawAdaptiveRow([`ASA Physical Status Classification: ${asaClassification}`]);
+    if (hasText(asaClassification)) {
+      drawAdaptiveRow([`ASA Physical Status Classification: ${asaClassification}`]);
+    }
     if (hasText(patientInfo.asaNotes)) {
       drawAdaptiveRow([`ASA Notes: ${txt(patientInfo.asaNotes)}`]);
     }
-    drawAdaptiveRow([
-      `Weight: ${txt(patientInfo.weight) ? `${txt(patientInfo.weight)} kg` : ""}`,
-      `Height: ${txt(patientInfo.height) ? `${txt(patientInfo.height)} cm` : ""}`,
-      `BMI: ${txt(patientInfo.bmi)}`,
-    ]);
-    drawAdaptiveRow([
-      `Date: ${formatPatientStickerDate(patientInfo.visitDate)}`,
-      `Time: ${txt(patientInfo.visitTime)}`,
-      "",
-    ]);
+    if (hasText(patientInfo.weight) || hasText(patientInfo.height) || hasText(patientInfo.bmi)) {
+      drawAdaptiveRow([
+        `Weight: ${txt(patientInfo.weight) ? `${txt(patientInfo.weight)} kg` : ""}`,
+        `Height: ${txt(patientInfo.height) ? `${txt(patientInfo.height)} cm` : ""}`,
+        `BMI: ${txt(patientInfo.bmi)}`,
+      ]);
+    }
+    if (hasText(patientInfo.visitDate) || hasText(patientInfo.visitTime)) {
+      drawAdaptiveRow([
+        `Date: ${formatPatientStickerDate(patientInfo.visitDate)}`,
+        `Time: ${txt(patientInfo.visitTime)}`,
+        "",
+      ]);
+    }
 
     drawSeparator();
 

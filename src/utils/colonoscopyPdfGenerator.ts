@@ -62,14 +62,42 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     additionalInfo.surgeonSignatureText || additionalInfo.endoscopistName;
   const signatureDateTime = additionalInfo.dateTime || "";
 
-  const sections: StructuredTemplatePdfSection[] = buildColonoscopyReportSections(data, {
+  const baseSections = buildColonoscopyReportSections(data, {
     includeSedationAndBbps: false,
-  }).map((section) => ({
+  });
+
+  const procedureDetailsSection = baseSections.find((section) => section.title === "Procedure Details");
+  const findingsSummarySection = baseSections.find((section) => section.title === "Findings Summary");
+  const interventionsSection = baseSections.find(
+    (section) => section.title === "Interventions and Final Endoscopic Diagnosis",
+  );
+
+  const mergedProcedureDetailsEntries = [
+    ...(procedureDetailsSection?.entries || []),
+    ...(findingsSummarySection?.entries || []),
+    ...(interventionsSection?.entries || []),
+  ];
+
+  const normalizedSections = baseSections
+    .filter(
+      (section) =>
+        section.title !== "Findings Summary" &&
+        section.title !== "Interventions and Final Endoscopic Diagnosis",
+    )
+    .map((section) => {
+      if (section.title !== "Procedure Details") {
+        return section;
+      }
+
+      return {
+        ...section,
+        entries: mergedProcedureDetailsEntries,
+      };
+    });
+
+  const sections: StructuredTemplatePdfSection[] = normalizedSections.map((section) => ({
     title: section.title,
-    layout:
-      section.title === "Preoperative Information"
-        ? "colonoscopy-preoperative"
-        : "default",
+    layout: section.layout || (section.title === "Preoperative Information" ? "colonoscopy-preoperative" : "label-value-table"),
     entries: section.entries.map((entry) => ({
       label: entry.label,
       value: formatExportValue(entry.value),
@@ -92,11 +120,12 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     patientInfo: patientInfo || data?.patientInfo,
     sections,
     diagram: diagramImageData
-      ? {
+        ? {
           title: "Colonoscopy Diagram",
           imageData: diagramImageData,
           placement: "inlineRight",
           sectionTitle: "Procedure Details",
+          style: "plain",
         }
       : undefined,
   });

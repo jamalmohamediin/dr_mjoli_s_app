@@ -5,7 +5,7 @@ import {
   formatDateTimeDDMMYYYYWithDashes,
 } from "@/utils/dateFormatter";
 import { getFullASAText } from "@/utils/asaDescriptions";
-import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
+import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
@@ -119,7 +119,7 @@ export const generateCholecystectomyPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = normalizePatientInfo(patientInfo || cholecystectomyData?.patientInfo || {});
+    const info = getPdfSafePatientInfo(patientInfo || cholecystectomyData?.patientInfo || {});
     const preop = cholecystectomyData?.preoperative || {};
     const intra = cholecystectomyData?.intraoperative || {};
     const proc = cholecystectomyData?.procedure || {};
@@ -301,34 +301,11 @@ export const generateCholecystectomyPDF = async (
       `Address: ${txt(info.address)}`
     );
     y += 1;
-    patientSubsection("Medical Aid Details");
-    row3(
-      `Medical Aid Name: ${txt(info.medicalAidName)}`,
-      `Medical Aid Number: ${txt(info.medicalAidNumber)}`,
-      `Main Member: ${txt(info.mainMember)}`
-    );
-    row3(
-      `Main Member ID: ${txt(info.mainMemberId)}`,
-      `Work Number: ${txt(info.workNumber)}`,
-      `Home Number: ${txt(info.homeNumber)}`
-    );
-    row3(`Authorization: ${txt(info.authorization)}`, `Depend Code: ${txt(info.dependCode)}`, "");
-    y += 1;
-    patientSubsection("Hospital Details");
-    rowFull(`Hospital Name: ${txt(info.hospitalName)}`);
-    rowFull(`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`);
-    rowFull(`Doctor's Name: ${txt(info.doctorName)}`);
-    rowFull(`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`);
     rowFull(`ASA Physical Status Classification: ${asaClassification}`);
     if (txt(info.asaNotes)) {
       rowFull(`ASA Notes: ${txt(info.asaNotes)}`);
     }
     row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
-    row3(
-      `Date: ${formatDateDDMMYYYYWithDashes(info.visitDate)}`,
-      `Time: ${txt(info.visitTime)}`,
-      ""
-    );
     y += 2;
 
     sec("PREOPERATIVE INFORMATION");

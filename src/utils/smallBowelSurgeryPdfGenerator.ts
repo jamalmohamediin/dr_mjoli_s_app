@@ -6,7 +6,7 @@ import {
 } from "@/utils/dateFormatter";
 import {
   formatPatientGender,
-  normalizePatientInfo,
+  getPdfSafePatientInfo,
 } from "@/utils/patientSticker";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
@@ -126,7 +126,7 @@ export const generateSmallBowelSurgeryPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = normalizePatientInfo(patientInfo || smallBowelData?.patientInfo || {});
+    const info = getPdfSafePatientInfo(patientInfo || smallBowelData?.patientInfo || {});
     const preop = smallBowelData?.preoperative || {};
     const findings = smallBowelData?.operativeFindings || {};
     const proc = smallBowelData?.procedure || {};
@@ -279,71 +279,27 @@ export const generateSmallBowelSurgeryPDF = async (
     );
     y += 1;
 
-    if (
-      txt(info.medicalAidName) ||
-      txt(info.medicalAidNumber) ||
-      txt(info.mainMember) ||
-      txt(info.mainMemberId) ||
-      txt(info.workNumber) ||
-      txt(info.homeNumber) ||
-      txt(info.authorization) ||
-      txt(info.dependCode)
-    ) {
-      patientSubsection("Medical Aid Details");
-      row3(
-        cell("Medical Aid Name", txt(info.medicalAidName)),
-        cell("Medical Aid Number", txt(info.medicalAidNumber)),
-        cell("Main Member", txt(info.mainMember)),
-      );
-      row3(
-        cell("Main Member ID", txt(info.mainMemberId)),
-        cell("Work Number", txt(info.workNumber)),
-        cell("Home Number", txt(info.homeNumber)),
-      );
-      row3(
-        cell("Authorization", txt(info.authorization)),
-        cell("Depend Code", txt(info.dependCode)),
-        "",
-      );
-      y += 1;
+    if (info.asaScore) {
+      row1(cell("ASA Physical Status Classification", getFullASAText(info.asaScore)));
     }
-
-    if (
-      txt(info.hospitalName) ||
-      txt(info.hospitalVisitNumber) ||
-      txt(info.doctorName) ||
-      txt(info.doctorPracticeNumber) ||
-      txt(info.asaScore) ||
-      txt(info.asaNotes) ||
-      txt(info.weight) ||
-      txt(info.height) ||
-      txt(info.bmi) ||
-      txt(info.visitDate) ||
-      txt(info.visitTime)
-    ) {
-      patientSubsection("Hospital Details");
-      row1(cell("Hospital Name", txt(info.hospitalName)));
-      row1(cell("Hospital Visit Number", txt(info.hospitalVisitNumber)));
-      row1(cell("Doctor's Name", txt(info.doctorName)));
-      row1(cell("Doctor's Practice Number", txt(info.doctorPracticeNumber)));
-      row1(
-        cell(
-          "ASA Physical Status Classification",
-          info.asaScore ? getFullASAText(info.asaScore) : "",
-        ),
-      );
+    if (txt(info.asaNotes)) {
       row1(cell("ASA Notes", txt(info.asaNotes)));
+    }
+    if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
       row3(
         cell("Weight", txt(info.weight)),
         cell("Height", txt(info.height)),
         cell("BMI", txt(info.bmi)),
       );
+    }
+    if (txt(info.visitDate) || txt(info.visitTime)) {
       row3(
         cell("Date", formatDateDDMMYYYYWithDashes(info.visitDate)),
         cell("Time", txt(info.visitTime)),
         "",
       );
     }
+    y += 1;
 
     sec("PREOPERATIVE INFORMATION");
     row3(

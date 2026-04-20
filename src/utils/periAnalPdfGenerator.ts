@@ -10,7 +10,7 @@ import {
 import {
   formatPatientGender,
   formatPatientStickerDate,
-  normalizePatientInfo,
+  getPdfSafePatientInfo,
 } from "@/utils/patientSticker";
 import {
   PERI_ANAL_DIAGRAM_VARIANTS,
@@ -93,6 +93,33 @@ const createSurgicalDiagramCanvas = async (
           ctx.setLineDash(drawingMetrics.incisionDash);
           ctx.stroke();
           ctx.restore();
+        } else if (marking.type === "drawStroke") {
+          const points = Array.isArray(marking.points) ? marking.points : [];
+          if (points.length === 0) return;
+          ctx.save();
+          ctx.strokeStyle = marking.color || "#111111";
+          ctx.lineWidth = Number(marking.width) > 0 ? Number(marking.width) : 3;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let index = 1; index < points.length; index += 1) {
+            ctx.lineTo(points[index].x, points[index].y);
+          }
+          if (points.length === 1) {
+            ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+          }
+          ctx.stroke();
+          ctx.restore();
+        } else if (marking.type === "textBox") {
+          if (!marking?.text?.trim()) return;
+          const textSize = Number(marking.size) > 0 ? Number(marking.size) : 20;
+          ctx.save();
+          ctx.fillStyle = marking.color || "#111111";
+          ctx.font = `${textSize}px Arial`;
+          ctx.textBaseline = "top";
+          ctx.fillText(marking.text, marking.x, marking.y);
+          ctx.restore();
         }
       });
 
@@ -118,7 +145,7 @@ export const generatePeriAnalPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = normalizePatientInfo(patientInfo || periAnalData?.patientInfo || {});
+    const info = getPdfSafePatientInfo(patientInfo || periAnalData?.patientInfo || {});
     const preop = periAnalData?.preoperative || {};
     const woundManagement = periAnalData?.woundManagement || {};
     const complications = periAnalData?.complications || {};
@@ -128,8 +155,14 @@ export const generatePeriAnalPDF = async (
     const findingsSummary = getPeriAnalAdditionalFindingSection(periAnalData);
     const findingSections = getPeriAnalFindingSections(periAnalData);
     const diagramState = parsePeriAnalDiagramState(periAnalData?.procedureFindings);
+    const selectedDiagramVariants = PERI_ANAL_DIAGRAM_VARIANTS.filter((variant) => {
+      const hasMarkings =
+        Array.isArray(diagramState.markingsByVariant?.[variant.key]) &&
+        diagramState.markingsByVariant[variant.key].length > 0;
+      return hasMarkings;
+    });
     const diagramCanvasEntries = await Promise.all(
-      PERI_ANAL_DIAGRAM_VARIANTS.map(async (variant) => ({
+      selectedDiagramVariants.map(async (variant) => ({
         ...variant,
         canvas: await createSurgicalDiagramCanvas(
           diagramState.markingsByVariant?.[variant.key] || [],
@@ -159,41 +192,105 @@ export const generatePeriAnalPDF = async (
       y += 5;
     };
 
+    const buildCellLayout = (rawValue: string, width: number) => {
+      const raw = rawValue || "";
+      const separatorIndex = raw.indexOf(":");
+      if (separatorIndex === -1) {
+        const lines = pdf.splitTextToSize(raw, width);
+        return {
+          isLabelValue: false,
+          labelLines: [] as string[],
+          valueLines: lines.length > 0 ? lines : [""],
+          lineCount: Math.max(lines.length, 1),
+          labelWidth: 0,
+        };
+      }
+
+      const labelText = `${raw.slice(0, separatorIndex).trim()}:`;
+      const valueText = raw.slice(separatorIndex + 1).trim();
+      const labelWidth = Math.min(60, Math.max(22, width * 0.42));
+      const valueWidth = Math.max(12, width - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+      const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+      return {
+        isLabelValue: true,
+        labelLines,
+        valueLines,
+        lineCount: Math.max(labelLines.length, valueLines.length, 1),
+        labelWidth,
+      };
+    };
+
+    const drawLayoutLine = (
+      layout: ReturnType<typeof buildCellLayout>,
+      lineIndex: number,
+      x: number,
+    ) => {
+      if (layout.isLabelValue) {
+        if (layout.labelLines[lineIndex]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(layout.labelLines[lineIndex], x, y);
+        }
+        if (layout.valueLines[lineIndex]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(layout.valueLines[lineIndex], x + layout.labelWidth + 2, y);
+        }
+      } else if (layout.valueLines[lineIndex]) {
+        pdf.setFont("helvetica", "normal");
+        pdf.text(layout.valueLines[lineIndex], x, y);
+      }
+    };
+
     const row3 = (a: string, b: string, c: string) => {
-      const l1 = pdf.splitTextToSize(a || "", 58);
-      const l2 = pdf.splitTextToSize(b || "", 58);
-      const l3 = pdf.splitTextToSize(c || "", 58);
-      const lines = Math.max(l1.length, l2.length, l3.length, 1);
+      const cell1 = buildCellLayout(a, 58);
+      const cell2 = buildCellLayout(b, 58);
+      const cell3 = buildCellLayout(c, 58);
+      const lines = Math.max(cell1.lineCount, cell2.lineCount, cell3.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
-        if (l1[i]) pdf.text(l1[i], col1X, y);
-        if (l2[i]) pdf.text(l2[i], col2X, y);
-        if (l3[i]) pdf.text(l3[i], col3X, y);
+        drawLayoutLine(cell1, i, col1X);
+        drawLayoutLine(cell2, i, col2X);
+        drawLayoutLine(cell3, i, col3X);
         y += lineHeight;
       }
+      pdf.setFont("helvetica", "normal");
     };
 
     const row2 = (a: string, b: string) => {
-      const l1 = pdf.splitTextToSize(a || "", 88);
-      const l2 = pdf.splitTextToSize(b || "", 88);
-      const lines = Math.max(l1.length, l2.length, 1);
+      const cell1 = buildCellLayout(a, 88);
+      const cell2 = buildCellLayout(b, 88);
+      const lines = Math.max(cell1.lineCount, cell2.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
-        if (l1[i]) pdf.text(l1[i], col1X, y);
-        if (l2[i]) pdf.text(l2[i], twoCol2X, y);
+        drawLayoutLine(cell1, i, col1X);
+        drawLayoutLine(cell2, i, twoCol2X);
         y += lineHeight;
       }
+      pdf.setFont("helvetica", "normal");
     };
 
     const writeEntries = (entries: { label: string; value: string }[]) => {
+      const labelColumnWidth = 64;
+      const valueColumnWidth = pageWidth - margin * 2 - labelColumnWidth - 2;
       entries.forEach((entry) => {
-        const lines = pdf.splitTextToSize(`${entry.label}: ${entry.value}`, pageWidth - margin * 2);
-        ensureSpace(lines.length * lineHeight + 1);
-        lines.forEach((line: string) => {
-          pdf.text(line, margin, y);
+        const labelLines = pdf.splitTextToSize(`${entry.label}:`, labelColumnWidth);
+        const valueLines = pdf.splitTextToSize(entry.value || "", valueColumnWidth);
+        const lines = Math.max(labelLines.length, valueLines.length, 1);
+        ensureSpace(lines * lineHeight + 1);
+
+        for (let index = 0; index < lines; index += 1) {
+          if (labelLines[index]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(labelLines[index], margin, y);
+          }
+          if (valueLines[index]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(valueLines[index], margin + labelColumnWidth + 2, y);
+          }
           y += lineHeight;
-        });
+        }
       });
+      pdf.setFont("helvetica", "normal");
     };
 
     pdf.setFontSize(10);
@@ -227,15 +324,13 @@ export const generatePeriAnalPDF = async (
     pdf.setFontSize(9);
 
     const row1 = (value: string) => {
-      const lines = pdf.splitTextToSize(value || "", pageWidth - margin * 2);
-      const safeLines = lines.length > 0 ? lines : [""];
-      ensureSpace(safeLines.length * lineHeight + 1);
-      safeLines.forEach((line: string) => {
-        if (line) {
-          pdf.text(line, margin, y);
-        }
+      const layout = buildCellLayout(value, pageWidth - margin * 2);
+      ensureSpace(layout.lineCount * lineHeight + 1);
+      for (let lineIndex = 0; lineIndex < layout.lineCount; lineIndex += 1) {
+        drawLayoutLine(layout, lineIndex, margin);
         y += lineHeight;
-      });
+      }
+      pdf.setFont("helvetica", "normal");
     };
 
     const startSection = (title: string, options?: { withDivider?: boolean }) => {
@@ -256,39 +351,6 @@ export const generatePeriAnalPDF = async (
       pdf.setFontSize(9);
     };
 
-    const startTwoColumnSection = (leftTitle: string, rightTitle: string) => {
-      y += 2;
-      drawRule();
-      ensureSpace(8);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(11);
-      pdf.text(leftTitle, margin, y);
-      pdf.text(rightTitle, twoCol2X, y);
-      y += 6;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-    };
-
-    const writeColumnEntries = (
-      entries: { label: string; value: string }[],
-      x: number,
-      width: number,
-      initialY: number
-    ) => {
-      let currentY = initialY;
-      entries.forEach((entry) => {
-        const lines = pdf.splitTextToSize(`${entry.label}: ${entry.value}`, width);
-        const safeLines = lines.length > 0 ? lines : [""];
-        safeLines.forEach((line: string) => {
-          if (line) {
-            pdf.text(line, x, currentY);
-          }
-          currentY += lineHeight;
-        });
-      });
-      return currentY;
-    };
-
     const patientNameValue = txt(info.name || patientName);
     const patientIdValue = txt(info.patientId || patientId);
     const patientGender = formatPatientGender(info);
@@ -306,43 +368,26 @@ export const generatePeriAnalPDF = async (
       `Address: ${txt(info.address)}`
     );
 
-    startSection("Medical Aid Details");
-    row3(
-      `Medical Aid Name: ${txt(info.medicalAidName)}`,
-      `Medical Aid Number: ${txt(info.medicalAidNumber)}`,
-      `Main Member: ${txt(info.mainMember)}`
-    );
-    row3(
-      `Main Member ID: ${txt(info.mainMemberId)}`,
-      `Work Number: ${txt(info.workNumber)}`,
-      `Home Number: ${txt(info.homeNumber)}`
-    );
-    row3(
-      `Authorization: ${txt(info.authorization)}`,
-      `Depend Code: ${txt(info.dependCode)}`,
-      ""
-    );
-
-    startSection("Hospital Details");
-    row1(`Hospital Name: ${txt(info.hospitalName)}`);
-    row1(`Hospital Visit Number: ${txt(info.hospitalVisitNumber)}`);
-    row1(`Doctor's Name: ${txt(info.doctorName)}`);
-    row1(`Doctor's Practice Number: ${txt(info.doctorPracticeNumber)}`);
-    row1(`ASA Physical Status Classification: ${asaClassification}`);
+    if (txt(asaClassification)) {
+      row1(`ASA Physical Status Classification: ${asaClassification}`);
+    }
     if (txt(info.asaNotes)) {
       row1(`ASA Notes: ${txt(info.asaNotes)}`);
     }
-    row3(
-      `Weight: ${txt(info.weight)}`,
-      `Height: ${txt(info.height)}`,
-      `BMI: ${txt(info.bmi)}`
-    );
-    row3(
-      `Date: ${formatPatientStickerDate(info.visitDate)}`,
-      `Time: ${txt(info.visitTime)}`,
-      ""
-    );
-
+    if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
+      row3(
+        `Weight: ${txt(info.weight)}`,
+        `Height: ${txt(info.height)}`,
+        `BMI: ${txt(info.bmi)}`
+      );
+    }
+    if (txt(info.visitDate) || txt(info.visitTime)) {
+      row3(
+        `Date: ${formatPatientStickerDate(info.visitDate)}`,
+        `Time: ${txt(info.visitTime)}`,
+        ""
+      );
+    }
     startSection("Preoperative Information");
     row3(
       `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
@@ -376,47 +421,51 @@ export const generatePeriAnalPDF = async (
         : [{ label: "Summary", value: "No findings summary recorded" }],
     );
 
-    const diagramSectionRequiredHeight = 170;
-    ensureSpace(diagramSectionRequiredHeight);
-    startSection("Peri-Anal Diagrams");
-    row1("Legend: Ports (With Size Label), Ileostomy (Dashed Yellow Circle), Colostomy (Solid Green Circle), Incisions (Dashed Dark Red Line)");
-    const diagramGridHeight = 144;
-    ensureSpace(diagramGridHeight + 16);
-    const gridStartY = y;
-    const cellGap = 8;
-    const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
-    const cellHeight = 58;
-    const titleOffset = 5;
-    const rowGap = 12;
+    if (diagramCanvasEntries.length > 0) {
+      const cellGap = 8;
+      const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
+      const cellHeight = 58;
+      const titleOffset = 5;
+      const rowGap = 12;
+      const rowCount = Math.ceil(diagramCanvasEntries.length / 2);
+      const diagramGridHeight = rowCount * (cellHeight + rowGap + titleOffset);
+      const diagramSectionRequiredHeight = Math.max(60, diagramGridHeight + 24);
+      ensureSpace(diagramSectionRequiredHeight);
 
-    diagramCanvasEntries.forEach((entry, index) => {
-      const row = Math.floor(index / 2);
-      const column = index % 2;
-      const cellX = margin + column * (cellWidth + cellGap);
-      const titleY = gridStartY + row * (cellHeight + rowGap + titleOffset);
-      const boxY = titleY + 2;
+      startSection("Peri-Anal Diagrams");
+      row1("Legend: Freehand Drawings And Textbox Notes Are Rendered Exactly As Marked On The Diagram.");
+      ensureSpace(diagramGridHeight + 8);
+      const gridStartY = y;
 
-      pdf.setFont("helvetica", "bold");
-      pdf.text(entry.label, cellX, titleY);
-      pdf.setFont("helvetica", "normal");
-      pdf.rect(cellX, boxY, cellWidth, cellHeight);
+      diagramCanvasEntries.forEach((entry, index) => {
+        const row = Math.floor(index / 2);
+        const column = index % 2;
+        const cellX = margin + column * (cellWidth + cellGap);
+        const titleY = gridStartY + row * (cellHeight + rowGap + titleOffset);
+        const boxY = titleY + 2;
 
-      if (entry.canvas) {
-        const props = pdf.getImageProperties(entry.canvas);
-        const ar = props.width / props.height;
-        let w = cellWidth - 4;
-        let h = w / ar;
-        if (h > cellHeight - 4) {
-          h = cellHeight - 4;
-          w = h * ar;
+        pdf.setFont("helvetica", "bold");
+        pdf.text(entry.label, cellX, titleY);
+        pdf.setFont("helvetica", "normal");
+        pdf.rect(cellX, boxY, cellWidth, cellHeight);
+
+        if (entry.canvas) {
+          const props = pdf.getImageProperties(entry.canvas);
+          const ar = props.width / props.height;
+          let w = cellWidth - 4;
+          let h = w / ar;
+          if (h > cellHeight - 4) {
+            h = cellHeight - 4;
+            w = h * ar;
+          }
+          pdf.addImage(entry.canvas, "PNG", cellX + (cellWidth - w) / 2, boxY + (cellHeight - h) / 2, w, h);
+        } else {
+          pdf.text("Diagram unavailable.", cellX + 4, boxY + 8);
         }
-        pdf.addImage(entry.canvas, "PNG", cellX + (cellWidth - w) / 2, boxY + (cellHeight - h) / 2, w, h);
-      } else {
-        pdf.text("Diagram unavailable.", cellX + 4, boxY + 8);
-      }
-    });
+      });
 
-    y = gridStartY + 2 * (cellHeight + rowGap + titleOffset) + 2;
+      y = gridStartY + rowCount * (cellHeight + rowGap + titleOffset) + 2;
+    }
 
     findingSections.forEach((section) => {
       if (section.entries.length === 0) return;
@@ -490,7 +539,10 @@ export const generatePeriAnalPDF = async (
     }
     row2(
       `Typed Signature: ${txt(addInfo?.surgeonSignatureText)}`,
-      `Date/Time: ${addInfo?.dateTime ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime) : ""}`
+      `Date/Time: ${
+        formatDateTimeDDMMYYYYWithDashes(addInfo?.dateTime || "") ||
+        formatDateTimeDDMMYYYYWithDashes(new Date())
+      }`
     );
 
     return {

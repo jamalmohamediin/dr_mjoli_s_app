@@ -25,6 +25,7 @@ export const ColonoscopyReportPreview = ({ report }: ColonoscopyReportPreviewPro
         title: "Colonoscopy Diagram",
         imageData: diagram.canvasImageData,
         alt: "Colonoscopy anatomy diagram",
+        maxHeightPx: 220,
       }}
       signature={{
         label: "Surgeon's Signature",

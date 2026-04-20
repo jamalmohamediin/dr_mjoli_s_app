@@ -257,6 +257,7 @@ export const initialPeriAnalState = {
     additionalNotes: "",
     activeDiagramVariant: DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
     diagramMarkingsByVariant: createInitialPeriAnalDiagramMarkings(),
+    visibleDiagramVariants: [] as string[],
   },
 };
 

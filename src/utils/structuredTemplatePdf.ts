@@ -5,19 +5,25 @@ import {
   formatDateTimeDDMMYYYYWithDashes,
 } from "@/utils/dateFormatter";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
-import { formatPatientGender, normalizePatientInfo } from "@/utils/patientSticker";
+import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
 import { hasText, toArray } from "@/utils/templateDataHelpers";
 
 export interface StructuredTemplatePdfEntry {
   label: string;
   value?: string | string[];
   fullWidth?: boolean;
+  subheading?: boolean;
 }
 
 export interface StructuredTemplatePdfSection {
   title: string;
   entries: StructuredTemplatePdfEntry[];
-  layout?: "default" | "colonoscopy-preoperative";
+  layout?:
+    | "default"
+    | "colonoscopy-preoperative"
+    | "label-value-table"
+    | "label-value-three-column";
+  columns?: 1 | 2;
 }
 
 interface StructuredTemplatePdfOptions {
@@ -29,6 +35,7 @@ interface StructuredTemplatePdfOptions {
     imageData?: string | null;
     placement?: "end" | "inlineRight";
     sectionTitle?: string;
+    style?: "plain" | "portsLegend";
   };
   signature?: {
     text?: string;
@@ -77,15 +84,23 @@ export const generateStructuredTemplatePdf = async ({
   const columnWidth = 84;
   let y = margin;
 
-  const info = normalizePatientInfo(patientInfo || {});
+  const info = getPdfSafePatientInfo(patientInfo || {});
   const filteredSections = sections
     .map((section) => ({
       ...section,
       entries: section.entries.filter((entry) =>
-        Array.isArray(entry.value) ? entry.value.length > 0 : hasText(entry.value),
+        entry.subheading
+          ? true
+          : Array.isArray(entry.value)
+            ? entry.value.length > 0
+            : hasText(entry.value),
       ),
     }))
-    .filter((section) => section.entries.length > 0);
+    .filter(
+      (section) =>
+        section.entries.some((entry) => !entry.subheading) ||
+        (section.layout !== "label-value-three-column" && section.entries.length > 0),
+    );
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -131,6 +146,44 @@ export const generateStructuredTemplatePdf = async ({
     });
   };
 
+  const drawLabelValueRow = (
+    label: string,
+    value: string,
+    x: number = margin,
+    width: number = contentWidth,
+    fixedLabelWidth?: number,
+  ) => {
+    if (!value) return;
+
+    const gap = 2;
+    const labelText = `${label}:`;
+    const preferredLabelWidth = Math.max(pdf.getTextWidth(labelText) + 2, width * 0.34);
+    const labelWidth = fixedLabelWidth
+      ? Math.min(Math.max(fixedLabelWidth, 30), width * 0.46)
+      : Math.min(Math.max(preferredLabelWidth, 30), width * 0.46);
+    const valueWidth = Math.max(width - labelWidth - gap, 20);
+    const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+    const valueLines = pdf.splitTextToSize(value, valueWidth);
+    const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+    ensureSpace(lineCount * lineHeight + 1);
+    for (let index = 0; index < lineCount; index += 1) {
+      if (labelLines[index]) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(labelLines[index], x, y);
+      }
+
+      if (valueLines[index]) {
+        pdf.setFont("helvetica", "normal");
+        pdf.text(valueLines[index], x + labelWidth + gap, y);
+      }
+
+      y += lineHeight;
+    }
+
+    pdf.setFont("helvetica", "normal");
+  };
+
   const drawThreeColRow = (first: string, second: string, third: string) => {
     if (!first && !second && !third) return;
     const gap = 4;
@@ -152,6 +205,143 @@ export const generateStructuredTemplatePdf = async ({
         pdf.text(thirdLines[index], margin + (threeColWidth + gap) * 2, y);
       }
       y += lineHeight;
+    }
+  };
+
+  type PreparedLabelValueCell = {
+    labelLines: string[];
+    valueLines: string[];
+    labelWidth: number;
+    x: number;
+  };
+
+  const prepareLabelValueCell = (
+    label: string,
+    value: string,
+    width: number,
+    x: number,
+  ): PreparedLabelValueCell => {
+    const gap = 2;
+    const labelText = `${label}:`;
+    const preferredLabelWidth = Math.max(pdf.getTextWidth(labelText) + 2, width * 0.34);
+    const labelWidth = Math.min(Math.max(preferredLabelWidth, 20), width * 0.48);
+    const valueWidth = Math.max(width - labelWidth - gap, 16);
+
+    return {
+      labelLines: pdf.splitTextToSize(labelText, labelWidth),
+      valueLines: pdf.splitTextToSize(value, valueWidth),
+      labelWidth,
+      x,
+    };
+  };
+
+  const drawPreparedLabelValueCellsRow = (
+    cells: PreparedLabelValueCell[],
+    rowGap: number = 0,
+  ) => {
+    if (cells.length === 0) return;
+    const gap = 2;
+    const lineCount = Math.max(
+      ...cells.map((cell) => Math.max(cell.labelLines.length, cell.valueLines.length, 1)),
+      1,
+    );
+
+    ensureSpace(lineCount * lineHeight + 1 + rowGap);
+
+    for (let index = 0; index < lineCount; index += 1) {
+      cells.forEach((cell) => {
+        if (cell.labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(cell.labelLines[index], cell.x, y);
+        }
+        if (cell.valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(cell.valueLines[index], cell.x + cell.labelWidth + gap, y);
+        }
+      });
+      y += lineHeight;
+    }
+
+    if (rowGap > 0) {
+      y += rowGap;
+    }
+    pdf.setFont("helvetica", "normal");
+  };
+
+  const drawTwoColLabelValueRow = (
+    left: { label: string; value: string },
+    right?: { label: string; value: string },
+  ) => {
+    const cells: PreparedLabelValueCell[] = [];
+
+    if (hasText(left.value)) {
+      cells.push(prepareLabelValueCell(left.label, left.value, columnWidth, margin));
+    }
+    if (right && hasText(right.value)) {
+      cells.push(prepareLabelValueCell(right.label, right.value, columnWidth, margin + 96));
+    }
+
+    drawPreparedLabelValueCellsRow(cells);
+  };
+
+  const drawThreeColLabelValueSection = (entries: StructuredTemplatePdfEntry[]) => {
+    const gap = 4;
+    const cellWidth = (contentWidth - gap * 2) / 3;
+    const rowGap = 3;
+    let index = 0;
+
+    while (index < entries.length) {
+      const entry = entries[index];
+
+      if (entry.subheading) {
+        let hasFollowingValues = false;
+        let scanIndex = index + 1;
+        while (scanIndex < entries.length && !entries[scanIndex].subheading) {
+          if (hasText(toEntryValue(entries[scanIndex]))) {
+            hasFollowingValues = true;
+            break;
+          }
+          scanIndex += 1;
+        }
+
+        if (hasFollowingValues) {
+          ensureSpace(lineHeight + 2);
+          pdf.setFont("helvetica", "bold");
+          pdf.text(entry.label, margin, y);
+          y += lineHeight + 1.2;
+          pdf.setFont("helvetica", "normal");
+        }
+
+        index += 1;
+        continue;
+      }
+
+      const rowEntries: StructuredTemplatePdfEntry[] = [];
+      while (
+        index < entries.length &&
+        rowEntries.length < 3 &&
+        !entries[index].subheading
+      ) {
+        if (hasText(toEntryValue(entries[index]))) {
+          rowEntries.push(entries[index]);
+        }
+        index += 1;
+      }
+
+      if (rowEntries.length === 0) {
+        continue;
+      }
+
+      const prepared = rowEntries.map((rowEntry, rowIndex) =>
+        prepareLabelValueCell(
+          rowEntry.label,
+          toEntryValue(rowEntry),
+          cellWidth,
+          margin + rowIndex * (cellWidth + gap),
+        ),
+      );
+
+      drawPreparedLabelValueCellsRow(prepared, rowGap);
     }
   };
 
@@ -230,27 +420,35 @@ export const generateStructuredTemplatePdf = async ({
   const gender = formatPatientGender(info);
   const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
 
-  drawTwoColRow(`Patient Name: ${info.name || ""}`, `Patient ID: ${info.patientId || ""}`);
-  drawTwoColRow(
-    `Date of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
-    `Age / Sex: ${[info.age, gender].filter(Boolean).join(" / ")}`,
+  drawTwoColLabelValueRow(
+    { label: "Patient Name", value: info.name || "" },
+    { label: "Patient ID", value: info.patientId || "" },
   );
-  drawTwoColRow(
-    `Weight / Height: ${[info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
-      .filter(Boolean)
-      .join(" / ")}`,
-    `BMI: ${info.bmi || ""}`,
+  drawTwoColLabelValueRow(
+    { label: "Date Of Birth", value: formatDateDDMMYYYYWithDashes(info.dateOfBirth) },
+    { label: "Age / Sex", value: [info.age, gender].filter(Boolean).join(" / ") },
   );
-  drawSingleRow(`ASA Score: ${asaText}`);
+  drawTwoColLabelValueRow(
+    {
+      label: "Weight / Height",
+      value: [info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
+        .filter(Boolean)
+        .join(" / "),
+    },
+    { label: "BMI", value: info.bmi || "" },
+  );
+  drawLabelValueRow("ASA Score", asaText);
   if (hasText(info.asaNotes)) {
-    drawSingleRow(`ASA Notes: ${info.asaNotes}`);
+    drawLabelValueRow("ASA Notes", info.asaNotes);
   }
 
   let inlineDiagramRendered = false;
 
   filteredSections.forEach((section) => {
     y += 2;
-    ensureSpace(16);
+    const sectionOpeningHeight =
+      section.layout === "label-value-three-column" ? 26 : 16;
+    ensureSpace(sectionOpeningHeight);
     drawRule();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
@@ -267,46 +465,162 @@ export const generateStructuredTemplatePdf = async ({
 
     if (shouldRenderInlineDiagram) {
       const gap = 6;
-      const rightWidth = 80;
+      const rightWidth = 70;
       const leftWidth = contentWidth - rightWidth - gap;
       const leftX = margin;
       const rightX = margin + leftWidth + gap;
-
-      const leftLines = section.entries.map((entry) => pdf.splitTextToSize(toEntryText(entry), leftWidth));
-      const leftHeight = leftLines.reduce((total, lines) => total + lines.length * lineHeight, 0);
-      const estimatedRightHeight = 74;
+      const labelGap = 2;
+      const renderedEntries = section.entries
+        .map((entry) => ({ label: entry.label, value: toEntryValue(entry) }))
+        .filter((entry) => hasText(entry.value));
+      const inlineLabelWidth = Math.min(
+        Math.max(
+          renderedEntries.reduce(
+            (maxWidth, entry) =>
+              Math.max(maxWidth, pdf.getTextWidth(`${entry.label}:`) + 2),
+            0,
+          ),
+          leftWidth * 0.34,
+          30,
+        ),
+        leftWidth * 0.46,
+      );
+      const countEntryLines = (entry: { label: string; value: string }) => {
+        const labelText = `${entry.label}:`;
+        const valueWidth = Math.max(leftWidth - inlineLabelWidth - labelGap, 20);
+        const labelLines = pdf.splitTextToSize(labelText, inlineLabelWidth);
+        const valueLines = pdf.splitTextToSize(entry.value, valueWidth);
+        return Math.max(labelLines.length, valueLines.length, 1);
+      };
+      const leftHeight =
+        renderedEntries.reduce(
+          (total, entry) => total + countEntryLines(entry) * lineHeight,
+          0,
+        ) || lineHeight;
+      const estimatedRightHeight = 66;
       const sectionHeight = Math.max(leftHeight, estimatedRightHeight) + 2;
 
       ensureSpace(sectionHeight + 2, 24);
 
       let leftY = y;
-      leftLines.forEach((lines) => {
-        lines.forEach((line: string) => {
-          pdf.text(line, leftX, leftY);
-          leftY += lineHeight;
-        });
-      });
+      renderedEntries.forEach((entry) => {
+        const labelText = `${entry.label}:`;
+        const valueWidth = Math.max(leftWidth - inlineLabelWidth - labelGap, 20);
+        const labelLines = pdf.splitTextToSize(labelText, inlineLabelWidth);
+        const valueLines = pdf.splitTextToSize(entry.value, valueWidth);
+        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
 
-      const portsAndIncisionsLayout = drawRectalStylePortsAndIncisions({
-        pdf,
-        x: rightX,
-        y,
-        pageHeight,
-        diagramCanvas: diagram?.imageData || null,
-        fallbackLabel: hasText(diagram?.title) ? String(diagram?.title) : "DIAGRAM",
+        for (let index = 0; index < lineCount; index += 1) {
+          if (labelLines[index]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(labelLines[index], leftX, leftY);
+          }
+
+          if (valueLines[index]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(valueLines[index], leftX + inlineLabelWidth + labelGap, leftY);
+          }
+
+          leftY += lineHeight;
+        }
       });
-      const rightBottomY = portsAndIncisionsLayout.diagramBottomY;
+      pdf.setFont("helvetica", "normal");
+
+      let rightBottomY = y;
+      if (diagram?.style === "plain") {
+        const diagramBoxHeight = 56;
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.rect(rightX, y, rightWidth, diagramBoxHeight);
+
+        if (diagram?.imageData) {
+          try {
+            const imageProps = pdf.getImageProperties(diagram.imageData);
+            const imageAspectRatio = imageProps.width / imageProps.height;
+            let imageWidth = rightWidth - 4;
+            let imageHeight = imageWidth / imageAspectRatio;
+
+            if (imageHeight > diagramBoxHeight - 4) {
+              imageHeight = diagramBoxHeight - 4;
+              imageWidth = imageHeight * imageAspectRatio;
+            }
+
+            const imageX = rightX + (rightWidth - imageWidth) / 2;
+            const imageY = y + (diagramBoxHeight - imageHeight) / 2;
+            pdf.addImage(diagram.imageData, "PNG", imageX, imageY, imageWidth, imageHeight);
+          } catch (error) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text("Diagram unavailable", rightX + rightWidth / 2, y + diagramBoxHeight / 2, {
+              align: "center",
+            });
+          }
+        }
+
+        rightBottomY = y + diagramBoxHeight;
+      } else {
+        const portsAndIncisionsLayout = drawRectalStylePortsAndIncisions({
+          pdf,
+          x: rightX,
+          y,
+          pageHeight,
+          diagramCanvas: diagram?.imageData || null,
+          fallbackLabel: hasText(diagram?.title) ? String(diagram?.title) : "DIAGRAM",
+        });
+        rightBottomY = portsAndIncisionsLayout.diagramBottomY;
+      }
 
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
 
-      y += Math.max(sectionHeight, rightBottomY - y + 2);
+      y = Math.max(leftY, rightBottomY + 2, y + sectionHeight);
       inlineDiagramRendered = true;
       return;
     }
 
     if (section.layout === "colonoscopy-preoperative") {
       renderColonoscopyPreoperativeSection(section.entries);
+      return;
+    }
+
+    if (section.layout === "label-value-table") {
+      if (section.columns === 2) {
+        for (let index = 0; index < section.entries.length; index += 2) {
+          const leftEntry = section.entries[index];
+          const rightEntry = section.entries[index + 1];
+          if (!leftEntry) {
+            continue;
+          }
+
+          drawTwoColLabelValueRow(
+            { label: leftEntry.label, value: toEntryValue(leftEntry) },
+            rightEntry ? { label: rightEntry.label, value: toEntryValue(rightEntry) } : undefined,
+          );
+        }
+        return;
+      }
+
+      const sectionLabelWidth = Math.min(
+        Math.max(
+          section.entries.reduce((maxWidth, entry) => {
+            const entryValue = toEntryValue(entry);
+            if (!hasText(entryValue)) {
+              return maxWidth;
+            }
+            return Math.max(maxWidth, pdf.getTextWidth(`${entry.label}:`) + 2);
+          }, 0),
+          contentWidth * 0.34,
+          30,
+        ),
+        contentWidth * 0.46,
+      );
+      section.entries.forEach((entry) => {
+        drawLabelValueRow(entry.label, toEntryValue(entry), margin, contentWidth, sectionLabelWidth);
+      });
+      return;
+    }
+
+    if (section.layout === "label-value-three-column") {
+      drawThreeColLabelValueSection(section.entries);
       return;
     }
 
@@ -377,27 +691,20 @@ export const generateStructuredTemplatePdf = async ({
     pdf.setFontSize(9);
 
     const signatureName = hasText(signature?.text) ? signature?.text : "";
-    if (hasText(signatureName) || signature?.alwaysShow) {
-      pdf.text(`Name: ${signatureName}`, margin, y);
-      y += lineHeight;
+    const signatureDate = hasText(signature?.dateTime)
+      ? formatDateTimeDDMMYYYYWithDashes(signature?.dateTime || "") || signature?.dateTime
+      : "";
+    const signatureNameLine = hasText(signatureName) ? `Name: ${signatureName}` : signature?.alwaysShow ? "Name:" : "";
+    const signatureDateLine = hasText(signatureDate) ? `Date: ${signatureDate}` : signature?.alwaysShow ? "Date:" : "";
+
+    if (hasText(signatureNameLine) || hasText(signatureDateLine)) {
+      drawTwoColRow(signatureNameLine, signatureDateLine);
     }
 
     if (hasText(signature?.imageData)) {
       const { width, height } = await calculateSignatureDimensions(signature?.imageData as string);
       pdf.addImage(signature?.imageData as string, "PNG", margin, y, width, height);
       y += height + 3;
-    }
-
-    if (hasText(signature?.dateTime)) {
-      pdf.text(
-        `Date: ${formatDateTimeDDMMYYYYWithDashes(signature?.dateTime || "") || signature?.dateTime}`,
-        margin,
-        y,
-      );
-      y += lineHeight;
-    } else if (signature?.alwaysShow) {
-      pdf.text("Date:", margin, y);
-      y += lineHeight;
     }
   }
 

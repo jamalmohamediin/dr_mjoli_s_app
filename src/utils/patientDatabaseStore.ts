@@ -3,6 +3,7 @@ import { firestoreDb } from "@/lib/firebase";
 import { isLocalPatientAttachment, stripLocalPatientAttachments } from "@/utils/localPatientAttachmentStore";
 import {
   createEmptyPatientDatabaseCache,
+  normalizePatientDatabaseCache,
   PatientAttachment,
   PatientDatabaseCache,
   PatientRecord,
@@ -87,14 +88,35 @@ const createQueueId = () => {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 };
 
-export const loadPatientDatabaseCache = (): PatientDatabaseCache => ({
-  patients: parseStoredJson(PATIENTS_CACHE_KEY, [] as PatientSummary[]),
-  records: parseStoredJson(PATIENT_RECORDS_CACHE_KEY, [] as PatientRecord[]),
-});
+const sanitizeId = (value: unknown) => String(value ?? "").trim();
+const isValidFirestoreDocId = (value: string) => value.length > 0 && !value.includes("/");
+
+const sanitizeIdList = (values: unknown) => {
+  if (!Array.isArray(values)) {
+    return [] as string[];
+  }
+
+  const dedupedIds = new Set<string>();
+  values.forEach((value) => {
+    const normalizedId = sanitizeId(value);
+    if (isValidFirestoreDocId(normalizedId)) {
+      dedupedIds.add(normalizedId);
+    }
+  });
+
+  return Array.from(dedupedIds);
+};
+
+export const loadPatientDatabaseCache = (): PatientDatabaseCache =>
+  normalizePatientDatabaseCache({
+    patients: parseStoredJson(PATIENTS_CACHE_KEY, [] as PatientSummary[]),
+    records: parseStoredJson(PATIENT_RECORDS_CACHE_KEY, [] as PatientRecord[]),
+  });
 
 export const savePatientDatabaseCache = (cache: PatientDatabaseCache) => {
-  writeStoredJson(PATIENTS_CACHE_KEY, cache.patients);
-  writeStoredJson(PATIENT_RECORDS_CACHE_KEY, cache.records);
+  const normalizedCache = normalizePatientDatabaseCache(cache);
+  writeStoredJson(PATIENTS_CACHE_KEY, normalizedCache.patients);
+  writeStoredJson(PATIENT_RECORDS_CACHE_KEY, normalizedCache.records);
 };
 
 export const loadPatientSyncQueue = () =>
@@ -149,7 +171,7 @@ export const fetchPatientDatabaseSnapshot = async () => {
     getDocs(collection(firestoreDb, "patient_records")),
   ]);
 
-  const cache = {
+  const normalizedCache = normalizePatientDatabaseCache({
     patients: patientSnapshot.docs.map((entry) => {
       const remotePatient = {
         id: entry.id,
@@ -180,10 +202,10 @@ export const fetchPatientDatabaseSnapshot = async () => {
       id: entry.id,
       ...entry.data(),
     })) as PatientRecord[],
-  };
+  });
 
-  savePatientDatabaseCache(cache);
-  return cache;
+  savePatientDatabaseCache(normalizedCache);
+  return normalizedCache;
 };
 
 const syncUpsertPatientRecord = async (patient: PatientSummary, record: PatientRecord) => {
@@ -191,11 +213,27 @@ const syncUpsertPatientRecord = async (patient: PatientSummary, record: PatientR
     throw new Error("Firestore is not configured");
   }
 
+  const safePatientId = sanitizeId(patient?.id);
+  const safeRecordId = sanitizeId(record?.id);
+  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+    return;
+  }
+
+  const normalizedPatient = {
+    ...patient,
+    id: safePatientId,
+  };
+  const normalizedRecord = {
+    ...record,
+    id: safeRecordId,
+    patientDocId: sanitizeId(record?.patientDocId) || safePatientId,
+  };
+
   await Promise.all([
-    setDoc(doc(firestoreDb, "patients", patient.id), toSerializable(patient), {
+    setDoc(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
       merge: true,
     }),
-    setDoc(doc(firestoreDb, "patient_records", record.id), toSerializable(record), {
+    setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(normalizedRecord), {
       merge: true,
     }),
   ]);
@@ -210,9 +248,16 @@ const syncPatientDeletedState = async (
     throw new Error("Firestore is not configured");
   }
 
+  const safePatientId = String(patientId || "").trim();
+  const safeRecordIds = sanitizeIdList(recordIds);
+
+  if (!isValidFirestoreDocId(safePatientId)) {
+    return;
+  }
+
   const batch = writeBatch(firestoreDb);
   batch.set(
-    doc(firestoreDb, "patients", patientId),
+    doc(firestoreDb, "patients", safePatientId),
     {
       deletedAt,
       updatedAt: new Date().toISOString(),
@@ -220,7 +265,7 @@ const syncPatientDeletedState = async (
     { merge: true },
   );
 
-  recordIds.forEach((recordId) => {
+  safeRecordIds.forEach((recordId) => {
     batch.set(
       doc(firestoreDb, "patient_records", recordId),
       {
@@ -239,13 +284,20 @@ const syncPermanentPatientDelete = async (patientIds: string[], recordIds: strin
     throw new Error("Firestore is not configured");
   }
 
+  const safePatientIds = sanitizeIdList(patientIds);
+  const safeRecordIds = sanitizeIdList(recordIds);
+
+  if (safePatientIds.length === 0 && safeRecordIds.length === 0) {
+    return;
+  }
+
   const batch = writeBatch(firestoreDb);
 
-  patientIds.forEach((patientId) => {
+  safePatientIds.forEach((patientId) => {
     batch.delete(doc(firestoreDb, "patients", patientId));
   });
 
-  recordIds.forEach((recordId) => {
+  safeRecordIds.forEach((recordId) => {
     batch.delete(doc(firestoreDb, "patient_records", recordId));
   });
 
@@ -260,8 +312,13 @@ const syncPatientAttachments = async (
     throw new Error("Firestore is not configured");
   }
 
+  const safePatientId = sanitizeId(patientId);
+  if (!isValidFirestoreDocId(safePatientId)) {
+    return;
+  }
+
   await setDoc(
-    doc(firestoreDb, "patients", patientId),
+    doc(firestoreDb, "patients", safePatientId),
     {
       attachments: toSerializable(attachments),
       updatedAt: new Date().toISOString(),
@@ -278,11 +335,21 @@ const syncDeletePatientRecord = async (
     throw new Error("Firestore is not configured");
   }
 
+  const safePatientId = String(patient?.id || "").trim();
+  const safeRecordId = String(recordId || "").trim();
+  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+    return;
+  }
+  const normalizedPatient = {
+    ...patient,
+    id: safePatientId,
+  };
+
   const batch = writeBatch(firestoreDb);
-  batch.set(doc(firestoreDb, "patients", patient.id), toSerializable(patient), {
+  batch.set(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
     merge: true,
   });
-  batch.delete(doc(firestoreDb, "patient_records", recordId));
+  batch.delete(doc(firestoreDb, "patient_records", safeRecordId));
   await batch.commit();
 };
 
@@ -320,53 +387,98 @@ export const processPatientSyncQueue = async () => {
 };
 
 export const queuePatientRecordSync = (patient: PatientSummary, record: PatientRecord) =>
-  enqueuePatientSyncItem({
+{
+  const safePatientId = sanitizeId(patient?.id);
+  const safeRecordId = sanitizeId(record?.id);
+  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+    return loadPatientSyncQueue().length;
+  }
+
+  return enqueuePatientSyncItem({
     type: "upsertPatientRecord",
-    patient: toSerializable(patient),
-    record: toSerializable(record),
+    patient: toSerializable({
+      ...patient,
+      id: safePatientId,
+    }),
+    record: toSerializable({
+      ...record,
+      id: safeRecordId,
+      patientDocId: sanitizeId(record?.patientDocId) || safePatientId,
+    }),
   });
+};
 
 export const queuePatientDeletedStateSync = (
   patientId: string,
   deletedAt: string | null,
   recordIds: string[],
-) =>
-  enqueuePatientSyncItem({
+) => {
+  const safePatientId = sanitizeId(patientId);
+  const safeRecordIds = sanitizeIdList(recordIds);
+  if (!isValidFirestoreDocId(safePatientId)) {
+    return loadPatientSyncQueue().length;
+  }
+
+  return enqueuePatientSyncItem({
     type: "setPatientDeletedState",
-    patientId,
+    patientId: safePatientId,
     deletedAt,
-    recordIds,
+    recordIds: safeRecordIds,
   });
+};
 
 export const queuePermanentPatientDeleteSync = (
   patientIds: string[],
   recordIds: string[],
-) =>
-  enqueuePatientSyncItem({
+) => {
+  const safePatientIds = sanitizeIdList(patientIds);
+  const safeRecordIds = sanitizeIdList(recordIds);
+  if (safePatientIds.length === 0 && safeRecordIds.length === 0) {
+    return loadPatientSyncQueue().length;
+  }
+
+  return enqueuePatientSyncItem({
     type: "permanentlyDeletePatients",
-    patientIds,
-    recordIds,
+    patientIds: safePatientIds,
+    recordIds: safeRecordIds,
   });
+};
 
 export const queuePatientAttachmentsSync = (
   patientId: string,
   attachments: PatientAttachment[],
-) =>
-  enqueuePatientSyncItem({
+) => {
+  const safePatientId = sanitizeId(patientId);
+  if (!isValidFirestoreDocId(safePatientId)) {
+    return loadPatientSyncQueue().length;
+  }
+
+  return enqueuePatientSyncItem({
     type: "setPatientAttachments",
-    patientId,
+    patientId: safePatientId,
     attachments: toSerializable(stripLocalPatientAttachments(attachments)),
   });
+};
 
 export const queuePatientRecordDeleteSync = (
   patient: PatientSummary,
   recordId: string,
-) =>
-  enqueuePatientSyncItem({
+) => {
+  const safePatientId = sanitizeId(patient?.id);
+  const safeRecordId = sanitizeId(recordId);
+  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+    return loadPatientSyncQueue().length;
+  }
+
+  return enqueuePatientSyncItem({
     type: "deletePatientRecord",
-    patient: toSerializable(patient),
-    recordId,
+    patient: toSerializable({
+      ...patient,
+      id: safePatientId,
+    }),
+    recordId: safeRecordId,
   });
+};
 
 export const resetPatientDatabaseCache = () => {
   savePatientDatabaseCache(createEmptyPatientDatabaseCache());

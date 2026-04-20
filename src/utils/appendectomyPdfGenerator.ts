@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
 import { getFullASAText } from './asaDescriptions';
-import { formatPatientGender, formatPatientStickerDate } from './patientSticker';
+import { formatPatientGender, formatPatientStickerDate, getPdfSafePatientInfo } from './patientSticker';
 import { drawRectalStylePortsAndIncisions } from './pdfPortsAndIncisionsLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
 
@@ -332,7 +332,7 @@ export const generateAppendectomyPDF = async (
     pdf.text('PATIENT INFORMATION', margin, y);
     y += 6;
     
-    const patientInfo = appendectomyData?.patientInfo || {};
+    const patientInfo = getPdfSafePatientInfo(appendectomyData?.patientInfo || {});
     const bodyFontSize = 8.5;
     const col1X = margin;
     const col2X = margin + 62;
@@ -346,20 +346,6 @@ export const generateAppendectomyPDF = async (
     const patientAge = getTextValue(patientInfo?.age);
     const patientDob = formatPatientStickerDate(patientInfo?.dateOfBirth);
     const patientAddress = getTextValue(patientInfo?.address);
-    const medicalAidName = getTextValue(patientInfo?.medicalAidName);
-    const medicalAidNumber = getTextValue(patientInfo?.medicalAidNumber);
-    const mainMember = getTextValue(patientInfo?.mainMember);
-    const mainMemberId = getTextValue(patientInfo?.mainMemberId);
-    const authorization = getTextValue(patientInfo?.authorization);
-    const workNumber = getTextValue(patientInfo?.workNumber);
-    const homeNumber = getTextValue(patientInfo?.homeNumber);
-    const dependCode = getTextValue(patientInfo?.dependCode);
-    const hospitalName = getTextValue(patientInfo?.hospitalName);
-    const hospitalVisitNumber = getTextValue(patientInfo?.hospitalVisitNumber);
-    const doctorName = getTextValue(patientInfo?.doctorName);
-    const doctorPracticeNumber = getTextValue(patientInfo?.doctorPracticeNumber);
-    const visitDate = formatPatientStickerDate(patientInfo?.visitDate);
-    const visitTime = getTextValue(patientInfo?.visitTime);
     const patientWeight = getTextValue(patientInfo?.weight);
     const patientHeight = getTextValue(patientInfo?.height);
     const patientBmi = getTextValue(patientInfo?.bmi);
@@ -403,63 +389,12 @@ export const generateAppendectomyPDF = async (
       ]);
     }
 
-    if (
-      hasPrintableValue(medicalAidName) ||
-      hasPrintableValue(medicalAidNumber) ||
-      hasPrintableValue(mainMember) ||
-      hasPrintableValue(mainMemberId) ||
-      hasPrintableValue(workNumber) ||
-      hasPrintableValue(homeNumber) ||
-      hasPrintableValue(authorization) ||
-      hasPrintableValue(dependCode)
-    ) {
-      drawPatientSubsectionTitle('Medical Aid Details');
-      drawWrappedColumns([
-        { text: `Medical Aid Name: ${medicalAidName}`, x: col1X, width: threeColumnWidth },
-        { text: `Medical Aid Number: ${medicalAidNumber}`, x: col2X, width: threeColumnWidth },
-        { text: `Main Member: ${mainMember}`, x: col3X, width: threeColumnWidth },
-      ]);
-      drawWrappedColumns([
-        { text: `Main Member ID: ${mainMemberId}`, x: col1X, width: threeColumnWidth },
-        { text: `Work Number: ${workNumber}`, x: col2X, width: threeColumnWidth },
-        { text: `Home Number: ${homeNumber}`, x: col3X, width: threeColumnWidth },
-      ]);
-      drawWrappedColumns([
-        { text: `Authorization: ${authorization}`, x: col1X, width: threeColumnWidth },
-        { text: `Depend Code: ${dependCode}`, x: col2X, width: threeColumnWidth },
-        { text: '', x: col3X, width: threeColumnWidth },
-      ]);
-    }
-
-    if (
-      hasPrintableValue(hospitalName) ||
-      hasPrintableValue(hospitalVisitNumber) ||
-      hasPrintableValue(doctorName) ||
-      hasPrintableValue(doctorPracticeNumber) ||
-      hasPrintableValue(asaClassification) ||
-      hasPrintableValue(patientWeight) ||
-      hasPrintableValue(patientHeight) ||
-      hasPrintableValue(patientBmi) ||
-      hasPrintableValue(visitDate) ||
-      hasPrintableValue(visitTime)
-    ) {
-      drawPatientSubsectionTitle('Hospital Details');
-      drawWrappedTextBlock(`Hospital Name: ${hospitalName}`, margin, fullWidth);
-      drawWrappedTextBlock(`Hospital Visit Number: ${hospitalVisitNumber}`, margin, fullWidth);
-      drawWrappedTextBlock(`Doctor's Name: ${doctorName}`, margin, fullWidth);
-      drawWrappedTextBlock(`Doctor's Practice Number: ${doctorPracticeNumber}`, margin, fullWidth);
-      drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
-      drawWrappedColumns([
-        { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
-        { text: `Height: ${patientHeight}`, x: col2X, width: threeColumnWidth },
-        { text: `BMI: ${patientBmi}`, x: col3X, width: threeColumnWidth },
-      ]);
-      drawWrappedColumns([
-        { text: `Date: ${visitDate}`, x: col1X, width: threeColumnWidth },
-        { text: `Time: ${visitTime}`, x: col2X, width: threeColumnWidth },
-        { text: '', x: col3X, width: threeColumnWidth },
-      ]);
-    }
+    drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
+    drawWrappedColumns([
+      { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
+      { text: `Height: ${patientHeight}`, x: col2X, width: threeColumnWidth },
+      { text: `BMI: ${patientBmi}`, x: col3X, width: threeColumnWidth },
+    ]);
 
     drawSectionDivider();
     

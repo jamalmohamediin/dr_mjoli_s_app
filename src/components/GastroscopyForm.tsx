@@ -3,9 +3,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { DateTimeDDMMYYYY24HourInput } from "@/components/Time24HourInput";
-import { AnatomyDiagram } from "@/components/AnatomyDiagram";
+import { GastroscopyDiagramCanvas } from "@/components/GastroscopyDiagramCanvas";
 import {
   CheckboxGrid,
   LabeledInput,
@@ -174,18 +175,6 @@ const diagnosisOptions = [
   "Other",
 ];
 
-const followUpOptions = [
-  "Barium Swallow",
-  "Barium Enema",
-  "Operation",
-  "CT Scan",
-  "MRI",
-  "Blood Tests",
-  "Repeat Endoscopy",
-  "Histology Results",
-  "Other",
-];
-
 type FindingSectionKey = "pharynxLarynx" | "oesophagus" | "stomach" | "duodenum";
 
 export const GastroscopyForm = ({
@@ -215,6 +204,7 @@ export const GastroscopyForm = ({
     stomach: true,
     duodenum: true,
   });
+  const [isSedationExpanded, setIsSedationExpanded] = React.useState(true);
 
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
@@ -240,6 +230,51 @@ export const GastroscopyForm = ({
   };
 
   const findingSelected = (values: unknown, option: string) => toArray(values).includes(option);
+  const toggleFindingValue = (values: unknown, option: string) => {
+    const currentValues = toArray(values);
+    return currentValues.includes(option)
+      ? currentValues.filter((entry) => entry !== option)
+      : [...currentValues, option];
+  };
+
+  const renderFindingOptionList = (
+    label: string,
+    options: string[],
+    values: unknown,
+    onChange: (nextValues: string[]) => void,
+    renderSubsection?: (option: string) => React.ReactNode,
+  ) => {
+    const selectedValues = toArray(values);
+
+    return (
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-gray-700">{label}</Label>
+        <div className="space-y-2">
+          {options.map((option) => {
+            const isSelected = selectedValues.includes(option);
+            const subsection = isSelected && renderSubsection ? renderSubsection(option) : null;
+
+            return (
+              <div key={option} className="rounded border border-gray-200">
+                <label className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => onChange(toggleFindingValue(selectedValues, option))}
+                  />
+                  <span>{option}</span>
+                </label>
+                {subsection ? (
+                  <div className="space-y-3 border-t border-gray-200 px-3 pb-3 pt-3">
+                    {subsection}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const renderFindingSegment = (
     section: FindingSectionKey,
@@ -321,20 +356,35 @@ export const GastroscopyForm = ({
           <OptionalOtherInput enabled={toArray(preoperative.signsSymptoms).includes("Other")} value={preoperative.signsSymptomsOther || ""} placeholder="Specify other sign/symptom" onChange={(value) => updateTemplate("preoperative", "signsSymptomsOther", value)} />
           <CheckboxGrid label="Extent of Examination" options={extentOptions} values={preoperative.extentOfExamination} onChange={(value) => updateTemplate("preoperative", "extentOfExamination", value)} columns="grid-cols-2 md:grid-cols-4" />
 
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Sedation / Anaesthesia</h3>
-            <RadioGrid label="Sedationist" options={sedationistOptions} value={preoperative.sedationist || ""} onChange={(value) => updateTemplate("preoperative", "sedationist", value)} />
-            <OptionalOtherInput enabled={preoperative.sedationist === "Other"} value={preoperative.sedationistOther || ""} placeholder="Specify other sedationist" onChange={(value) => updateTemplate("preoperative", "sedationistOther", value)} />
-            <CheckboxGrid label="Type of sedation" options={sedationTypeOptions} values={preoperative.sedationTypes} onChange={(value) => updateTemplate("preoperative", "sedationTypes", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <LabeledInput label="Midazolam dose (mg)" value={preoperative.medications?.midazolamDose || ""} onChange={(value) => updateMedication("midazolamDose", value)} />
-              <LabeledInput label="Fentanyl dose (mcg)" value={preoperative.medications?.fentanylDose || ""} onChange={(value) => updateMedication("fentanylDose", value)} />
-              <LabeledInput label="Propofol dose (mg)" value={preoperative.medications?.propofolDose || ""} onChange={(value) => updateMedication("propofolDose", value)} />
-              <LabeledInput label="Other medication" value={preoperative.medications?.otherMedication || ""} onChange={(value) => updateMedication("otherMedication", value)} />
-            </div>
-            <CheckboxGrid label="Monitoring" options={monitoringOptions} values={preoperative.monitoring} onChange={(value) => updateTemplate("preoperative", "monitoring", value)} columns="grid-cols-2 md:grid-cols-4" />
-            <OptionalOtherInput enabled={toArray(preoperative.monitoring).includes("Other")} value={preoperative.monitoringOther || ""} placeholder="Specify other monitoring" onChange={(value) => updateTemplate("preoperative", "monitoringOther", value)} />
-            <RadioGrid label="Level of sedation achieved" options={sedationLevelOptions} value={preoperative.sedationLevel || ""} onChange={(value) => updateTemplate("preoperative", "sedationLevel", value)} />
+          <div className="rounded-md border border-gray-200">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+              onClick={() => setIsSedationExpanded((previous) => !previous)}
+            >
+              <span className="text-sm font-semibold text-gray-800">Sedation / Anaesthesia</span>
+              {isSedationExpanded ? (
+                <ChevronUp className="h-4 w-4 text-gray-600" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-600" />
+              )}
+            </button>
+            {isSedationExpanded ? (
+              <div className="space-y-4 border-t px-4 pb-4 pt-4">
+                <RadioGrid label="Sedationist" options={sedationistOptions} value={preoperative.sedationist || ""} onChange={(value) => updateTemplate("preoperative", "sedationist", value)} />
+                <OptionalOtherInput enabled={preoperative.sedationist === "Other"} value={preoperative.sedationistOther || ""} placeholder="Specify other sedationist" onChange={(value) => updateTemplate("preoperative", "sedationistOther", value)} />
+                <CheckboxGrid label="Type of sedation" options={sedationTypeOptions} values={preoperative.sedationTypes} onChange={(value) => updateTemplate("preoperative", "sedationTypes", value)} columns="grid-cols-2 md:grid-cols-4" />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <LabeledInput label="Midazolam dose (mg)" value={preoperative.medications?.midazolamDose || ""} onChange={(value) => updateMedication("midazolamDose", value)} />
+                  <LabeledInput label="Fentanyl dose (mcg)" value={preoperative.medications?.fentanylDose || ""} onChange={(value) => updateMedication("fentanylDose", value)} />
+                  <LabeledInput label="Propofol dose (mg)" value={preoperative.medications?.propofolDose || ""} onChange={(value) => updateMedication("propofolDose", value)} />
+                  <LabeledInput label="Other medication" value={preoperative.medications?.otherMedication || ""} onChange={(value) => updateMedication("otherMedication", value)} />
+                </div>
+                <CheckboxGrid label="Monitoring" options={monitoringOptions} values={preoperative.monitoring} onChange={(value) => updateTemplate("preoperative", "monitoring", value)} columns="grid-cols-2 md:grid-cols-4" />
+                <OptionalOtherInput enabled={toArray(preoperative.monitoring).includes("Other")} value={preoperative.monitoringOther || ""} placeholder="Specify other monitoring" onChange={(value) => updateTemplate("preoperative", "monitoringOther", value)} />
+                <RadioGrid label="Level of sedation achieved" options={sedationLevelOptions} value={preoperative.sedationLevel || ""} onChange={(value) => updateTemplate("preoperative", "sedationLevel", value)} />
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -359,66 +409,59 @@ export const GastroscopyForm = ({
             "oesophagus",
             "Oesophagus",
             <>
-              <CheckboxGrid label="Oesophagus Findings" options={oesophagusFindingOptions} values={oesophagus.findings} onChange={(value) => updateTemplate("oesophagus", "findings", value)} />
-
-              {findingSelected(oesophagus.findings, "Barrett’s Oesophagus") ? (
-                <div className="space-y-4 border-t pt-4">
-                  <CheckboxGrid label="Barrett’s Oesophagus" options={["Suspected", "Confirmed"]} values={oesophagus.barrettType} onChange={(value) => updateTemplate("oesophagus", "barrettType", value)} columns="grid-cols-2" />
-                  <LabeledInput label="Length (cm)" value={oesophagus.barrettLength || ""} onChange={(value) => updateTemplate("oesophagus", "barrettLength", value)} />
-                </div>
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Candida Oesophagitis") ? (
-                <CheckboxGrid label="Candida Oesophagitis" options={["Mild", "Moderate", "Severe"]} values={oesophagus.candidaSeverity} onChange={(value) => updateTemplate("oesophagus", "candidaSeverity", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Oesophageal Ulcer") ? (
-                <CheckboxGrid label="Oesophageal Ulcer" options={["Benign Appearing", "Malignant Appearing"]} values={oesophagus.ulcerAppearance} onChange={(value) => updateTemplate("oesophagus", "ulcerAppearance", value)} columns="grid-cols-2" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Oesophagitis") ? (
-                <CheckboxGrid label="Oesophagitis" options={["Grade A", "Grade B", "Grade C", "Grade D"]} values={oesophagus.oesophagitisGrade} onChange={(value) => updateTemplate("oesophagus", "oesophagitisGrade", value)} columns="grid-cols-2 md:grid-cols-4" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Hiatus Hernia") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Hiatus Hernia" options={["Grade I", "Grade II", "Grade III", "Grade IV"]} values={oesophagus.hiatusHerniaGrade} onChange={(value) => updateTemplate("oesophagus", "hiatusHerniaGrade", value)} columns="grid-cols-2 md:grid-cols-4" />
-                  <LabeledInput label="Length (cm)" value={oesophagus.hiatusHerniaLength || ""} onChange={(value) => updateTemplate("oesophagus", "hiatusHerniaLength", value)} />
-                </div>
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Kaposi Sarcoma") ? (
-                <CheckboxGrid label="Kaposi Sarcoma" options={["Single", "Multiple"]} values={oesophagus.kaposiMultiplicity} onChange={(value) => updateTemplate("oesophagus", "kaposiMultiplicity", value)} columns="grid-cols-2" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Mallory-Weiss Tear") ? (
-                <CheckboxGrid label="Mallory-Weiss Tear" options={["Actively Bleeding", "Not Bleeding"]} values={oesophagus.malloryWeissBleeding} onChange={(value) => updateTemplate("oesophagus", "malloryWeissBleeding", value)} columns="grid-cols-2" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Oesophageal Web") ? (
-                <CheckboxGrid label="Oesophageal Web" options={["Proximal esophagus", "Mid esophagus", "Distal esophagus"]} values={oesophagus.webLocation} onChange={(value) => updateTemplate("oesophagus", "webLocation", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Stricture") ? (
-                <CheckboxGrid label="Stricture" options={["Benign", "Malignant"]} values={oesophagus.strictureType} onChange={(value) => updateTemplate("oesophagus", "strictureType", value)} columns="grid-cols-2" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Malignancy") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Malignancy location" options={["Proximal Oesophagus", "Mid Oesophagus", "Distal Oesophagus"]} values={oesophagus.malignancyLocation} onChange={(value) => updateTemplate("oesophagus", "malignancyLocation", value)} columns="grid-cols-3" />
-                  <LabeledInput label="Length (cm)" value={oesophagus.malignancyLength || ""} onChange={(value) => updateTemplate("oesophagus", "malignancyLength", value)} />
-                </div>
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Diverticulum") ? (
-                <CheckboxGrid label="Diverticulum location" options={["Proximal Oesophagus", "Mid Oesophagus", "Distal Oesophagus"]} values={oesophagus.diverticulumLocation} onChange={(value) => updateTemplate("oesophagus", "diverticulumLocation", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(oesophagus.findings, "Varices") ? (
-                <CheckboxGrid label="Varices" options={["Grade I", "Grade II", "Grade III"]} values={oesophagus.varicesGrade} onChange={(value) => updateTemplate("oesophagus", "varicesGrade", value)} columns="grid-cols-3" />
-              ) : null}
-
-              <OptionalOtherInput enabled={findingSelected(oesophagus.findings, "Other")} value={oesophagus.other || ""} placeholder="Specify other oesophagus finding" onChange={(value) => updateTemplate("oesophagus", "other", value)} />
+              {renderFindingOptionList(
+                "Oesophagus Findings",
+                oesophagusFindingOptions,
+                oesophagus.findings,
+                (value) => updateTemplate("oesophagus", "findings", value),
+                (option) => {
+                  switch (option) {
+                    case "Barrett’s Oesophagus":
+                      return (
+                        <>
+                          <CheckboxGrid label="Barrett’s Oesophagus" options={["Suspected", "Confirmed"]} values={oesophagus.barrettType} onChange={(value) => updateTemplate("oesophagus", "barrettType", value)} columns="grid-cols-2" />
+                          <LabeledInput label="Length (cm)" value={oesophagus.barrettLength || ""} onChange={(value) => updateTemplate("oesophagus", "barrettLength", value)} />
+                        </>
+                      );
+                    case "Candida Oesophagitis":
+                      return <CheckboxGrid label="Candida Oesophagitis" options={["Mild", "Moderate", "Severe"]} values={oesophagus.candidaSeverity} onChange={(value) => updateTemplate("oesophagus", "candidaSeverity", value)} columns="grid-cols-3" />;
+                    case "Oesophageal Ulcer":
+                      return <CheckboxGrid label="Oesophageal Ulcer" options={["Benign Appearing", "Malignant Appearing"]} values={oesophagus.ulcerAppearance} onChange={(value) => updateTemplate("oesophagus", "ulcerAppearance", value)} columns="grid-cols-2" />;
+                    case "Oesophagitis":
+                      return <CheckboxGrid label="Oesophagitis" options={["Grade A", "Grade B", "Grade C", "Grade D"]} values={oesophagus.oesophagitisGrade} onChange={(value) => updateTemplate("oesophagus", "oesophagitisGrade", value)} columns="grid-cols-2 md:grid-cols-4" />;
+                    case "Hiatus Hernia":
+                      return (
+                        <>
+                          <CheckboxGrid label="Hiatus Hernia" options={["Grade I", "Grade II", "Grade III", "Grade IV"]} values={oesophagus.hiatusHerniaGrade} onChange={(value) => updateTemplate("oesophagus", "hiatusHerniaGrade", value)} columns="grid-cols-2 md:grid-cols-4" />
+                          <LabeledInput label="Length (cm)" value={oesophagus.hiatusHerniaLength || ""} onChange={(value) => updateTemplate("oesophagus", "hiatusHerniaLength", value)} />
+                        </>
+                      );
+                    case "Kaposi Sarcoma":
+                      return <CheckboxGrid label="Kaposi Sarcoma" options={["Single", "Multiple"]} values={oesophagus.kaposiMultiplicity} onChange={(value) => updateTemplate("oesophagus", "kaposiMultiplicity", value)} columns="grid-cols-2" />;
+                    case "Mallory-Weiss Tear":
+                      return <CheckboxGrid label="Mallory-Weiss Tear" options={["Actively Bleeding", "Not Bleeding"]} values={oesophagus.malloryWeissBleeding} onChange={(value) => updateTemplate("oesophagus", "malloryWeissBleeding", value)} columns="grid-cols-2" />;
+                    case "Oesophageal Web":
+                      return <CheckboxGrid label="Oesophageal Web" options={["Proximal esophagus", "Mid esophagus", "Distal esophagus"]} values={oesophagus.webLocation} onChange={(value) => updateTemplate("oesophagus", "webLocation", value)} columns="grid-cols-3" />;
+                    case "Stricture":
+                      return <CheckboxGrid label="Stricture" options={["Benign", "Malignant"]} values={oesophagus.strictureType} onChange={(value) => updateTemplate("oesophagus", "strictureType", value)} columns="grid-cols-2" />;
+                    case "Malignancy":
+                      return (
+                        <>
+                          <CheckboxGrid label="Malignancy location" options={["Proximal Oesophagus", "Mid Oesophagus", "Distal Oesophagus"]} values={oesophagus.malignancyLocation} onChange={(value) => updateTemplate("oesophagus", "malignancyLocation", value)} columns="grid-cols-3" />
+                          <LabeledInput label="Length (cm)" value={oesophagus.malignancyLength || ""} onChange={(value) => updateTemplate("oesophagus", "malignancyLength", value)} />
+                        </>
+                      );
+                    case "Diverticulum":
+                      return <CheckboxGrid label="Diverticulum location" options={["Proximal Oesophagus", "Mid Oesophagus", "Distal Oesophagus"]} values={oesophagus.diverticulumLocation} onChange={(value) => updateTemplate("oesophagus", "diverticulumLocation", value)} columns="grid-cols-3" />;
+                    case "Varices":
+                      return <CheckboxGrid label="Varices" options={["Grade I", "Grade II", "Grade III"]} values={oesophagus.varicesGrade} onChange={(value) => updateTemplate("oesophagus", "varicesGrade", value)} columns="grid-cols-3" />;
+                    case "Other":
+                      return <LabeledInput label="Specify Other Oesophagus Finding" value={oesophagus.other || ""} onChange={(value) => updateTemplate("oesophagus", "other", value)} />;
+                    default:
+                      return null;
+                  }
+                },
+              )}
             </>,
           )}
 
@@ -426,69 +469,68 @@ export const GastroscopyForm = ({
             "stomach",
             "Stomach",
             <>
-              <CheckboxGrid label="Stomach Findings" options={stomachFindingOptions} values={stomach.findings} onChange={(value) => updateTemplate("stomach", "findings", value)} />
-
-              {findingSelected(stomach.findings, "Ulcer") ? (
-                <div className="space-y-4 border-t pt-4">
-                  <CheckboxGrid label="Ulcer" options={["Single", "Multiple", "Malignant Features", "No Malignant Features"]} values={stomach.ulcerSelections} onChange={(value) => updateTemplate("stomach", "ulcerSelections", value)} columns="grid-cols-2 md:grid-cols-4" />
-                  <CheckboxGrid label="Forrest Classification" options={forrestOptions} values={stomach.forrestClassification} onChange={(value) => updateTemplate("stomach", "forrestClassification", value)} columns="grid-cols-2 md:grid-cols-3" />
-                </div>
-              ) : null}
-
-              {findingSelected(stomach.findings, "Mass / Tumour") ? (
-                <CheckboxGrid label="Mass / Tumour" options={["Polypoid", "Ulcerating", "Fungating", "Infiltrating"]} values={stomach.massMorphology} onChange={(value) => updateTemplate("stomach", "massMorphology", value)} columns="grid-cols-2 md:grid-cols-4" />
-              ) : null}
-
-              {findingSelected(stomach.findings, "Erosion(s)") ? (
-                <CheckboxGrid label="Erosion(s)" options={["Single", "Multiple", "Associated with Gastritis"]} values={stomach.erosionSelections} onChange={(value) => updateTemplate("stomach", "erosionSelections", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(stomach.findings, "Gastritis") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Gastritis Type" options={["Erosive Gastritis", "Atrophic Gastritis", "Haemorrhagic Gastritis", "Nodular Gastritis", "Bile Reflux Gastritis", "Other"]} values={stomach.gastritisType} onChange={(value) => updateTemplate("stomach", "gastritisType", value)} />
-                  <OptionalOtherInput enabled={toArray(stomach.gastritisType).includes("Other")} value={stomach.gastritisTypeOther || ""} placeholder="Specify other gastritis type" onChange={(value) => updateTemplate("stomach", "gastritisTypeOther", value)} />
-                  <CheckboxGrid label="Severity" options={["Mild", "Moderate", "Severe"]} values={stomach.gastritisSeverity} onChange={(value) => updateTemplate("stomach", "gastritisSeverity", value)} columns="grid-cols-3" />
-                </div>
-              ) : null}
-
-              {findingSelected(stomach.findings, "GIST") ? (
-                <CheckboxGrid label="GIST" options={["Normal Overlying Mucosa", "Ulcerated Overlying Mucosa"]} values={stomach.gistMucosa} onChange={(value) => updateTemplate("stomach", "gistMucosa", value)} columns="grid-cols-2" />
-              ) : null}
-
-              {findingSelected(stomach.findings, "Kaposi Sarcoma") ? (
-                <CheckboxGrid label="Kaposi Sarcoma" options={["Single", "Multiple", "Diffuse"]} values={stomach.kaposiPattern} onChange={(value) => updateTemplate("stomach", "kaposiPattern", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(stomach.findings, "Gastric Antral Vascular Ectasia (GAVE)") ? (
-                <CheckboxGrid label="Gastric Antral Vascular Ectasia (GAVE)" options={["Focal", "Patchy", "Diffuse"]} values={stomach.gavePattern} onChange={(value) => updateTemplate("stomach", "gavePattern", value)} columns="grid-cols-3" />
-              ) : null}
-
-              {findingSelected(stomach.findings, "Varices") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Varices Number" options={["Single", "Multiple", "Diffuse"]} values={stomach.varicesNumber} onChange={(value) => updateTemplate("stomach", "varicesNumber", value)} columns="grid-cols-3" />
-                  <CheckboxGrid label="Varices Classification" options={["Continuous With Oesophageal Varices", "Isolated Gastric Varices"]} values={stomach.varicesClassification} onChange={(value) => updateTemplate("stomach", "varicesClassification", value)} columns="grid-cols-2" />
-                </div>
-              ) : null}
-
-              {findingSelected(stomach.findings, "Polyps") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Polyps" options={["Single", "Multiple", "Diffuse"]} values={stomach.polypNumber} onChange={(value) => updateTemplate("stomach", "polypNumber", value)} columns="grid-cols-3" />
-                  <CheckboxGrid label="Polyp Size" options={["< 5mm", "5 – 10mm", "10 – 20mm", "> 20mm"]} values={stomach.polypSize} onChange={(value) => updateTemplate("stomach", "polypSize", value)} columns="grid-cols-2 md:grid-cols-4" />
-                </div>
-              ) : null}
-
-              {findingSelected(stomach.findings, "Portal Gastropathy") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Portal Gastropathy Severity" options={["Mild", "Moderate", "Severe"]} values={stomach.portalGastropathySeverity} onChange={(value) => updateTemplate("stomach", "portalGastropathySeverity", value)} columns="grid-cols-3" />
-                  <CheckboxGrid label="Portal Gastropathy Mucosa" options={["Erythematous", "Edematous", "Petechial", "Erosions"]} values={stomach.portalGastropathyMucosa} onChange={(value) => updateTemplate("stomach", "portalGastropathyMucosa", value)} columns="grid-cols-2 md:grid-cols-4" />
-                </div>
-              ) : null}
-
-              {findingSelected(stomach.findings, "Stricture") ? (
-                <CheckboxGrid label="Stricture Overlying Mucosa" options={["Normal", "Inflamed", "Ulcerated", "Scarred / Fibrotic"]} values={stomach.strictureMucosa} onChange={(value) => updateTemplate("stomach", "strictureMucosa", value)} columns="grid-cols-2 md:grid-cols-4" />
-              ) : null}
-
-              <OptionalOtherInput enabled={findingSelected(stomach.findings, "Other")} value={stomach.other || ""} placeholder="Specify other stomach finding" onChange={(value) => updateTemplate("stomach", "other", value)} />
+              {renderFindingOptionList(
+                "Stomach Findings",
+                stomachFindingOptions,
+                stomach.findings,
+                (value) => updateTemplate("stomach", "findings", value),
+                (option) => {
+                  switch (option) {
+                    case "Ulcer":
+                      return (
+                        <>
+                          <CheckboxGrid label="Ulcer" options={["Single", "Multiple", "Malignant Features", "No Malignant Features"]} values={stomach.ulcerSelections} onChange={(value) => updateTemplate("stomach", "ulcerSelections", value)} columns="grid-cols-2 md:grid-cols-4" />
+                          <CheckboxGrid label="Forrest Classification" options={forrestOptions} values={stomach.forrestClassification} onChange={(value) => updateTemplate("stomach", "forrestClassification", value)} columns="grid-cols-2 md:grid-cols-3" />
+                        </>
+                      );
+                    case "Mass / Tumour":
+                      return <CheckboxGrid label="Mass / Tumour" options={["Polypoid", "Ulcerating", "Fungating", "Infiltrating"]} values={stomach.massMorphology} onChange={(value) => updateTemplate("stomach", "massMorphology", value)} columns="grid-cols-2 md:grid-cols-4" />;
+                    case "Erosion(s)":
+                      return <CheckboxGrid label="Erosion(s)" options={["Single", "Multiple", "Associated with Gastritis"]} values={stomach.erosionSelections} onChange={(value) => updateTemplate("stomach", "erosionSelections", value)} columns="grid-cols-3" />;
+                    case "Gastritis":
+                      return (
+                        <>
+                          <CheckboxGrid label="Gastritis Type" options={["Erosive Gastritis", "Atrophic Gastritis", "Haemorrhagic Gastritis", "Nodular Gastritis", "Bile Reflux Gastritis", "Other"]} values={stomach.gastritisType} onChange={(value) => updateTemplate("stomach", "gastritisType", value)} />
+                          <OptionalOtherInput enabled={toArray(stomach.gastritisType).includes("Other")} value={stomach.gastritisTypeOther || ""} placeholder="Specify other gastritis type" onChange={(value) => updateTemplate("stomach", "gastritisTypeOther", value)} />
+                          <CheckboxGrid label="Severity" options={["Mild", "Moderate", "Severe"]} values={stomach.gastritisSeverity} onChange={(value) => updateTemplate("stomach", "gastritisSeverity", value)} columns="grid-cols-3" />
+                        </>
+                      );
+                    case "GIST":
+                      return <CheckboxGrid label="GIST" options={["Normal Overlying Mucosa", "Ulcerated Overlying Mucosa"]} values={stomach.gistMucosa} onChange={(value) => updateTemplate("stomach", "gistMucosa", value)} columns="grid-cols-2" />;
+                    case "Kaposi Sarcoma":
+                      return <CheckboxGrid label="Kaposi Sarcoma" options={["Single", "Multiple", "Diffuse"]} values={stomach.kaposiPattern} onChange={(value) => updateTemplate("stomach", "kaposiPattern", value)} columns="grid-cols-3" />;
+                    case "Gastric Antral Vascular Ectasia (GAVE)":
+                      return <CheckboxGrid label="Gastric Antral Vascular Ectasia (GAVE)" options={["Focal", "Patchy", "Diffuse"]} values={stomach.gavePattern} onChange={(value) => updateTemplate("stomach", "gavePattern", value)} columns="grid-cols-3" />;
+                    case "Varices":
+                      return (
+                        <>
+                          <CheckboxGrid label="Varices Number" options={["Single", "Multiple", "Diffuse"]} values={stomach.varicesNumber} onChange={(value) => updateTemplate("stomach", "varicesNumber", value)} columns="grid-cols-3" />
+                          <CheckboxGrid label="Varices Classification" options={["Continuous With Oesophageal Varices", "Isolated Gastric Varices"]} values={stomach.varicesClassification} onChange={(value) => updateTemplate("stomach", "varicesClassification", value)} columns="grid-cols-2" />
+                        </>
+                      );
+                    case "Polyps":
+                      return (
+                        <>
+                          <CheckboxGrid label="Polyps" options={["Single", "Multiple", "Diffuse"]} values={stomach.polypNumber} onChange={(value) => updateTemplate("stomach", "polypNumber", value)} columns="grid-cols-3" />
+                          <CheckboxGrid label="Polyp Size" options={["< 5mm", "5 – 10mm", "10 – 20mm", "> 20mm"]} values={stomach.polypSize} onChange={(value) => updateTemplate("stomach", "polypSize", value)} columns="grid-cols-2 md:grid-cols-4" />
+                        </>
+                      );
+                    case "Portal Gastropathy":
+                      return (
+                        <>
+                          <CheckboxGrid label="Portal Gastropathy Severity" options={["Mild", "Moderate", "Severe"]} values={stomach.portalGastropathySeverity} onChange={(value) => updateTemplate("stomach", "portalGastropathySeverity", value)} columns="grid-cols-3" />
+                          <CheckboxGrid label="Portal Gastropathy Mucosa" options={["Erythematous", "Edematous", "Petechial", "Erosions"]} values={stomach.portalGastropathyMucosa} onChange={(value) => updateTemplate("stomach", "portalGastropathyMucosa", value)} columns="grid-cols-2 md:grid-cols-4" />
+                        </>
+                      );
+                    case "Stricture":
+                      return <CheckboxGrid label="Stricture Overlying Mucosa" options={["Normal", "Inflamed", "Ulcerated", "Scarred / Fibrotic"]} values={stomach.strictureMucosa} onChange={(value) => updateTemplate("stomach", "strictureMucosa", value)} columns="grid-cols-2 md:grid-cols-4" />;
+                    case "Other":
+                      return <LabeledInput label="Specify Other Stomach Finding" value={stomach.other || ""} onChange={(value) => updateTemplate("stomach", "other", value)} />;
+                    default:
+                      return null;
+                  }
+                },
+              )}
             </>,
           )}
 
@@ -496,38 +538,45 @@ export const GastroscopyForm = ({
             "duodenum",
             "Duodenum",
             <>
-              <CheckboxGrid label="Duodenum Findings" options={duodenumFindingOptions} values={duodenum.findings} onChange={(value) => updateTemplate("duodenum", "findings", value)} />
-
-              {findingSelected(duodenum.findings, "Duodenitis") ? (
-                <div className="space-y-4 border-t pt-4">
-                  <CheckboxGrid label="Duodenitis Severity" options={["Mild", "Moderate", "Severe"]} values={duodenum.duodenitisSeverity} onChange={(value) => updateTemplate("duodenum", "duodenitisSeverity", value)} columns="grid-cols-3" />
-                  <CheckboxGrid label="Duodenitis Additional Findings" options={["With Presence Of Erosions"]} values={duodenum.duodenitisWithErosions} onChange={(value) => updateTemplate("duodenum", "duodenitisWithErosions", value)} columns="grid-cols-1" />
-                </div>
-              ) : null}
-
-              {findingSelected(duodenum.findings, "Ulcer") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Ulcer" options={["Single", "Multiple", "Malignant Features", "No Malignant Features"]} values={duodenum.ulcerSelections} onChange={(value) => updateTemplate("duodenum", "ulcerSelections", value)} columns="grid-cols-2 md:grid-cols-4" />
-                  <CheckboxGrid label="Forrest Classification" options={forrestOptions} values={duodenum.forrestClassification} onChange={(value) => updateTemplate("duodenum", "forrestClassification", value)} columns="grid-cols-2 md:grid-cols-3" />
-                </div>
-              ) : null}
-
-              {findingSelected(duodenum.findings, "Polyp") ? (
-                <div className="space-y-4">
-                  <CheckboxGrid label="Polyp" options={["Single", "Multiple", "Diffuse"]} values={duodenum.polypNumber} onChange={(value) => updateTemplate("duodenum", "polypNumber", value)} columns="grid-cols-3" />
-                  <CheckboxGrid label="Polyp Size" options={["< 5mm", "5 – 10mm", "10 – 20mm", "> 20mm"]} values={duodenum.polypSize} onChange={(value) => updateTemplate("duodenum", "polypSize", value)} columns="grid-cols-2 md:grid-cols-4" />
-                </div>
-              ) : null}
-
-              {findingSelected(duodenum.findings, "Tumour") ? (
-                <CheckboxGrid label="Tumour" options={["Polypoid", "Ulcerating", "Fungating", "Infiltrating"]} values={duodenum.tumourMorphology} onChange={(value) => updateTemplate("duodenum", "tumourMorphology", value)} columns="grid-cols-2 md:grid-cols-4" />
-              ) : null}
-
-              {findingSelected(duodenum.findings, "Stricture") ? (
-                <CheckboxGrid label="Stricture Overlying Mucosa" options={["Normal", "Inflamed", "Ulcerated", "Scarred / Fibrotic", "Malignant"]} values={duodenum.strictureMucosa} onChange={(value) => updateTemplate("duodenum", "strictureMucosa", value)} columns="grid-cols-2 md:grid-cols-5" />
-              ) : null}
-
-              <OptionalOtherInput enabled={findingSelected(duodenum.findings, "Other")} value={duodenum.other || ""} placeholder="Specify other duodenum finding" onChange={(value) => updateTemplate("duodenum", "other", value)} />
+              {renderFindingOptionList(
+                "Duodenum Findings",
+                duodenumFindingOptions,
+                duodenum.findings,
+                (value) => updateTemplate("duodenum", "findings", value),
+                (option) => {
+                  switch (option) {
+                    case "Duodenitis":
+                      return (
+                        <>
+                          <CheckboxGrid label="Duodenitis Severity" options={["Mild", "Moderate", "Severe"]} values={duodenum.duodenitisSeverity} onChange={(value) => updateTemplate("duodenum", "duodenitisSeverity", value)} columns="grid-cols-3" />
+                          <CheckboxGrid label="Duodenitis Additional Findings" options={["With Presence Of Erosions"]} values={duodenum.duodenitisWithErosions} onChange={(value) => updateTemplate("duodenum", "duodenitisWithErosions", value)} columns="grid-cols-1" />
+                        </>
+                      );
+                    case "Ulcer":
+                      return (
+                        <>
+                          <CheckboxGrid label="Ulcer" options={["Single", "Multiple", "Malignant Features", "No Malignant Features"]} values={duodenum.ulcerSelections} onChange={(value) => updateTemplate("duodenum", "ulcerSelections", value)} columns="grid-cols-2 md:grid-cols-4" />
+                          <CheckboxGrid label="Forrest Classification" options={forrestOptions} values={duodenum.forrestClassification} onChange={(value) => updateTemplate("duodenum", "forrestClassification", value)} columns="grid-cols-2 md:grid-cols-3" />
+                        </>
+                      );
+                    case "Polyp":
+                      return (
+                        <>
+                          <CheckboxGrid label="Polyp" options={["Single", "Multiple", "Diffuse"]} values={duodenum.polypNumber} onChange={(value) => updateTemplate("duodenum", "polypNumber", value)} columns="grid-cols-3" />
+                          <CheckboxGrid label="Polyp Size" options={["< 5mm", "5 – 10mm", "10 – 20mm", "> 20mm"]} values={duodenum.polypSize} onChange={(value) => updateTemplate("duodenum", "polypSize", value)} columns="grid-cols-2 md:grid-cols-4" />
+                        </>
+                      );
+                    case "Tumour":
+                      return <CheckboxGrid label="Tumour" options={["Polypoid", "Ulcerating", "Fungating", "Infiltrating"]} values={duodenum.tumourMorphology} onChange={(value) => updateTemplate("duodenum", "tumourMorphology", value)} columns="grid-cols-2 md:grid-cols-4" />;
+                    case "Stricture":
+                      return <CheckboxGrid label="Stricture Overlying Mucosa" options={["Normal", "Inflamed", "Ulcerated", "Scarred / Fibrotic", "Malignant"]} values={duodenum.strictureMucosa} onChange={(value) => updateTemplate("duodenum", "strictureMucosa", value)} columns="grid-cols-2 md:grid-cols-5" />;
+                    case "Other":
+                      return <LabeledInput label="Specify Other Duodenum Finding" value={duodenum.other || ""} onChange={(value) => updateTemplate("duodenum", "other", value)} />;
+                    default:
+                      return null;
+                  }
+                },
+              )}
             </>,
           )}
         </CardContent>
@@ -538,15 +587,12 @@ export const GastroscopyForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Gastroscopy Diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <AnatomyDiagram
-            type="gastroscopy"
-            customImage={gastroscopyTemplateImage}
-            initialFindings={Array.isArray(template.diagram?.findings) ? template.diagram.findings : []}
+          <GastroscopyDiagramCanvas
+            imageSrc={gastroscopyTemplateImage}
+            initialCanvasImageData={template.diagram?.canvasImageData || ""}
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
-              if (data.canvasImageData !== undefined) {
-                updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
-              }
+              updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
             }}
           />
         </CardContent>
@@ -604,7 +650,7 @@ export const GastroscopyForm = ({
 
       <Card className="glass-card-light">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-gray-800">Specimen, Conclusion and Follow-up</CardTitle>
+          <CardTitle className="text-base font-semibold text-gray-800">Specimen, Conclusion and Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
@@ -625,12 +671,6 @@ export const GastroscopyForm = ({
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-semibold text-gray-800">Conclusion</h3>
             <LabeledTextarea label="Conclusion" value={additionalInfo.conclusion || ""} onChange={(value) => updateTemplate("additionalInfo", "conclusion", value)} />
-          </div>
-
-          <div className="space-y-4 border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-800">Follow-up</h3>
-            <CheckboxGrid label="Follow-up" options={followUpOptions} values={additionalInfo.followUp} onChange={(value) => updateTemplate("additionalInfo", "followUp", value)} />
-            <OptionalOtherInput enabled={toArray(additionalInfo.followUp).includes("Other")} value={additionalInfo.followUpOther || ""} placeholder="Specify other follow-up" onChange={(value) => updateTemplate("additionalInfo", "followUpOther", value)} />
           </div>
 
           <div className="space-y-4 border-t pt-4">
