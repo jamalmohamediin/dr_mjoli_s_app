@@ -103,17 +103,20 @@ export const parsePeriAnalDiagramState = (procedureFindings: any): PeriAnalDiagr
   if (!Array.isArray(normalizedMarkings.lithotomyPosition) && legacyFemaleMarkings.length > 0) {
     markingsByVariant.lithotomyPosition = legacyFemaleMarkings;
   }
+  const hasVisibleVariantState = Object.prototype.hasOwnProperty.call(
+    state,
+    "visibleDiagramVariants",
+  );
   const rawVisibleVariants = Array.isArray(state.visibleDiagramVariants)
     ? state.visibleDiagramVariants.filter((key: string) => defaultVariantKeys.includes(key))
     : [];
-  const visibleVariants =
-    rawVisibleVariants.length > 0
-      ? rawVisibleVariants
-      : defaultVariantKeys.filter(
-          (variantKey) =>
-            Array.isArray(markingsByVariant[variantKey]) &&
-            markingsByVariant[variantKey].length > 0,
-        );
+  const visibleVariants = hasVisibleVariantState
+    ? rawVisibleVariants
+    : defaultVariantKeys.filter(
+        (variantKey) =>
+          Array.isArray(markingsByVariant[variantKey]) &&
+          markingsByVariant[variantKey].length > 0,
+      );
 
   return {
     activeVariant: defaultVariantKeys.includes(state.activeDiagramVariant)

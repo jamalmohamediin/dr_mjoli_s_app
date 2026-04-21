@@ -209,17 +209,64 @@ export const generateVentralHerniaPDF = async (
       }
 
       const activeLayout = layout.filter((cell) => hasCellValue(cell.text));
-      const rowLines = activeLayout.map((cell) => splitText(cell.text, cell.width));
+      const buildCellLayout = (text: string, width: number) => {
+        const separatorIndex = text.indexOf(":");
+        if (separatorIndex === -1) {
+          const valueLines = splitText(text, width);
+          return {
+            isLabelValue: false,
+            labelLines: [] as string[],
+            valueLines,
+            labelWidth: 0,
+            lineCount: Math.max(valueLines.length, 1),
+          };
+        }
+
+        const labelText = `${text.slice(0, separatorIndex).trim()}:`;
+        const valueText = text.slice(separatorIndex + 1).trim();
+        const labelWidth = Math.min(42, Math.max(20, width * 0.42));
+        const valueWidth = Math.max(12, width - labelWidth - 2);
+        const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
+        const valueLines = pdf.splitTextToSize(valueText, valueWidth) as string[];
+        return {
+          isLabelValue: true,
+          labelLines,
+          valueLines,
+          labelWidth,
+          lineCount: Math.max(labelLines.length, valueLines.length, 1),
+        };
+      };
+
+      const rowLayouts = activeLayout.map((cell) => buildCellLayout(cell.text, cell.width));
       const rowHeight =
-        Math.max(...rowLines.map((lines) => Math.max(lines.length, 1)), 1) * 4.2 + 1;
+        Math.max(...rowLayouts.map((layoutItem) => Math.max(layoutItem.lineCount, 1)), 1) * 4.2 + 1;
 
       ensureSpace(rowHeight);
 
-      rowLines.forEach((lines, cellIndex) => {
-        lines.forEach((line, lineIndex) => {
-          pdf.text(line, activeLayout[cellIndex].x, y + lineIndex * 4.2);
+      for (let lineIndex = 0; lineIndex < Math.max(...rowLayouts.map((item) => item.lineCount), 1); lineIndex += 1) {
+        rowLayouts.forEach((layoutItem, cellIndex) => {
+          const cellX = activeLayout[cellIndex].x;
+          const lineY = y + lineIndex * 4.2;
+          if (layoutItem.isLabelValue) {
+            if (layoutItem.labelLines[lineIndex]) {
+              pdf.setFont("helvetica", "bold");
+              pdf.text(layoutItem.labelLines[lineIndex], cellX, lineY);
+            }
+            if (layoutItem.valueLines[lineIndex]) {
+              pdf.setFont("helvetica", "normal");
+              pdf.text(
+                layoutItem.valueLines[lineIndex],
+                cellX + layoutItem.labelWidth + 2,
+                lineY,
+              );
+            }
+          } else if (layoutItem.valueLines[lineIndex]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(layoutItem.valueLines[lineIndex], cellX, lineY);
+          }
         });
-      });
+      }
+      pdf.setFont("helvetica", "normal");
 
       y += rowHeight;
     };
@@ -236,24 +283,34 @@ export const generateVentralHerniaPDF = async (
       const x = options.x ?? margin;
       const width = options.width ?? contentWidth;
       const indent = options.indent ?? 0;
-      const fullText = `${label}: ${value}`;
-      const lines = splitText(fullText, width - indent);
+      const labelText = `${label}:`;
+      const availableWidth = width - indent;
+      const labelWidth = Math.min(70, Math.max(24, availableWidth * 0.4));
+      const valueWidth = Math.max(20, availableWidth - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
+      const valueLines = pdf.splitTextToSize(value, valueWidth) as string[];
+      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
       const lineHeight = 4.4;
 
-      ensureSpace(Math.max(lines.length, 1) * lineHeight + 1.2);
-      pdf.setFont("helvetica", "normal");
+      ensureSpace(Math.max(lineCount, 1) * lineHeight + 1.2);
 
-      lines.forEach((line) => {
+      for (let index = 0; index < lineCount; index += 1) {
         if (y + lineHeight > getBottomLimit()) {
           startNewPage();
-          pdf.setFont("helvetica", "normal");
         }
-
-        pdf.text(line, x + indent, y);
+        if (labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[index], x + indent, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], x + indent + labelWidth + 2, y);
+        }
         y += lineHeight;
-      });
+      }
 
       y += 1.2;
+      pdf.setFont("helvetica", "normal");
     };
 
     const patientInfo = getPdfSafePatientInfo(ventralHerniaData?.patientInfo || {});
@@ -473,15 +530,28 @@ export const generateVentralHerniaPDF = async (
         return currentY;
       }
 
-      pdf.setFont("helvetica", "normal");
-      const lines = splitText(`${label}: ${value}`, width);
+      const labelText = `${label}:`;
+      const labelWidth = Math.min(36, Math.max(20, width * 0.44));
+      const valueWidth = Math.max(16, width - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
+      const valueLines = pdf.splitTextToSize(value, valueWidth) as string[];
+      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
       const lineHeight = 4.4;
+      let nextY = currentY;
 
-      lines.forEach((line, lineIndex) => {
-        pdf.text(line, x, currentY + lineIndex * lineHeight);
-      });
+      for (let index = 0; index < lineCount; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[index], x, nextY);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], x + labelWidth + 2, nextY);
+        }
+        nextY += lineHeight;
+      }
 
-      return currentY + Math.max(lines.length, 1) * lineHeight + 1.4;
+      return nextY + 1.4;
     };
 
     ensureSpace(90);
@@ -613,10 +683,11 @@ export const generateVentralHerniaPDF = async (
     const signatureY = y + 2;
 
     pdf.setFontSize(9);
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("helvetica", "bold");
     pdf.text("Surgeon's Signature:", margin, signatureY);
 
     if (hasText(closure.surgeonSignatureText)) {
+      pdf.setFont("helvetica", "normal");
       pdf.text(txt(closure.surgeonSignatureText), margin + 42, signatureY);
     } else if (hasText(closure.surgeonSignature)) {
       if (String(closure.surgeonSignature).startsWith("data:image")) {
@@ -652,7 +723,9 @@ export const generateVentralHerniaPDF = async (
     const signatureDateTime = hasText(closure.dateTime)
       ? formatDateTimeDDMMYYYYWithDashes(closure.dateTime)
       : formatDateTimeDDMMYYYYWithDashes(new Date());
+    pdf.setFont("helvetica", "bold");
     pdf.text("Date & Time:", pageCenter + 2, signatureY);
+    pdf.setFont("helvetica", "normal");
     pdf.text(signatureDateTime, pageCenter + 32, signatureY);
     y = signatureY + 8;
 

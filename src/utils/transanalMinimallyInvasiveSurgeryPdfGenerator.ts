@@ -66,7 +66,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   const sections: StructuredTemplatePdfSection[] = [
     {
       title: "Preoperative Information",
-      layout: "label-value-table",
+      layout: "aligned-preoperative-grid",
       entries: [
         { label: "Surgeon", value: formatSelectionList(preoperative.surgeons) },
         { label: "Assistant", value: formatSelectionList(preoperative.assistants) },

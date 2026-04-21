@@ -117,21 +117,106 @@ export const generateFinalPDF = async (
       return currentY;
     };
 
+    type PreparedPatientCell = {
+      x: number;
+      plainLines: string[] | null;
+      labelLines: string[];
+      valueLines: string[];
+      labelWidth: number;
+    };
+
+    const preparePatientCell = (
+      cellText: string,
+      width: number,
+      x: number,
+    ): PreparedPatientCell => {
+      const text = String(cellText || '').trim();
+      const separatorIndex = text.indexOf(':');
+
+      if (separatorIndex <= 0) {
+        return {
+          x,
+          plainLines: pdf.splitTextToSize(text, width),
+          labelLines: [],
+          valueLines: [],
+          labelWidth: 0,
+        };
+      }
+
+      const rawLabel = text.slice(0, separatorIndex).trim();
+      const rawValue = text.slice(separatorIndex + 1).trim();
+
+      if (!rawLabel || !rawValue) {
+        return {
+          x,
+          plainLines: pdf.splitTextToSize(text, width),
+          labelLines: [],
+          valueLines: [],
+          labelWidth: 0,
+        };
+      }
+
+      const labelText = `${rawLabel}:`;
+      const gap = 1.5;
+      const preferredLabelWidth = Math.max(pdf.getTextWidth(labelText) + 1, width * 0.32);
+      const labelWidth = Math.min(Math.max(preferredLabelWidth, 16), width * 0.5);
+      const valueWidth = Math.max(width - labelWidth - gap, 12);
+
+      return {
+        x,
+        plainLines: null,
+        labelLines: pdf.splitTextToSize(labelText, labelWidth),
+        valueLines: pdf.splitTextToSize(rawValue, valueWidth),
+        labelWidth,
+      };
+    };
+
     const writePatientRows = (rows: string[][]) => {
+      const patientColumnWidth = 58;
+      const gap = 1.5;
+
       rows.forEach((row) => {
-        const col1Lines = pdf.splitTextToSize(row[0] || '', 58);
-        const col2Lines = pdf.splitTextToSize(row[1] || '', 58);
-        const col3Lines = pdf.splitTextToSize(row[2] || '', 58);
-        const lineCount = Math.max(col1Lines.length, col2Lines.length, col3Lines.length, 1);
+        const cells = [
+          preparePatientCell(row[0] || '', patientColumnWidth, col1X),
+          preparePatientCell(row[1] || '', patientColumnWidth, col2X),
+          preparePatientCell(row[2] || '', patientColumnWidth, col3X),
+        ];
+
+        const lineCount = Math.max(
+          ...cells.map((cell) =>
+            cell.plainLines
+              ? Math.max(cell.plainLines.length, 1)
+              : Math.max(cell.labelLines.length, cell.valueLines.length, 1),
+          ),
+          1,
+        );
 
         checkPageBreak(lineCount * 4 + 2);
 
         for (let index = 0; index < lineCount; index++) {
-          if (col1Lines[index]) pdf.text(col1Lines[index], col1X, y);
-          if (col2Lines[index]) pdf.text(col2Lines[index], col2X, y);
-          if (col3Lines[index]) pdf.text(col3Lines[index], col3X, y);
+          cells.forEach((cell) => {
+            if (cell.plainLines) {
+              if (cell.plainLines[index]) {
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(cell.plainLines[index], cell.x, y);
+              }
+              return;
+            }
+
+            if (cell.labelLines[index]) {
+              pdf.setFont('helvetica', 'bold');
+              pdf.text(cell.labelLines[index], cell.x, y);
+            }
+
+            if (cell.valueLines[index]) {
+              pdf.setFont('helvetica', 'normal');
+              pdf.text(cell.valueLines[index], cell.x + cell.labelWidth + gap, y);
+            }
+          });
           y += 4;
         }
+
+        pdf.setFont('helvetica', 'normal');
       });
     };
 
@@ -468,10 +553,28 @@ export const generateFinalPDF = async (
     
     let leftY = y;
     let rightY = y;
+    const hasGastroscopyDiagramCapture = Boolean(
+      gastro?.canvasImageData || reportData?.gastroscopy?.diagram?.canvasImageData,
+    );
+    const hasColonoscopyDiagramCapture = Boolean(
+      colono?.canvasImageData || reportData?.colonoscopy?.diagram?.canvasImageData,
+    );
+    const useLegacyGastroscopyFindings = !hasGastroscopyDiagramCapture;
+    const useLegacyColonoscopyFindings = !hasColonoscopyDiagramCapture;
+    const gastroscopyFindingsList = useLegacyGastroscopyFindings
+      ? (Array.isArray(gastro?.findings) && gastro.findings.length > 0
+          ? gastro.findings
+          : (reportData?.gastroscopyFindings?.findings || []))
+      : [];
+    const colonoscopyFindingsList = useLegacyColonoscopyFindings
+      ? (Array.isArray(colono?.findings) && colono.findings.length > 0
+          ? colono.findings
+          : (reportData?.colonoscopyFindings?.findings || []))
+      : [];
     
     // Gastroscopy findings - display actual findings only if they exist
-    if (reportData?.gastroscopyFindings?.findings?.length > 0) {
-      reportData.gastroscopyFindings.findings.forEach((finding: any, index: number) => {
+    if (gastroscopyFindingsList.length > 0) {
+      gastroscopyFindingsList.forEach((finding: any, index: number) => {
         if (leftY < pageHeight - footerHeight - 40) {
           const text = `• ${finding.type || ''} ${finding.location ? 'at ' + finding.location : ''}`;
           const lines = pdf.splitTextToSize(text, diagramColumnWidth - 4);
@@ -487,16 +590,18 @@ export const generateFinalPDF = async (
         }
       });
     } else {
-      // Show "No significant findings" only if this section was included
-      if (gastro || reportData?.gastroscopyFindings) {
+      if (!useLegacyGastroscopyFindings && gastro?.canvasImageData) {
+        pdf.text('See diagram annotations', diagramLeftX, leftY);
+        leftY += 4;
+      } else if (gastro || reportData?.gastroscopyFindings) {
         pdf.text('No significant findings', diagramLeftX, leftY);
         leftY += 4;
       }
     }
     
     // Colonoscopy findings - display actual findings only if they exist
-    if (reportData?.colonoscopyFindings?.findings?.length > 0) {
-      reportData.colonoscopyFindings.findings.forEach((finding: any, index: number) => {
+    if (colonoscopyFindingsList.length > 0) {
+      colonoscopyFindingsList.forEach((finding: any, index: number) => {
         if (rightY < pageHeight - footerHeight - 40) {
           const text = `• ${finding.type || ''} ${finding.location ? 'at ' + finding.location : ''}`;
           const lines = pdf.splitTextToSize(text, diagramColumnWidth - 4);
@@ -512,8 +617,10 @@ export const generateFinalPDF = async (
         }
       });
     } else {
-      // Show "No significant findings" only if this section was included
-      if (colono || reportData?.colonoscopyFindings) {
+      if (!useLegacyColonoscopyFindings && colono?.canvasImageData) {
+        pdf.text('See diagram annotations', diagramRightX, rightY);
+        rightY += 4;
+      } else if (colono || reportData?.colonoscopyFindings) {
         pdf.text('No significant findings', diagramRightX, rightY);
         rightY += 4;
       }

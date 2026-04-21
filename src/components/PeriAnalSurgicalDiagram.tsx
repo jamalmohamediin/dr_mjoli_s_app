@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Eraser, Pencil, Type } from "lucide-react";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
-type DiagramTool = "draw" | "textBox" | "erase" | null;
+type DiagramTool = "draw" | "text" | "erase";
+type TextFontStyle = "regular" | "bold" | "italic";
 
 type Point = {
   x: number;
@@ -28,9 +28,19 @@ type TextBoxMarking = {
   text: string;
   x: number;
   y: number;
+  fontStyle?: TextFontStyle;
+  fontWeight?: string;
+  underline?: boolean;
 };
 
 type PeriAnalMarking = DrawStrokeMarking | TextBoxMarking | any;
+
+type TextEditorState = {
+  canvasX: number;
+  canvasY: number;
+  xPercent: number;
+  yPercent: number;
+};
 
 interface PeriAnalSurgicalDiagramProps {
   diagramImage: string;
@@ -79,6 +89,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const imageRef = useRef<HTMLImageElement>(null);
   const drawingStrokeRef = useRef<Point[] | null>(null);
   const isDrawingRef = useRef(false);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const serializedInitialMarkings = JSON.stringify(initialMarkings || []);
   const lastCommittedMarkingsRef = useRef(serializedInitialMarkings);
   const previousDiagramImageRef = useRef(diagramImage);
@@ -86,14 +97,16 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const [markings, setMarkings] = useState<PeriAnalMarking[]>(initialMarkings || []);
   const [draftStroke, setDraftStroke] = useState<DrawStrokeMarking | null>(null);
   const [activeTool, setActiveTool] = useState<DiagramTool>("draw");
-  const [drawColor, setDrawColor] = useState("#111111");
-  const [drawWidth, setDrawWidth] = useState(3);
-  const [textValue, setTextValue] = useState("");
-  const [textSize, setTextSize] = useState(20);
-  const [textColor, setTextColor] = useState("#111111");
+  const [strokeColor, setStrokeColor] = useState("#111111");
+  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [textFontSize, setTextFontSize] = useState(16);
+  const [textFontStyle, setTextFontStyle] = useState<TextFontStyle>("regular");
+  const [textUnderline, setTextUnderline] = useState(false);
+  const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
+  const [textDraft, setTextDraft] = useState("");
   const drawingMetrics = getSurgicalDiagramMarkingMetrics(markingScale);
 
-  const getCanvasCoordinatesFromPoint = (clientX: number, clientY: number) => {
+  const getCanvasCoordinatesFromPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -103,7 +116,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
       x: (clientX - rect.left) * scaleX,
       y: (clientY - rect.top) * scaleY,
     };
-  };
+  }, []);
 
   const drawLegacyPort = (ctx: CanvasRenderingContext2D, mark: any) => {
     ctx.save();
@@ -169,12 +182,28 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
 
   const drawTextBoxMarking = (ctx: CanvasRenderingContext2D, mark: TextBoxMarking) => {
     if (!mark?.text?.trim()) return;
-    const size = Number(mark.size) > 0 ? Number(mark.size) : 20;
+
+    const size = Number(mark.size) > 0 ? Number(mark.size) : 16;
+    const fontWeight = mark.fontWeight || (mark.fontStyle === "bold" ? "700" : "400");
+    const fontStyle = mark.fontStyle === "italic" ? "italic" : "normal";
+
     ctx.save();
     ctx.fillStyle = mark.color || "#111111";
-    ctx.font = `${size}px Arial`;
+    ctx.font = `${fontStyle} ${fontWeight} ${size}px Arial`;
     ctx.textBaseline = "top";
     ctx.fillText(mark.text, mark.x, mark.y);
+
+    if (mark.underline) {
+      const measuredTextWidth = ctx.measureText(mark.text).width;
+      const underlineY = mark.y + size + 1;
+      ctx.strokeStyle = mark.color || "#111111";
+      ctx.lineWidth = Math.max(1, size / 14);
+      ctx.beginPath();
+      ctx.moveTo(mark.x, underlineY);
+      ctx.lineTo(mark.x + measuredTextWidth, underlineY);
+      ctx.stroke();
+    }
+
     ctx.restore();
   };
 
@@ -229,6 +258,8 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
 
     setMarkings(initialMarkings || []);
     setDraftStroke(null);
+    setTextEditor(null);
+    setTextDraft("");
     previousDiagramImageRef.current = diagramImage;
     lastCommittedMarkingsRef.current = serializedInitialMarkings;
   }, [diagramImage, initialMarkings, serializedInitialMarkings]);
@@ -282,10 +313,10 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
 
     if (mark.type === "textBox") {
-      const size = Number(mark.size) > 0 ? Number(mark.size) : 20;
+      const size = Number(mark.size) > 0 ? Number(mark.size) : 16;
       const text = String(mark.text || "");
       const width = Math.max(20, text.length * size * 0.56);
-      const height = size * 1.2;
+      const height = size * 1.2 + (mark.underline ? 2 : 0);
       return (
         point.x >= mark.x - 8 &&
         point.x <= mark.x + width + 8 &&
@@ -315,46 +346,138 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
   };
 
+  const commitTextEditor = useCallback(() => {
+    if (!textEditor) return;
+
+    const trimmedText = String(textDraft || "").trim();
+    if (!trimmedText) {
+      setTextEditor(null);
+      setTextDraft("");
+      return;
+    }
+
+    const fontWeight = textFontStyle === "bold" ? "700" : "400";
+    const nextMarkings = [
+      ...markings,
+      {
+        id: createMarkingId(),
+        type: "textBox",
+        color: strokeColor,
+        size: Math.max(10, textFontSize),
+        text: trimmedText,
+        x: textEditor.canvasX,
+        y: textEditor.canvasY,
+        fontStyle: textFontStyle,
+        fontWeight,
+        underline: textUnderline,
+      } as TextBoxMarking,
+    ];
+
+    commitMarkings(nextMarkings);
+    setTextEditor(null);
+    setTextDraft("");
+  }, [
+    markings,
+    strokeColor,
+    textDraft,
+    textEditor,
+    textFontSize,
+    textFontStyle,
+    textUnderline,
+  ]);
+
+  const cancelTextEditor = useCallback(() => {
+    setTextEditor(null);
+    setTextDraft("");
+  }, []);
+
+  const openTextEditorAtPoint = useCallback((point: Point) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !canvas.width || !canvas.height) {
+      return;
+    }
+
+    setTextEditor({
+      canvasX: point.x,
+      canvasY: point.y,
+      xPercent: (point.x / canvas.width) * 100,
+      yPercent: (point.y / canvas.height) * 100,
+    });
+    setTextDraft("");
+
+    window.setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const handleTextEditorKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTextEditor();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelTextEditor();
+    }
+  };
+
+  const finishStroke = useCallback(() => {
+    if (!drawingStrokeRef.current || drawingStrokeRef.current.length === 0) {
+      isDrawingRef.current = false;
+      setDraftStroke(null);
+      drawingStrokeRef.current = null;
+      return;
+    }
+
+    const nextMarkings = [
+      ...markings,
+      {
+        id: createMarkingId(),
+        type: "drawStroke",
+        color: strokeColor,
+        width: strokeWidth,
+        points: drawingStrokeRef.current,
+      } as DrawStrokeMarking,
+    ];
+    commitMarkings(nextMarkings);
+    isDrawingRef.current = false;
+    drawingStrokeRef.current = null;
+    setDraftStroke(null);
+  }, [markings, strokeColor, strokeWidth]);
+
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
     const point = getCanvasCoordinatesFromPoint(event.clientX, event.clientY);
 
-    if (activeTool === "draw") {
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      isDrawingRef.current = true;
-      drawingStrokeRef.current = [point];
-      setDraftStroke({
-        id: "draft",
-        type: "drawStroke",
-        color: drawColor,
-        width: drawWidth,
-        points: [point],
-      });
+    if (activeTool === "text") {
+      if (textEditor) {
+        commitTextEditor();
+      }
+      openTextEditorAtPoint(point);
       return;
     }
 
-    if (activeTool === "textBox") {
-      const text = textValue.trim();
-      if (!text) return;
-      const nextMarkings = [
-        ...markings,
-        {
-          id: createMarkingId(),
-          type: "textBox",
-          color: textColor,
-          size: textSize,
-          text,
-          x: point.x,
-          y: point.y,
-        } as TextBoxMarking,
-      ];
-      commitMarkings(nextMarkings);
-      return;
+    if (textEditor) {
+      commitTextEditor();
     }
 
     if (activeTool === "erase") {
       eraseAtPoint(point);
+      return;
     }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    isDrawingRef.current = true;
+    drawingStrokeRef.current = [point];
+    setDraftStroke({
+      id: "draft",
+      type: "drawStroke",
+      color: strokeColor,
+      width: strokeWidth,
+      points: [point],
+    });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -368,34 +491,10 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     setDraftStroke({
       id: "draft",
       type: "drawStroke",
-      color: drawColor,
-      width: drawWidth,
+      color: strokeColor,
+      width: strokeWidth,
       points: drawingStrokeRef.current,
     });
-  };
-
-  const finishStroke = () => {
-    if (!drawingStrokeRef.current || drawingStrokeRef.current.length === 0) {
-      isDrawingRef.current = false;
-      setDraftStroke(null);
-      drawingStrokeRef.current = null;
-      return;
-    }
-
-    const nextMarkings = [
-      ...markings,
-      {
-        id: createMarkingId(),
-        type: "drawStroke",
-        color: drawColor,
-        width: drawWidth,
-        points: drawingStrokeRef.current,
-      } as DrawStrokeMarking,
-    ];
-    commitMarkings(nextMarkings);
-    isDrawingRef.current = false;
-    drawingStrokeRef.current = null;
-    setDraftStroke(null);
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -408,23 +507,22 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (activeTool !== "draw") return;
     event.preventDefault();
-    isDrawingRef.current = false;
-    drawingStrokeRef.current = null;
-    setDraftStroke(null);
-    redrawCanvas();
+    finishStroke();
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
-  const toggleTool = (tool: Exclude<DiagramTool, null>) => {
-    setActiveTool((previousTool) => (previousTool === tool ? null : tool));
-  };
+  useEffect(() => {
+    if (activeTool !== "text" && textEditor) {
+      commitTextEditor();
+    }
+  }, [activeTool, textEditor, commitTextEditor]);
 
   return (
     <div className="space-y-4">
       <Card className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start">
         <Button
           type="button"
-          onClick={() => toggleTool("draw")}
+          onClick={() => setActiveTool("draw")}
           variant={activeTool === "draw" ? "default" : "outline"}
           className="w-full sm:w-auto"
         >
@@ -433,8 +531,8 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
         </Button>
         <Button
           type="button"
-          onClick={() => toggleTool("textBox")}
-          variant={activeTool === "textBox" ? "default" : "outline"}
+          onClick={() => setActiveTool("text")}
+          variant={activeTool === "text" ? "default" : "outline"}
           className="w-full sm:w-auto"
         >
           <Type className="mr-2 h-4 w-4" />
@@ -442,7 +540,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
         </Button>
         <Button
           type="button"
-          onClick={() => toggleTool("erase")}
+          onClick={() => setActiveTool("erase")}
           variant={activeTool === "erase" ? "default" : "outline"}
           className="w-full sm:w-auto"
         >
@@ -450,68 +548,88 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
           Erase
         </Button>
 
-        {activeTool === "draw" && (
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-700">Color</label>
-              <input
-                type="color"
-                value={drawColor}
-                onChange={(event) => setDrawColor(event.target.value)}
-                className="h-8 w-10 cursor-pointer rounded border border-gray-300 p-1"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-700">Thickness</label>
-              <input
-                type="range"
-                min={1}
-                max={14}
-                value={drawWidth}
-                onChange={(event) => setDrawWidth(Number(event.target.value))}
-                className="w-28"
-              />
-              <span className="text-xs text-gray-600">{drawWidth}</span>
-            </div>
-          </div>
-        )}
-
-        {activeTool === "textBox" && (
-          <div className="flex w-full flex-col gap-2 sm:w-full">
-            <Input
-              value={textValue}
-              onChange={(event) => setTextValue(event.target.value)}
-              placeholder="Type text, then tap on diagram to place it"
+        {activeTool !== "erase" ? (
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-gray-700">Color</label>
+            <input
+              type="color"
+              value={strokeColor}
+              onChange={(event) => setStrokeColor(event.target.value)}
+              className="h-8 w-10 cursor-pointer rounded border border-gray-300 bg-white p-1"
             />
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-700">Color</label>
-                <input
-                  type="color"
-                  value={textColor}
-                  onChange={(event) => setTextColor(event.target.value)}
-                  className="h-8 w-10 cursor-pointer rounded border border-gray-300 p-1"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-700">Size</label>
-                <input
-                  type="range"
-                  min={12}
-                  max={36}
-                  value={textSize}
-                  onChange={(event) => setTextSize(Number(event.target.value))}
-                  className="w-28"
-                />
-                <span className="text-xs text-gray-600">{textSize}px</span>
-              </div>
-            </div>
           </div>
-        )}
+        ) : null}
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-gray-700">Thickness</label>
+          <input
+            type="range"
+            min={1}
+            max={16}
+            value={strokeWidth}
+            onChange={(event) => setStrokeWidth(Number(event.target.value))}
+            className="w-28"
+          />
+          <span className="text-xs text-gray-600">{strokeWidth}px</span>
+        </div>
+
+        {activeTool === "text" ? (
+          <>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-700">Font Size</label>
+              <select
+                value={textFontSize}
+                onChange={(event) => setTextFontSize(Number(event.target.value))}
+                className="h-8 rounded border border-gray-300 bg-white px-2 text-xs"
+              >
+                {[12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                  <option key={size} value={size}>
+                    {size}px
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant={textFontStyle === "regular" ? "default" : "outline"}
+                className="h-8 px-2 text-xs"
+                onClick={() => setTextFontStyle("regular")}
+              >
+                Regular
+              </Button>
+              <Button
+                type="button"
+                variant={textFontStyle === "bold" ? "default" : "outline"}
+                className="h-8 px-2 text-xs font-semibold"
+                onClick={() => setTextFontStyle("bold")}
+              >
+                Bold
+              </Button>
+              <Button
+                type="button"
+                variant={textFontStyle === "italic" ? "default" : "outline"}
+                className="h-8 px-2 text-xs italic"
+                onClick={() => setTextFontStyle("italic")}
+              >
+                Italic
+              </Button>
+              <Button
+                type="button"
+                variant={textUnderline ? "default" : "outline"}
+                className="h-8 px-2 text-xs underline"
+                onClick={() => setTextUnderline((previous) => !previous)}
+              >
+                Underline
+              </Button>
+            </div>
+          </>
+        ) : null}
       </Card>
 
       <div className="relative mx-auto flex w-full justify-center rounded-lg border bg-white p-2 sm:p-4">
-        <div className="w-full max-w-[520px]">
+        <div className="relative w-full max-w-[520px]">
           <img ref={imageRef} alt="Peri-Anal surgical diagram" className="hidden" />
           <canvas
             ref={canvasRef}
@@ -522,12 +640,42 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
             onPointerLeave={handlePointerCancel}
             className="mx-auto block h-auto w-full max-w-[520px] select-none"
             style={{
-              cursor: activeTool ? "crosshair" : "default",
+              cursor: activeTool === "text" ? "text" : "crosshair",
               touchAction: "none",
             }}
           />
+          {textEditor ? (
+            <input
+              ref={textInputRef}
+              type="text"
+              value={textDraft}
+              onChange={(event) => setTextDraft(event.target.value)}
+              onBlur={commitTextEditor}
+              onKeyDown={handleTextEditorKeyDown}
+              className="absolute z-10 h-8 min-w-[140px] max-w-[220px] rounded border border-gray-300 bg-white px-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+              style={{
+                left: `${textEditor.xPercent}%`,
+                top: `${textEditor.yPercent}%`,
+                transform: "translate(-1px, -1px)",
+                fontSize: `${Math.max(12, textFontSize)}px`,
+                fontWeight: textFontStyle === "bold" ? 700 : 400,
+                fontStyle: textFontStyle === "italic" ? "italic" : "normal",
+                textDecoration: textUnderline ? "underline" : "none",
+              }}
+              placeholder="Type text..."
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+            />
+          ) : null}
         </div>
       </div>
+
+      <p className="text-xs text-gray-500">
+        Select a tool, then draw, erase, or place text directly on the diagram using touch, pen, or mouse.
+      </p>
     </div>
   );
 };
+

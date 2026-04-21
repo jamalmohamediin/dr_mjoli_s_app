@@ -233,22 +233,75 @@ export const generateAppendectomyPDF = async (
       if (visibleColumns.length === 0) return;
 
       const lineGroups = columns.map((column) =>
-        hasPrintableValue(column.text) ? pdf.splitTextToSize(column.text, column.width) : [],
+        hasPrintableValue(column.text)
+          ? (() => {
+              const separatorIndex = column.text.indexOf(':');
+              if (separatorIndex === -1) {
+                return [
+                  {
+                    isLabelValue: false,
+                    labelLines: [] as string[],
+                    valueLines: pdf.splitTextToSize(column.text, column.width) as string[],
+                    labelWidth: 0,
+                  },
+                ];
+              }
+
+              const labelText = `${column.text.slice(0, separatorIndex).trim()}:`;
+              const valueText = column.text.slice(separatorIndex + 1).trim();
+              const labelWidth = Math.min(36, Math.max(18, column.width * 0.42));
+              const valueWidth = Math.max(12, column.width - labelWidth - 2);
+              return [
+                {
+                  isLabelValue: true,
+                  labelLines: pdf.splitTextToSize(labelText, labelWidth) as string[],
+                  valueLines: pdf.splitTextToSize(valueText, valueWidth) as string[],
+                  labelWidth,
+                },
+              ];
+            })()
+          : [],
       );
-      const lineCount = Math.max(1, ...lineGroups.map((lines) => lines.length));
+      const lineCount = Math.max(
+        1,
+        ...lineGroups.map((items) =>
+          items.length > 0
+            ? Math.max(
+                items[0].labelLines?.length || 0,
+                items[0].valueLines?.length || 0,
+                1,
+              )
+            : 0,
+        ),
+      );
 
       checkPageBreak(lineCount * lineHeight + rowGap + 1);
 
       for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
         columns.forEach((column, columnIndex) => {
-          const line = lineGroups[columnIndex][lineIndex];
-          if (line) {
-            pdf.text(line, column.x, y);
+          const layout = lineGroups[columnIndex][0];
+          if (!layout) {
+            return;
+          }
+
+          if (layout.isLabelValue) {
+            if (layout.labelLines[lineIndex]) {
+              pdf.setFont('helvetica', 'bold');
+              pdf.text(layout.labelLines[lineIndex], column.x, y);
+            }
+            if (layout.valueLines[lineIndex]) {
+              pdf.setFont('helvetica', 'normal');
+              pdf.text(layout.valueLines[lineIndex], column.x + layout.labelWidth + 2, y);
+            }
+          } else if (layout.valueLines[lineIndex]) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(layout.valueLines[lineIndex], column.x, y);
           }
         });
         y += lineHeight;
       }
 
+      pdf.setFont('helvetica', 'normal');
       y += rowGap;
     };
 
@@ -261,12 +314,40 @@ export const generateAppendectomyPDF = async (
     ) => {
       if (!hasPrintableValue(text)) return;
 
-      const lines = pdf.splitTextToSize(text, width);
-      checkPageBreak(lines.length * lineHeight + bottomGap + 1);
-      lines.forEach((line: string) => {
-        pdf.text(line, x, y);
+      const separatorIndex = text.indexOf(':');
+      if (separatorIndex === -1) {
+        const lines = pdf.splitTextToSize(text, width);
+        checkPageBreak(lines.length * lineHeight + bottomGap + 1);
+        lines.forEach((line: string) => {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(line, x, y);
+          y += lineHeight;
+        });
+        y += bottomGap;
+        return;
+      }
+
+      const labelText = `${text.slice(0, separatorIndex).trim()}:`;
+      const valueText = text.slice(separatorIndex + 1).trim();
+      const labelWidth = Math.min(62, Math.max(24, width * 0.4));
+      const valueWidth = Math.max(20, width - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+      const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+      checkPageBreak(lineCount * lineHeight + bottomGap + 1);
+      for (let index = 0; index < lineCount; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(labelLines[index], x, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(valueLines[index], x + labelWidth + 2, y);
+        }
         y += lineHeight;
-      });
+      }
+      pdf.setFont('helvetica', 'normal');
       y += bottomGap;
     };
     
@@ -497,11 +578,38 @@ export const generateAppendectomyPDF = async (
     const addContentLine = (text: string, spacing: number = 4.75) => {
       if (hasPrintableValue(text)) {
         const maxWidth = procedureColumnWidth - 2;
-        const lines = pdf.splitTextToSize(text, maxWidth);
-        lines.forEach((line: string) => {
-          pdf.text(line, procedureX, procedureY);
+        const separatorIndex = text.indexOf(':');
+
+        if (separatorIndex === -1) {
+          const lines = pdf.splitTextToSize(text, maxWidth);
+          lines.forEach((line: string) => {
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(line, procedureX, procedureY);
+            procedureY += 3.7;
+          });
+          procedureY += Math.max(0.8, spacing - 3.7);
+          return true;
+        }
+
+        const labelText = `${text.slice(0, separatorIndex).trim()}:`;
+        const valueText = text.slice(separatorIndex + 1).trim();
+        const labelWidth = Math.min(34, Math.max(18, maxWidth * 0.42));
+        const valueWidth = Math.max(14, maxWidth - labelWidth - 2);
+        const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+        const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+        for (let index = 0; index < lineCount; index += 1) {
+          if (labelLines[index]) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(labelLines[index], procedureX, procedureY);
+          }
+          if (valueLines[index]) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(valueLines[index], procedureX + labelWidth + 2, procedureY);
+          }
           procedureY += 3.7;
-        });
+        }
+        pdf.setFont('helvetica', 'normal');
         procedureY += Math.max(0.8, spacing - 3.7);
         return true;
       }
@@ -598,24 +706,14 @@ export const generateAppendectomyPDF = async (
 
     const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
     if (difficulty && difficulty.trim() && difficulty !== 'Not specified' && difficulty !== 'None') {
-      const difficultyLines = pdf.splitTextToSize(`Intra-Operative Difficulty: ${difficulty}`, 180);
-      difficultyLines.forEach((line: string) => {
-        pdf.text(line, margin, y);
-        y += 4;
-      });
-      y += 2;
+      drawWrappedTextBlock(`Intra-Operative Difficulty: ${difficulty}`, margin, fullWidth, 4, 2);
     }
 
     const complications = Array.isArray(appendectomyData?.closure?.complications)
       ? appendectomyData.closure.complications.join(', ')
       : appendectomyData?.closure?.complications || '';
     if (complications && complications.trim() && complications !== 'Not specified' && complications !== 'None') {
-      const complicationLines = pdf.splitTextToSize(`Intra-Operative Complications: ${complications}`, 180);
-      complicationLines.forEach((line: string) => {
-        pdf.text(line, margin, y);
-        y += 4;
-      });
-      y += 2;
+      drawWrappedTextBlock(`Intra-Operative Complications: ${complications}`, margin, fullWidth, 4, 2);
     }
 
     // Add separator line after COMPLICATIONS
@@ -646,24 +744,48 @@ export const generateAppendectomyPDF = async (
     const fascialClosure = Array.isArray(closure.fascialClosure) ? closure.fascialClosure.join(', ') : closure.fascialClosure || '';
     const skinClosureField = Array.isArray(closure.skinClosure) ? closure.skinClosure.join(', ') : closure.skinClosure || '';
     
-    if (fascialClosure && fascialClosure.trim() && fascialClosure !== 'Not specified' && fascialClosure !== 'None') {
-      pdf.text(`Fascial Closure: ${fascialClosure}`, closureCol1X, y);
-    }
-    if (skinClosureField && skinClosureField.trim() && skinClosureField !== 'Not specified' && skinClosureField !== 'None') {
-      pdf.text(`Skin Closure: ${skinClosureField}`, closureCol2X, y);
-    }
+    drawWrappedColumns([
+      {
+        text:
+          fascialClosure && fascialClosure.trim() && fascialClosure !== 'Not specified' && fascialClosure !== 'None'
+            ? `Fascial Closure: ${fascialClosure}`
+            : '',
+        x: closureCol1X,
+        width: 88,
+      },
+      {
+        text:
+          skinClosureField && skinClosureField.trim() && skinClosureField !== 'Not specified' && skinClosureField !== 'None'
+            ? `Skin Closure: ${skinClosureField}`
+            : '',
+        x: closureCol2X,
+        width: 88,
+      },
+    ], 4, 0);
     y += 6;
     
     // Row 2: Fascial Material Used and Skin Material Used
     const fascialMaterial = Array.isArray(closure.fascialMaterial) ? closure.fascialMaterial.join(', ') : closure.fascialMaterial || '';
     const skinMaterial = Array.isArray(closure.skinMaterial) ? closure.skinMaterial.join(', ') : closure.skinMaterial || '';
     
-    if (fascialMaterial && fascialMaterial.trim() && fascialMaterial !== 'Not specified' && fascialMaterial !== 'None') {
-      pdf.text(`Fascial Material Used: ${fascialMaterial}`, closureCol1X, y);
-    }
-    if (skinMaterial && skinMaterial.trim() && skinMaterial !== 'Not specified' && skinMaterial !== 'None') {
-      pdf.text(`Skin Material Used: ${skinMaterial}`, closureCol2X, y);
-    }
+    drawWrappedColumns([
+      {
+        text:
+          fascialMaterial && fascialMaterial.trim() && fascialMaterial !== 'Not specified' && fascialMaterial !== 'None'
+            ? `Fascial Material Used: ${fascialMaterial}`
+            : '',
+        x: closureCol1X,
+        width: 88,
+      },
+      {
+        text:
+          skinMaterial && skinMaterial.trim() && skinMaterial !== 'Not specified' && skinMaterial !== 'None'
+            ? `Skin Material Used: ${skinMaterial}`
+            : '',
+        x: closureCol2X,
+        width: 88,
+      },
+    ], 4, 0);
     y += 10;
     
     // Add separator line after CLOSURE
@@ -685,15 +807,13 @@ export const generateAppendectomyPDF = async (
     // Specimen Sent for Pathology
     const pathology = closure.pathology || '';
     if (pathology && pathology.trim() && pathology !== 'Not specified' && pathology !== 'None') {
-      pdf.text(`Specimen Sent for Pathology: ${pathology}`, margin, y);
-      y += 6;
+      drawWrappedTextBlock(`Specimen Sent for Pathology: ${pathology}`, margin, fullWidth, 4, 2);
     }
     
     // Specify Laboratory Sent to
     const laboratory = closure.laboratoryName || '';
     if (laboratory && laboratory.trim() && laboratory !== 'Not specified' && laboratory !== 'None') {
-      pdf.text(`Specify Laboratory Sent to: ${laboratory}`, margin, y);
-      y += 6;
+      drawWrappedTextBlock(`Specify Laboratory Sent to: ${laboratory}`, margin, fullWidth, 4, 2);
     }
     
     // Other Specimens Taken
@@ -704,12 +824,7 @@ export const generateAppendectomyPDF = async (
         ? `${otherSpecimens} - ${specimenDetails}`
         : otherSpecimens;
     if (hasPrintableValue(otherSpecimensDisplay)) {
-      const otherSpecimenLines = pdf.splitTextToSize(`Other Specimens Taken: ${otherSpecimensDisplay}`, fullWidth);
-      otherSpecimenLines.forEach((line: string) => {
-        pdf.text(line, margin, y);
-        y += 4;
-      });
-      y += 4;
+      drawWrappedTextBlock(`Other Specimens Taken: ${otherSpecimensDisplay}`, margin, fullWidth, 4, 4);
     }
     
     // Add separator line after SPECIMEN
@@ -729,8 +844,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFont('helvetica', 'normal');
     const additionalNotes = closure.additionalNotes || '';
     if (additionalNotes && additionalNotes.trim() && additionalNotes !== 'Not specified' && additionalNotes !== 'None') {
-      pdf.text(`Additional Notes: ${additionalNotes}`, margin, y);
-      y += 10;
+      drawWrappedTextBlock(`Additional Notes: ${additionalNotes}`, margin, fullWidth, 4, 6);
     }
     
     // Add separator line after NOTES
@@ -750,8 +864,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFont('helvetica', 'normal');
     const postOpManagement = closure.postOperativeManagement || '';
     if (postOpManagement && postOpManagement.trim() && postOpManagement !== 'Not specified' && postOpManagement !== 'None') {
-      pdf.text(`Post Operative Management: ${postOpManagement}`, margin, y);
-      y += 10;
+      drawWrappedTextBlock(`Post Operative Management: ${postOpManagement}`, margin, fullWidth, 4, 6);
     }
     
     // Add separator line after POST OPERATIVE MANAGEMENT
@@ -770,10 +883,12 @@ export const generateAppendectomyPDF = async (
     // Surgeon's Signature
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
+    pdf.setFont('helvetica', 'bold');
     pdf.text('Surgeon\'s Signature:', signatureCol1X, signatureY);
     
     // Date & Time
     pdf.text('Date & Time:', signatureCol2X, signatureY);
+    pdf.setFont('helvetica', 'normal');
     
     // Add signature if available
     if (appendectomyData?.closure?.surgeonSignature) {

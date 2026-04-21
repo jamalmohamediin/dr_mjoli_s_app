@@ -103,11 +103,23 @@ const SurgicalDiagramDisplay = ({
         } else if (marking.type === "textBox") {
           if (!marking?.text?.trim()) return;
           const textSize = Number(marking.size) > 0 ? Number(marking.size) : 20;
+          const fontWeight = marking.fontWeight || (marking.fontStyle === "bold" ? "700" : "400");
+          const fontStyle = marking.fontStyle === "italic" ? "italic" : "normal";
           ctx.save();
           ctx.fillStyle = marking.color || "#111111";
-          ctx.font = `${textSize}px Arial`;
+          ctx.font = `${fontStyle} ${fontWeight} ${textSize}px Arial`;
           ctx.textBaseline = "top";
           ctx.fillText(marking.text, marking.x, marking.y);
+          if (marking.underline) {
+            const measuredTextWidth = ctx.measureText(marking.text).width;
+            const underlineY = marking.y + textSize + 1;
+            ctx.strokeStyle = marking.color || "#111111";
+            ctx.lineWidth = Math.max(1, textSize / 14);
+            ctx.beginPath();
+            ctx.moveTo(marking.x, underlineY);
+            ctx.lineTo(marking.x + measuredTextWidth, underlineY);
+            ctx.stroke();
+          }
           ctx.restore();
         }
       });
@@ -155,8 +167,9 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
   const patientEntries = getPatientInfoDisplayEntries(periAnal?.patientInfo);
   const diagramState = parsePeriAnalDiagramState(periAnal?.procedureFindings);
   const visibleDiagramVariants = PERI_ANAL_DIAGRAM_VARIANTS.filter((variant) => {
+    const isSelected = diagramState.visibleVariants.includes(variant.key);
     const markings = diagramState.markingsByVariant?.[variant.key] || [];
-    return markings.length > 0;
+    return isSelected && markings.length > 0;
   });
   const hasDiagramMarkings = visibleDiagramVariants.length > 0;
 

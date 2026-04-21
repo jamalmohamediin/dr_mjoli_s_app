@@ -221,20 +221,9 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
       ? `Yes - ${additionalInfo.otherSpecimensDetails}`
       : String(additionalInfo.otherSpecimensTaken || "");
 
-  const diagramFindings = Array.isArray(diagram.findings) ? diagram.findings : [];
-  const legendLines =
-    diagramFindings.length > 0
-      ? diagramFindings.flatMap((finding: any, index: number) => {
-          const main = `${index + 1}. ${[
-            String(finding?.type || "").trim(),
-            String(finding?.location || "").trim(),
-          ]
-            .filter(Boolean)
-            .join(" - ")}`;
-          const description = String(finding?.description || "").trim();
-          return description ? [main, `   ${description}`] : [main];
-        })
-      : ["No legend entries recorded."];
+  const legendLines = hasText(diagram.canvasImageData)
+    ? ["Diagram annotations are included directly in the image."]
+    : ["No diagram captured."];
 
   const pdf = new jsPDF("portrait", "mm", "a4");
   const pageWidth = 210;
@@ -259,53 +248,53 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     y += 5;
   };
 
+  const parseLabeledCell = (text: string, width: number) => {
+    const normalized = String(text || "").trim();
+    if (!normalized) {
+      return {
+        labelLines: [] as string[],
+        valueLines: [] as string[],
+        labelWidth: 0,
+        lineCount: 1,
+      };
+    }
+
+    const separatorIndex = normalized.indexOf(":");
+    if (separatorIndex <= 0) {
+      const valueLines = pdf.splitTextToSize(normalized, width);
+      return {
+        labelLines: [] as string[],
+        valueLines,
+        labelWidth: 0,
+        lineCount: Math.max(valueLines.length, 1),
+      };
+    }
+
+    const labelText = normalized.slice(0, separatorIndex).trim();
+    const valueText = normalized.slice(separatorIndex + 1).trim();
+    const labelWithColon = `${labelText}:`;
+    const inferredLabelWidth = Math.min(
+      Math.max(pdf.getTextWidth(labelWithColon) + 2, 24),
+      width * 0.52,
+    );
+    const valueWidth = Math.max(width - inferredLabelWidth - 1, 12);
+    const labelLines = pdf.splitTextToSize(labelWithColon, inferredLabelWidth);
+    const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+    const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+    return {
+      labelLines,
+      valueLines,
+      labelWidth: inferredLabelWidth,
+      lineCount,
+    };
+  };
+
   const drawTwoColRow = (left: string, right: string) => {
     if (!left && !right) return;
 
-    const parseLabeledCell = (text: string) => {
-      const normalized = String(text || "").trim();
-      if (!normalized) {
-        return {
-          labelLines: [] as string[],
-          valueLines: [] as string[],
-          labelWidth: 0,
-          lineCount: 1,
-        };
-      }
-
-      const separatorIndex = normalized.indexOf(":");
-      if (separatorIndex <= 0) {
-        const valueLines = pdf.splitTextToSize(normalized, columnWidth);
-        return {
-          labelLines: [] as string[],
-          valueLines,
-          labelWidth: 0,
-          lineCount: Math.max(valueLines.length, 1),
-        };
-      }
-
-      const labelText = normalized.slice(0, separatorIndex).trim();
-      const valueText = normalized.slice(separatorIndex + 1).trim();
-      const labelWithColon = `${labelText}:`;
-      const inferredLabelWidth = Math.min(
-        Math.max(pdf.getTextWidth(labelWithColon) + 2, 24),
-        columnWidth * 0.52,
-      );
-      const valueWidth = Math.max(columnWidth - inferredLabelWidth - 1, 12);
-      const labelLines = pdf.splitTextToSize(labelWithColon, inferredLabelWidth);
-      const valueLines = pdf.splitTextToSize(valueText, valueWidth);
-      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
-
-      return {
-        labelLines,
-        valueLines,
-        labelWidth: inferredLabelWidth,
-        lineCount,
-      };
-    };
-
-    const leftCell = parseLabeledCell(left);
-    const rightCell = parseLabeledCell(right);
+    const leftCell = parseLabeledCell(left, columnWidth);
+    const rightCell = parseLabeledCell(right, columnWidth);
     const lineCount = Math.max(leftCell.lineCount, rightCell.lineCount, 1);
     ensureSpace(lineCount * lineHeight + 1);
 
@@ -332,6 +321,62 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
           margin + 96 + rightCell.labelWidth + 1,
           y,
         );
+      }
+
+      y += lineHeight;
+    }
+
+    pdf.setFont("helvetica", "normal");
+  };
+
+  const drawThreeColRow = (first: string, second: string, third: string) => {
+    if (!first && !second && !third) return;
+    const gap = 4;
+    const threeColWidth = (contentWidth - gap * 2) / 3;
+    const firstCell = parseLabeledCell(first, threeColWidth);
+    const secondCell = parseLabeledCell(second, threeColWidth);
+    const thirdCell = parseLabeledCell(third, threeColWidth);
+    const lineCount = Math.max(
+      firstCell.lineCount,
+      secondCell.lineCount,
+      thirdCell.lineCount,
+      1,
+    );
+
+    ensureSpace(lineCount * lineHeight + 1);
+
+    for (let index = 0; index < lineCount; index += 1) {
+      if (firstCell.labelLines[index]) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(firstCell.labelLines[index], margin, y);
+      }
+      if (firstCell.valueLines[index]) {
+        pdf.setFont("helvetica", "normal");
+        pdf.text(firstCell.valueLines[index], margin + firstCell.labelWidth + 1, y);
+      }
+
+      const secondX = margin + threeColWidth + gap;
+      if (secondCell.labelLines[index]) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(secondCell.labelLines[index], secondX, y);
+      }
+      if (secondCell.valueLines[index]) {
+        pdf.setFont("helvetica", "normal");
+        pdf.text(
+          secondCell.valueLines[index],
+          secondX + secondCell.labelWidth + 1,
+          y,
+        );
+      }
+
+      const thirdX = margin + (threeColWidth + gap) * 2;
+      if (thirdCell.labelLines[index]) {
+        pdf.setFont("helvetica", "bold");
+        pdf.text(thirdCell.labelLines[index], thirdX, y);
+      }
+      if (thirdCell.valueLines[index]) {
+        pdf.setFont("helvetica", "normal");
+        pdf.text(thirdCell.valueLines[index], thirdX + thirdCell.labelWidth + 1, y);
       }
 
       y += lineHeight;
@@ -446,20 +491,33 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   }
 
   drawSectionTitle("Preoperative Information");
-  drawEntryRow("Endoscopist", toArray(preoperative.endoscopists).join(", "), false, false);
-  drawEntryRow("Surgeon", toArray(preoperative.surgeons).join(", "), false, false);
-  drawEntryRow("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false, false);
-  drawEntryRow("Procedure Urgency", preoperative.procedureUrgency);
-  drawEntryRow(
-    "Preoperative Imaging",
-    joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
+  const preopCell = (label: string, value: unknown, titleCaseValue = true) => {
+    const normalized = formatValue(value, titleCaseValue);
+    return normalized ? `${label}: ${normalized}` : "";
+  };
+  drawThreeColRow(
+    preopCell("Endoscopist", toArray(preoperative.endoscopists).join(", "), false),
+    preopCell("Surgeon", toArray(preoperative.surgeons).join(", "), false),
+    preopCell("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false),
   );
-  drawEntryRow("Indications", joinSelections(preoperative.indications, preoperative.indicationOther));
-  drawEntryRow(
-    "Signs & Symptoms",
-    joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+  drawThreeColRow(
+    preopCell("Procedure Urgency", preoperative.procedureUrgency),
+    preopCell(
+      "Preoperative Imaging",
+      joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
+    ),
+    preopCell("Extent Of Examination", toArray(preoperative.extentOfExamination).join(", ")),
   );
-  drawEntryRow("Extent Of Examination", toArray(preoperative.extentOfExamination).join(", "));
+  drawTwoColRow(
+    preopCell(
+      "Indications",
+      joinSelections(preoperative.indications, preoperative.indicationOther),
+    ),
+    preopCell(
+      "Signs & Symptoms",
+      joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+    ),
+  );
 
   const procedureFindingRows: Array<{ label: string; value: string }> = [];
   const appendFindingRow = (label: string, value: unknown, titleCaseValue = true) => {

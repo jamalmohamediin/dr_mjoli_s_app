@@ -21,6 +21,8 @@ interface ReportPreviewProps {
     patientInfo: any;
     gastroscopyFindings: any;
     colonoscopyFindings: any;
+    gastroscopy?: any;
+    colonoscopy?: any;
     media: any[];
     notes: string;
     selectedProcedures?: string[];
@@ -162,9 +164,20 @@ const SurgicalDiagramDisplay = ({ markings }: { markings: any[] }) => {
 };
 
 export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFinding, onUndoFinding, onEditProcedureFindings, onRemoveProcedureFindings, onEditPatientInfo, onEditConclusion, onRemoveConclusion, onEditFollowUp, onRemoveFollowUp, canRedo, currentTab }: ReportPreviewProps) => {
-  // Use canvas data directly from the report
-  const gastroscopyImageData = report.gastroscopyCanvasData || '';
-  const colonoscopyImageData = report.colonoscopyCanvasData || '';
+  const templateGastroscopyDiagramImage = report?.gastroscopy?.diagram?.canvasImageData || '';
+  const templateColonoscopyDiagramImage = report?.colonoscopy?.diagram?.canvasImageData || '';
+  const hasTemplateGastroscopyDiagram = Boolean(templateGastroscopyDiagramImage);
+  const hasTemplateColonoscopyDiagram = Boolean(templateColonoscopyDiagramImage);
+
+  // Prefer template diagram image data; legacy endoscopy canvas is fallback.
+  const gastroscopyImageData = templateGastroscopyDiagramImage || report.gastroscopyCanvasData || '';
+  const colonoscopyImageData = templateColonoscopyDiagramImage || report.colonoscopyCanvasData || '';
+  const legacyGastroscopyFindings = hasTemplateGastroscopyDiagram
+    ? []
+    : (report.gastroscopyFindings?.findings || []);
+  const legacyColonoscopyFindings = hasTemplateColonoscopyDiagram
+    ? []
+    : (report.colonoscopyFindings?.findings || []);
   
   // State for inline editing
   const [editingFinding, setEditingFinding] = useState<{id: string; type: 'gastroscopy' | 'colonoscopy'} | null>(null);
@@ -1734,30 +1747,30 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
           // If no procedures selected, show general findings
           if (!hasAnyProcedure) {
             const allFindings = [
-              ...(report.gastroscopyFindings?.findings || []),
-              ...(report.colonoscopyFindings?.findings || [])
+              ...legacyGastroscopyFindings,
+              ...legacyColonoscopyFindings,
             ];
             
-            if (allFindings.length > 0 || report.gastroscopyFindings?.findings?.length > 0 || report.colonoscopyFindings?.findings?.length > 0) {
+            if (allFindings.length > 0 || gastroscopyImageData || colonoscopyImageData) {
               return (
                 <>
                   <div className="space-y-3">
                     <h4 className="text-sm font-semibold text-black">DOCUMENTED FINDINGS</h4>
                     {/* Show gastroscopy findings if any */}
-                    {report.gastroscopyFindings?.findings?.length > 0 && (
+                    {legacyGastroscopyFindings.length > 0 && (
                       <div className="mb-3">
                         <h5 className="text-xs font-medium text-gray-600 mb-2">Upper GI Findings:</h5>
-                        {renderFindings(report.gastroscopyFindings, 'Gastroscopy')}
+                        {renderFindings({ findings: legacyGastroscopyFindings }, 'Gastroscopy')}
                       </div>
                     )}
                     {/* Show colonoscopy findings if any */}
-                    {report.colonoscopyFindings?.findings?.length > 0 && (
+                    {legacyColonoscopyFindings.length > 0 && (
                       <div>
                         <h5 className="text-xs font-medium text-gray-600 mb-2">Lower GI Findings:</h5>
-                        {renderFindings(report.colonoscopyFindings, 'Colonoscopy')}
+                        {renderFindings({ findings: legacyColonoscopyFindings }, 'Colonoscopy')}
                       </div>
                     )}
-                    {allFindings.length === 0 && (
+                    {allFindings.length === 0 && !gastroscopyImageData && !colonoscopyImageData && (
                       <p className="text-muted-foreground text-xs">No findings documented yet. Mark findings on the anatomy diagrams to see them here.</p>
                     )}
                     
@@ -1803,13 +1816,13 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                   <>
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-black">GASTROSCOPY FINDINGS</h4>
-                      {report.gastroscopyFindings?.findings?.length > 0 ? (
-                        renderFindings(report.gastroscopyFindings, 'Gastroscopy')
-                      ) : (
+                      {legacyGastroscopyFindings.length > 0 ? (
+                        renderFindings({ findings: legacyGastroscopyFindings }, 'Gastroscopy')
+                      ) : !gastroscopyImageData ? (
                         <div className="p-3 border rounded-lg bg-gray-50">
                           <p className="text-muted-foreground text-xs">No gastroscopy findings documented yet. Mark findings on the diagram to see them here.</p>
                         </div>
-                      )}
+                      ) : null}
                       
                       {/* Show Gastroscopy Anatomy Diagram */}
                       {gastroscopyImageData && (
@@ -1835,13 +1848,13 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                   <>
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-black">COLONOSCOPY FINDINGS</h4>
-                      {report.colonoscopyFindings?.findings?.length > 0 ? (
-                        renderFindings(report.colonoscopyFindings, 'Colonoscopy')
-                      ) : (
+                      {legacyColonoscopyFindings.length > 0 ? (
+                        renderFindings({ findings: legacyColonoscopyFindings }, 'Colonoscopy')
+                      ) : !colonoscopyImageData ? (
                         <div className="p-3 border rounded-lg bg-gray-50">
                           <p className="text-muted-foreground text-xs">No colonoscopy findings documented yet. Mark findings on the diagram to see them here.</p>
                         </div>
-                      )}
+                      ) : null}
                       
                       {/* Show Colonoscopy Anatomy Diagram */}
                       {colonoscopyImageData && (

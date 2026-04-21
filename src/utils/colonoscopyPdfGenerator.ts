@@ -52,12 +52,25 @@ const formatExportValue = (value?: string | string[]) => {
 export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
   const additionalInfo = data?.additionalInfo || {};
   const diagram = data?.diagram || {};
+  const findingsSummary = data?.findingsSummary || {};
   const diagramImageData =
     diagram?.canvasImageData ||
     data?.colonoscopyCanvasData ||
     data?.colonoscopyFindings?.canvasImageData ||
     data?.canvasImageData ||
     "";
+  const selectedFindings = Array.isArray(findingsSummary.findings)
+    ? findingsSummary.findings
+    : [];
+  const findingOther = String(findingsSummary.findingOther || "").trim();
+  const diagramLegendItems = Array.from(
+    new Set(
+      [
+        ...selectedFindings.map((item) => toTitleCaseText(String(item || "").trim())),
+        findingOther ? toTitleCaseText(findingOther) : "",
+      ].filter(Boolean),
+    ),
+  );
   const surgeonSignatureText =
     additionalInfo.surgeonSignatureText || additionalInfo.endoscopistName;
   const signatureDateTime = additionalInfo.dateTime || "";
@@ -97,7 +110,11 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
 
   const sections: StructuredTemplatePdfSection[] = normalizedSections.map((section) => ({
     title: section.title,
-    layout: section.layout || (section.title === "Preoperative Information" ? "colonoscopy-preoperative" : "label-value-table"),
+    layout:
+      section.layout ||
+      (section.title === "Preoperative Information"
+        ? "aligned-preoperative-grid"
+        : "label-value-table"),
     entries: section.entries.map((entry) => ({
       label: entry.label,
       value: formatExportValue(entry.value),
@@ -126,6 +143,11 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
           placement: "inlineRight",
           sectionTitle: "Procedure Details",
           style: "plain",
+          legendTitle: "Legend",
+          legendItems:
+            diagramLegendItems.length > 0
+              ? diagramLegendItems
+              : ["Procedure Diagram Annotations"],
         }
       : undefined,
   });

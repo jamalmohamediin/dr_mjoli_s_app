@@ -269,7 +269,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
   const sections: StructuredTemplatePdfSection[] = [
     {
       title: "Preoperative Information",
-      layout: "label-value-table",
+      layout: "aligned-preoperative-grid",
       entries: [
         { label: "Surgeon", value: preoperative.surgeon || "" },
         { label: "Assistant", value: preoperative.assistant || "" },
@@ -343,7 +343,8 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
       ? {
           title: "Ports And Incisions Diagram",
           imageData: diagramImageData,
-          placement: "end",
+          placement: "inlineRight",
+          sectionTitle: "Procedure Details",
         }
       : undefined,
     signature: {

@@ -5089,10 +5089,31 @@ const Index = () => {
               },
             };
 
-      return {
+      const nextReport: any = {
         ...prev,
         [templateKey]: nextTemplateState,
       };
+
+      // Keep legacy endoscopy preview/export paths synchronized with structured templates.
+      if (section === "diagram" && field === "canvasImageData") {
+        if (templateKey === "gastroscopy") {
+          nextReport.gastroscopyCanvasData = String(value || "");
+          nextReport.gastroscopyFindings = {
+            ...(nextReport.gastroscopyFindings || {}),
+            findings: [],
+            canvasImageData: String(value || ""),
+          };
+        } else if (templateKey === "colonoscopy") {
+          nextReport.colonoscopyCanvasData = String(value || "");
+          nextReport.colonoscopyFindings = {
+            ...(nextReport.colonoscopyFindings || {}),
+            findings: [],
+            canvasImageData: String(value || ""),
+          };
+        }
+      }
+
+      return nextReport;
     });
   };
 
@@ -5198,12 +5219,8 @@ const Index = () => {
             canvasImageData:
               currentReport.gastroscopy?.diagram?.canvasImageData ||
               currentReport.gastroscopyCanvasData ||
-              currentReport.gastroscopyFindings?.canvasImageData ||
               "",
-            findings:
-              currentReport.gastroscopy?.diagram?.findings ||
-              currentReport.gastroscopyFindings?.findings ||
-              [],
+            findings: [],
           },
         };
 
@@ -5802,22 +5819,34 @@ const Index = () => {
       
       // USE FINAL PDF GENERATOR (completely new)  
       const finalDiagrams: FinalDiagramCapture[] = [];
+      const gastroscopyFinalDiagramCanvasData =
+        currentReport.gastroscopy?.diagram?.canvasImageData ||
+        currentReport.gastroscopyCanvasData ||
+        currentReport.gastroscopyFindings?.canvasImageData ||
+        '';
+      const hasTemplateGastroscopyDiagram = Boolean(currentReport.gastroscopy?.diagram?.canvasImageData);
+      const colonoscopyFinalDiagramCanvasData =
+        currentReport.colonoscopy?.diagram?.canvasImageData ||
+        currentReport.colonoscopyCanvasData ||
+        currentReport.colonoscopyFindings?.canvasImageData ||
+        '';
+      const hasTemplateColonoscopyDiagram = Boolean(currentReport.colonoscopy?.diagram?.canvasImageData);
       
       // Add diagrams if canvas data exists
-      if (currentReport.gastroscopyCanvasData) {
+      if (gastroscopyFinalDiagramCanvasData) {
         console.log("✅ Adding gastroscopy diagram to FINAL PDF");
         finalDiagrams.push({
-          canvasImageData: currentReport.gastroscopyCanvasData,
-          findings: currentReport.gastroscopyFindings?.findings || [],
+          canvasImageData: gastroscopyFinalDiagramCanvasData,
+          findings: hasTemplateGastroscopyDiagram ? [] : (currentReport.gastroscopyFindings?.findings || []),
           type: 'gastroscopy'
         });
       }
       
-      if (currentReport.colonoscopyCanvasData) {
+      if (colonoscopyFinalDiagramCanvasData) {
         console.log("✅ Adding colonoscopy diagram to FINAL PDF");
         finalDiagrams.push({
-          canvasImageData: currentReport.colonoscopyCanvasData,
-          findings: currentReport.colonoscopyFindings?.findings || [],
+          canvasImageData: colonoscopyFinalDiagramCanvasData,
+          findings: hasTemplateColonoscopyDiagram ? [] : (currentReport.colonoscopyFindings?.findings || []),
           type: 'colonoscopy'
         });
       }

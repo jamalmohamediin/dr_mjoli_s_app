@@ -163,38 +163,166 @@ export const generateCholecystectomyPDF = async (
     const txt = (v: any) => (v === undefined || v === null ? "" : String(v));
 
     const rowFull = (text: string) => {
-      const lines = pdf.splitTextToSize(text || "", pageWidth - margin * 2);
-      ensureSpace(lines.length * lineHeight + 1);
-      lines.forEach((line: string) => {
-        pdf.text(line, col1X, y);
+      const normalized = text || "";
+      const separatorIndex = normalized.indexOf(":");
+      if (separatorIndex === -1) {
+        const lines = pdf.splitTextToSize(normalized, pageWidth - margin * 2);
+        ensureSpace(lines.length * lineHeight + 1);
+        lines.forEach((line: string) => {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(line, col1X, y);
+          y += lineHeight;
+        });
+        return;
+      }
+
+      const label = `${normalized.slice(0, separatorIndex).trim()}:`;
+      const value = normalized.slice(separatorIndex + 1).trim();
+      const fullWidth = pageWidth - margin * 2;
+      const labelWidth = Math.min(70, Math.max(24, fullWidth * 0.4));
+      const valueWidth = Math.max(20, fullWidth - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(label, labelWidth);
+      const valueLines = pdf.splitTextToSize(value, valueWidth);
+      const lines = Math.max(labelLines.length, valueLines.length, 1);
+      ensureSpace(lines * lineHeight + 1);
+      for (let index = 0; index < lines; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[index], col1X, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], col1X + labelWidth + 2, y);
+        }
         y += lineHeight;
-      });
+      }
+      pdf.setFont("helvetica", "normal");
     };
 
     const row3 = (a: string, b: string, c: string) => {
-      const l1 = pdf.splitTextToSize(a || "", 58);
-      const l2 = pdf.splitTextToSize(b || "", 58);
-      const l3 = pdf.splitTextToSize(c || "", 58);
-      const lines = Math.max(l1.length, l2.length, l3.length, 1);
+      const buildCellLayout = (rawValue: string, width: number) => {
+        const raw = rawValue || "";
+        const separatorIndex = raw.indexOf(":");
+        if (separatorIndex === -1) {
+          const lines = pdf.splitTextToSize(raw, width);
+          return {
+            isLabelValue: false,
+            labelLines: [] as string[],
+            valueLines: lines.length > 0 ? lines : [""],
+            lineCount: Math.max(lines.length, 1),
+            labelWidth: 0,
+          };
+        }
+
+        const labelText = `${raw.slice(0, separatorIndex).trim()}:`;
+        const valueText = raw.slice(separatorIndex + 1).trim();
+        const labelWidth = Math.min(34, Math.max(20, width * 0.42));
+        const valueWidth = Math.max(12, width - labelWidth - 2);
+        const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+        const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+        return {
+          isLabelValue: true,
+          labelLines,
+          valueLines,
+          lineCount: Math.max(labelLines.length, valueLines.length, 1),
+          labelWidth,
+        };
+      };
+
+      const drawLayoutLine = (
+        layout: ReturnType<typeof buildCellLayout>,
+        lineIndex: number,
+        x: number,
+      ) => {
+        if (layout.isLabelValue) {
+          if (layout.labelLines[lineIndex]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(layout.labelLines[lineIndex], x, y);
+          }
+          if (layout.valueLines[lineIndex]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(layout.valueLines[lineIndex], x + layout.labelWidth + 2, y);
+          }
+        } else if (layout.valueLines[lineIndex]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(layout.valueLines[lineIndex], x, y);
+        }
+      };
+
+      const cell1 = buildCellLayout(a, 58);
+      const cell2 = buildCellLayout(b, 58);
+      const cell3 = buildCellLayout(c, 58);
+      const lines = Math.max(cell1.lineCount, cell2.lineCount, cell3.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
-        if (l1[i]) pdf.text(l1[i], col1X, y);
-        if (l2[i]) pdf.text(l2[i], col2X, y);
-        if (l3[i]) pdf.text(l3[i], col3X, y);
+        drawLayoutLine(cell1, i, col1X);
+        drawLayoutLine(cell2, i, col2X);
+        drawLayoutLine(cell3, i, col3X);
         y += lineHeight;
       }
+      pdf.setFont("helvetica", "normal");
     };
 
     const row2 = (a: string, b: string) => {
-      const l1 = pdf.splitTextToSize(a || "", 88);
-      const l2 = pdf.splitTextToSize(b || "", 88);
-      const lines = Math.max(l1.length, l2.length, 1);
+      const buildCellLayout = (rawValue: string, width: number) => {
+        const raw = rawValue || "";
+        const separatorIndex = raw.indexOf(":");
+        if (separatorIndex === -1) {
+          const lines = pdf.splitTextToSize(raw, width);
+          return {
+            isLabelValue: false,
+            labelLines: [] as string[],
+            valueLines: lines.length > 0 ? lines : [""],
+            lineCount: Math.max(lines.length, 1),
+            labelWidth: 0,
+          };
+        }
+
+        const labelText = `${raw.slice(0, separatorIndex).trim()}:`;
+        const valueText = raw.slice(separatorIndex + 1).trim();
+        const labelWidth = Math.min(38, Math.max(20, width * 0.42));
+        const valueWidth = Math.max(12, width - labelWidth - 2);
+        const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+        const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+        return {
+          isLabelValue: true,
+          labelLines,
+          valueLines,
+          lineCount: Math.max(labelLines.length, valueLines.length, 1),
+          labelWidth,
+        };
+      };
+
+      const drawLayoutLine = (
+        layout: ReturnType<typeof buildCellLayout>,
+        lineIndex: number,
+        x: number,
+      ) => {
+        if (layout.isLabelValue) {
+          if (layout.labelLines[lineIndex]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(layout.labelLines[lineIndex], x, y);
+          }
+          if (layout.valueLines[lineIndex]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(layout.valueLines[lineIndex], x + layout.labelWidth + 2, y);
+          }
+        } else if (layout.valueLines[lineIndex]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(layout.valueLines[lineIndex], x, y);
+        }
+      };
+
+      const cell1 = buildCellLayout(a, 88);
+      const cell2 = buildCellLayout(b, 88);
+      const lines = Math.max(cell1.lineCount, cell2.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
-        if (l1[i]) pdf.text(l1[i], col1X, y);
-        if (l2[i]) pdf.text(l2[i], twoCol2X, y);
+        drawLayoutLine(cell1, i, col1X);
+        drawLayoutLine(cell2, i, twoCol2X);
         y += lineHeight;
       }
+      pdf.setFont("helvetica", "normal");
     };
 
     // Header
@@ -356,11 +484,24 @@ export const generateCholecystectomyPDF = async (
     let lyCh = blockTopCh;
 
     const addLeftCh = (label: string, value: string) => {
-      const lines = pdf.splitTextToSize(`${label}: ${value}`, leftWCh);
-      lines.forEach((line: string) => {
-        pdf.text(line, leftXCh, lyCh);
+      const labelText = `${label}:`;
+      const valueText = value || "";
+      const labelWidth = Math.min(34, Math.max(20, leftWCh * 0.42));
+      const valueWidth = Math.max(18, leftWCh - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth);
+      const valueLines = pdf.splitTextToSize(valueText, valueWidth);
+      const lines = Math.max(labelLines.length, valueLines.length, 1);
+      for (let index = 0; index < lines; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[index], leftXCh, lyCh);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], leftXCh + labelWidth + 2, lyCh);
+        }
         lyCh += lineHeight;
-      });
+      }
     };
 
     addLeftCh("Surgical Approach", toArray(proc?.approach).join(", "));

@@ -3,6 +3,7 @@ import { Eraser, Pencil, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type DiagramTool = "draw" | "text" | "erase";
+type TextFontStyle = "regular" | "bold" | "italic";
 
 interface GastroscopyDiagramCanvasProps {
   imageSrc: string;
@@ -39,6 +40,9 @@ export const GastroscopyDiagramCanvas = ({
   const [useLegacyCompositeBase, setUseLegacyCompositeBase] = React.useState(false);
   const [textEditor, setTextEditor] = React.useState<TextEditorState | null>(null);
   const [textDraft, setTextDraft] = React.useState("");
+  const [textFontSize, setTextFontSize] = React.useState(16);
+  const [textFontStyle, setTextFontStyle] = React.useState<TextFontStyle>("regular");
+  const [textUnderline, setTextUnderline] = React.useState(false);
 
   const getCanvasContext = () => canvasRef.current?.getContext("2d") || null;
 
@@ -160,15 +164,37 @@ export const GastroscopyDiagramCanvas = ({
     context.save();
     context.globalCompositeOperation = "source-over";
     context.fillStyle = strokeColor;
-    context.font = `${Math.max(14, strokeWidth * 6)}px Arial`;
+    const resolvedFontSize = Math.max(10, textFontSize);
+    const fontWeight = textFontStyle === "bold" ? "700" : "400";
+    const fontStyle = textFontStyle === "italic" ? "italic" : "normal";
+    context.font = `${fontStyle} ${fontWeight} ${resolvedFontSize}px Arial`;
     context.textBaseline = "top";
     context.fillText(trimmedText, textEditor.canvasX, textEditor.canvasY);
+
+    if (textUnderline) {
+      const measuredTextWidth = context.measureText(trimmedText).width;
+      const underlineY = textEditor.canvasY + resolvedFontSize + 1;
+      context.strokeStyle = strokeColor;
+      context.lineWidth = Math.max(1, resolvedFontSize / 14);
+      context.beginPath();
+      context.moveTo(textEditor.canvasX, underlineY);
+      context.lineTo(textEditor.canvasX + measuredTextWidth, underlineY);
+      context.stroke();
+    }
     context.restore();
 
     setTextEditor(null);
     setTextDraft("");
     emitDiagramUpdate();
-  }, [emitDiagramUpdate, strokeColor, strokeWidth, textDraft, textEditor]);
+  }, [
+    emitDiagramUpdate,
+    strokeColor,
+    textDraft,
+    textEditor,
+    textFontSize,
+    textFontStyle,
+    textUnderline,
+  ]);
 
   const cancelTextEditor = React.useCallback(() => {
     setTextEditor(null);
@@ -375,6 +401,60 @@ export const GastroscopyDiagramCanvas = ({
           />
           <span>{strokeWidth}px</span>
         </label>
+
+        {activeTool === "text" ? (
+          <>
+            <label className="ml-2 flex items-center gap-2 text-xs text-gray-700">
+              <span>Font Size</span>
+              <select
+                value={textFontSize}
+                onChange={(event) => setTextFontSize(Number(event.target.value))}
+                className="h-8 rounded border border-gray-300 bg-white px-2 text-xs"
+              >
+                {[12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                  <option key={size} value={size}>
+                    {size}px
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="ml-2 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant={textFontStyle === "regular" ? "default" : "outline"}
+                className="h-8 px-2 text-xs"
+                onClick={() => setTextFontStyle("regular")}
+              >
+                Regular
+              </Button>
+              <Button
+                type="button"
+                variant={textFontStyle === "bold" ? "default" : "outline"}
+                className="h-8 px-2 text-xs font-semibold"
+                onClick={() => setTextFontStyle("bold")}
+              >
+                Bold
+              </Button>
+              <Button
+                type="button"
+                variant={textFontStyle === "italic" ? "default" : "outline"}
+                className="h-8 px-2 text-xs italic"
+                onClick={() => setTextFontStyle("italic")}
+              >
+                Italic
+              </Button>
+              <Button
+                type="button"
+                variant={textUnderline ? "default" : "outline"}
+                className="h-8 px-2 text-xs underline"
+                onClick={() => setTextUnderline((previous) => !previous)}
+              >
+                Underline
+              </Button>
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="relative mx-auto w-full max-w-[480px] overflow-hidden rounded-md border border-gray-200 bg-white">
@@ -414,6 +494,10 @@ export const GastroscopyDiagramCanvas = ({
               left: `${textEditor.xPercent}%`,
               top: `${textEditor.yPercent}%`,
               transform: "translate(-1px, -1px)",
+              fontSize: `${Math.max(12, textFontSize)}px`,
+              fontWeight: textFontStyle === "bold" ? 700 : 400,
+              fontStyle: textFontStyle === "italic" ? "italic" : "normal",
+              textDecoration: textUnderline ? "underline" : "none",
             }}
             placeholder="Type text..."
             spellCheck={false}

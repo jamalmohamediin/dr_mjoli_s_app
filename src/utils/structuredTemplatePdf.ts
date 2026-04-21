@@ -21,6 +21,7 @@ export interface StructuredTemplatePdfSection {
   layout?:
     | "default"
     | "colonoscopy-preoperative"
+    | "aligned-preoperative-grid"
     | "label-value-table"
     | "label-value-three-column";
   columns?: 1 | 2;
@@ -36,6 +37,8 @@ interface StructuredTemplatePdfOptions {
     placement?: "end" | "inlineRight";
     sectionTitle?: string;
     style?: "plain" | "portsLegend";
+    legendTitle?: string;
+    legendItems?: string[];
   };
   signature?: {
     text?: string;
@@ -101,6 +104,9 @@ export const generateStructuredTemplatePdf = async ({
         section.entries.some((entry) => !entry.subheading) ||
         (section.layout !== "label-value-three-column" && section.entries.length > 0),
     );
+  const normalizedDiagramLegendItems = toArray(diagram?.legendItems)
+    .map((item) => String(item || "").trim())
+    .filter((item) => item.length > 0);
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -268,6 +274,34 @@ export const generateStructuredTemplatePdf = async ({
     pdf.setFont("helvetica", "normal");
   };
 
+  const drawThreeColLabelValueRow = (
+    first?: { label: string; value: string },
+    second?: { label: string; value: string },
+    third?: { label: string; value: string },
+    rowGap: number = 0,
+  ) => {
+    const gap = 4;
+    const cellWidth = (contentWidth - gap * 2) / 3;
+    const cells: PreparedLabelValueCell[] = [];
+    const candidates = [first, second, third];
+
+    candidates.forEach((candidate, index) => {
+      if (!candidate || !hasText(candidate.value)) {
+        return;
+      }
+      cells.push(
+        prepareLabelValueCell(
+          candidate.label,
+          candidate.value,
+          cellWidth,
+          margin + index * (cellWidth + gap),
+        ),
+      );
+    });
+
+    drawPreparedLabelValueCellsRow(cells, rowGap);
+  };
+
   const drawTwoColLabelValueRow = (
     left: { label: string; value: string },
     right?: { label: string; value: string },
@@ -381,6 +415,90 @@ export const generateStructuredTemplatePdf = async ({
     drawSingleRow(formatEntry("Signs & Symptoms"));
   };
 
+  const renderAlignedPreoperativeGridSection = (entries: StructuredTemplatePdfEntry[]) => {
+    const normalizedEntries = entries
+      .map((entry) => ({
+        label: entry.label,
+        value: toEntryValue(entry),
+      }))
+      .filter((entry) => hasText(entry.value));
+
+    if (normalizedEntries.length === 0) {
+      return;
+    }
+
+    const consumed = new Set<string>();
+    const findEntry = (labels: string[]) =>
+      normalizedEntries.find(
+        (entry) => labels.includes(entry.label) && !consumed.has(entry.label),
+      );
+    const pick = (labels: string[]) => {
+      const entry = findEntry(labels);
+      if (!entry) {
+        return undefined;
+      }
+      consumed.add(entry.label);
+      return { label: entry.label, value: entry.value };
+    };
+
+    drawThreeColLabelValueRow(
+      pick(["Endoscopist", "Surgeon"]),
+      pick(["Assistant"]),
+      pick(["Anaesthetist", "Anesthetist"]),
+      1,
+    );
+    drawThreeColLabelValueRow(
+      pick(["Start Time", "Start Time (24-hour)"]),
+      pick(["End Time", "End Time (24-hour)"]),
+      pick([
+        "Total Duration (Min)",
+        "Duration Of Procedure",
+        "Duration Of Operation (In Minutes)",
+        "Duration of Procedure",
+      ]),
+      1,
+    );
+    drawThreeColLabelValueRow(
+      pick(["Caecal Intubation Time"]),
+      pick(["Start of Withdrawal Time"]),
+      pick(["Duration of Withdrawal (Min)"]),
+      1,
+    );
+    drawThreeColLabelValueRow(
+      pick(["Procedure Urgency", "Urgency"]),
+      pick(["Preoperative Imaging", "Pre-Operative Imaging"]),
+      pick(["Tumour Staging"]),
+      1,
+    );
+    drawThreeColLabelValueRow(
+      pick(["Pre-Operative Diagnosis"]),
+      undefined,
+      undefined,
+      1,
+    );
+
+    const remainingEntries = normalizedEntries.filter((entry) => !consumed.has(entry.label));
+    if (remainingEntries.length === 0) {
+      return;
+    }
+
+    const sectionLabelWidth = Math.min(
+      Math.max(
+        remainingEntries.reduce(
+          (maxWidth, entry) => Math.max(maxWidth, pdf.getTextWidth(`${entry.label}:`) + 2),
+          0,
+        ),
+        contentWidth * 0.34,
+        30,
+      ),
+      contentWidth * 0.46,
+    );
+
+    remainingEntries.forEach((entry) => {
+      drawLabelValueRow(entry.label, entry.value, margin, contentWidth, sectionLabelWidth);
+    });
+  };
+
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "bold");
   pdf.text("Dr. Monde Mjoli", margin, y);
@@ -445,9 +563,19 @@ export const generateStructuredTemplatePdf = async ({
   let inlineDiagramRendered = false;
 
   filteredSections.forEach((section) => {
+    const shouldRenderInlineDiagram =
+      Boolean(diagram?.imageData) &&
+      diagram?.placement === "inlineRight" &&
+      diagram?.sectionTitle === section.title &&
+      !inlineDiagramRendered;
+
     y += 2;
     const sectionOpeningHeight =
-      section.layout === "label-value-three-column" ? 26 : 16;
+      shouldRenderInlineDiagram
+        ? 94
+        : section.layout === "label-value-three-column"
+          ? 26
+          : 16;
     ensureSpace(sectionOpeningHeight);
     drawRule();
     pdf.setFont("helvetica", "bold");
@@ -457,12 +585,6 @@ export const generateStructuredTemplatePdf = async ({
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    const shouldRenderInlineDiagram =
-      Boolean(diagram?.imageData) &&
-      diagram?.placement === "inlineRight" &&
-      diagram?.sectionTitle === section.title &&
-      !inlineDiagramRendered;
-
     if (shouldRenderInlineDiagram) {
       const gap = 6;
       const rightWidth = 70;
@@ -470,6 +592,7 @@ export const generateStructuredTemplatePdf = async ({
       const leftX = margin;
       const rightX = margin + leftWidth + gap;
       const labelGap = 2;
+      const legendLineHeight = Math.max(lineHeight - 0.5, 3.8);
       const renderedEntries = section.entries
         .map((entry) => ({ label: entry.label, value: toEntryValue(entry) }))
         .filter((entry) => hasText(entry.value));
@@ -497,7 +620,19 @@ export const generateStructuredTemplatePdf = async ({
           (total, entry) => total + countEntryLines(entry) * lineHeight,
           0,
         ) || lineHeight;
-      const estimatedRightHeight = 66;
+      const plainDiagramBoxHeight = 56;
+      const legendLinesCount = normalizedDiagramLegendItems.reduce(
+        (count, item) => count + pdf.splitTextToSize(`- ${item}`, rightWidth - 1).length,
+        0,
+      );
+      const estimatedLegendHeight =
+        normalizedDiagramLegendItems.length > 0
+          ? lineHeight + legendLinesCount * legendLineHeight + 1
+          : 0;
+      const estimatedRightHeight =
+        diagram?.style === "plain"
+          ? plainDiagramBoxHeight + (normalizedDiagramLegendItems.length > 0 ? 3 + estimatedLegendHeight : 0)
+          : 66;
       const sectionHeight = Math.max(leftHeight, estimatedRightHeight) + 2;
 
       ensureSpace(sectionHeight + 2, 24);
@@ -557,6 +692,22 @@ export const generateStructuredTemplatePdf = async ({
         }
 
         rightBottomY = y + diagramBoxHeight;
+        if (normalizedDiagramLegendItems.length > 0) {
+          let legendY = rightBottomY + 3;
+          pdf.setFont("helvetica", "bold");
+          pdf.text(diagram?.legendTitle || "Legend", rightX, legendY);
+          legendY += lineHeight;
+
+          pdf.setFont("helvetica", "normal");
+          normalizedDiagramLegendItems.forEach((item) => {
+            const legendLines = pdf.splitTextToSize(`- ${item}`, rightWidth - 1);
+            legendLines.forEach((line: string) => {
+              pdf.text(line, rightX, legendY);
+              legendY += legendLineHeight;
+            });
+          });
+          rightBottomY = Math.max(rightBottomY, legendY);
+        }
       } else {
         const portsAndIncisionsLayout = drawRectalStylePortsAndIncisions({
           pdf,
@@ -579,6 +730,11 @@ export const generateStructuredTemplatePdf = async ({
 
     if (section.layout === "colonoscopy-preoperative") {
       renderColonoscopyPreoperativeSection(section.entries);
+      return;
+    }
+
+    if (section.layout === "aligned-preoperative-grid") {
+      renderAlignedPreoperativeGridSection(section.entries);
       return;
     }
 
@@ -670,6 +826,23 @@ export const generateStructuredTemplatePdf = async ({
     y += 7;
     pdf.addImage(diagram?.imageData || "", "PNG", margin, y, contentWidth, 75);
     y += 80;
+    if (normalizedDiagramLegendItems.length > 0) {
+      const endLegendLineHeight = Math.max(lineHeight - 0.5, 3.8);
+      ensureSpace(lineHeight + normalizedDiagramLegendItems.length * endLegendLineHeight + 4, 20);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(diagram?.legendTitle || "Legend", margin, y);
+      y += lineHeight;
+      pdf.setFont("helvetica", "normal");
+      normalizedDiagramLegendItems.forEach((item) => {
+        const lines = pdf.splitTextToSize(`- ${item}`, contentWidth);
+        lines.forEach((line: string) => {
+          ensureSpace(endLegendLineHeight + 1, 20);
+          pdf.text(line, margin, y);
+          y += endLegendLineHeight;
+        });
+      });
+      y += 1;
+    }
   }
 
   const shouldRenderSignatureSection =

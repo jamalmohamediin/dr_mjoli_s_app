@@ -51,18 +51,30 @@ const parseSurgicalMarkings = (value: string) => {
 const buildFinalDiagrams = (reportSnapshot: any): FinalDiagramCapture[] => {
   const diagrams: FinalDiagramCapture[] = [];
 
-  if (reportSnapshot?.gastroscopyCanvasData) {
+  const gastroscopyCanvasImage =
+    reportSnapshot?.gastroscopy?.diagram?.canvasImageData ||
+    reportSnapshot?.gastroscopyCanvasData ||
+    reportSnapshot?.gastroscopyFindings?.canvasImageData ||
+    "";
+  const hasTemplateGastroscopyImage = Boolean(reportSnapshot?.gastroscopy?.diagram?.canvasImageData);
+  if (gastroscopyCanvasImage) {
     diagrams.push({
-      canvasImageData: reportSnapshot.gastroscopyCanvasData,
-      findings: reportSnapshot?.gastroscopyFindings?.findings || [],
+      canvasImageData: gastroscopyCanvasImage,
+      findings: hasTemplateGastroscopyImage ? [] : (reportSnapshot?.gastroscopyFindings?.findings || []),
       type: "gastroscopy",
     });
   }
 
-  if (reportSnapshot?.colonoscopyCanvasData) {
+  const colonoscopyCanvasImage =
+    reportSnapshot?.colonoscopy?.diagram?.canvasImageData ||
+    reportSnapshot?.colonoscopyCanvasData ||
+    reportSnapshot?.colonoscopyFindings?.canvasImageData ||
+    "";
+  const hasTemplateColonoscopyImage = Boolean(reportSnapshot?.colonoscopy?.diagram?.canvasImageData);
+  if (colonoscopyCanvasImage) {
     diagrams.push({
-      canvasImageData: reportSnapshot.colonoscopyCanvasData,
-      findings: reportSnapshot?.colonoscopyFindings?.findings || [],
+      canvasImageData: colonoscopyCanvasImage,
+      findings: hasTemplateColonoscopyImage ? [] : (reportSnapshot?.colonoscopyFindings?.findings || []),
       type: "colonoscopy",
     });
   }
@@ -134,12 +146,8 @@ export const generateSavedRecordPdfBlob = async (record: PatientRecord) => {
         canvasImageData:
           reportSnapshot?.gastroscopy?.diagram?.canvasImageData ||
           reportSnapshot?.gastroscopyCanvasData ||
-          reportSnapshot?.gastroscopyFindings?.canvasImageData ||
           "",
-        findings:
-          reportSnapshot?.gastroscopy?.diagram?.findings ||
-          reportSnapshot?.gastroscopyFindings?.findings ||
-          [],
+        findings: [],
       },
     };
 

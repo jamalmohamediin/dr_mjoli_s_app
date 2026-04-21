@@ -24,6 +24,9 @@ interface TextAnnotation {
   text: string;
   color: string;
   size: number;
+  fontWeight: "normal" | "bold";
+  fontStyle: "normal" | "italic";
+  underline: boolean;
 }
 
 interface DraftTextAnnotation extends TextAnnotation {}
@@ -38,6 +41,7 @@ interface FreeDrawDiagramProps {
 
 const DEFAULT_CANVAS_WIDTH = 1200;
 const DEFAULT_CANVAS_HEIGHT = 800;
+const TEXT_SIZE_OPTIONS = [10, 12, 14, 16, 18, 20, 24, 28, 32];
 
 export const FreeDrawDiagram = ({
   backgroundImage,
@@ -53,6 +57,10 @@ export const FreeDrawDiagram = ({
   const [mode, setMode] = useState<DiagramMode>("draw");
   const [strokeColor, setStrokeColor] = useState("#e11d48");
   const [strokeWidth, setStrokeWidth] = useState(3);
+  const [textSize, setTextSize] = useState(14);
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [paths, setPaths] = useState<DrawPath[]>([]);
   const [currentPath, setCurrentPath] = useState<DrawPath | null>(null);
@@ -158,12 +166,23 @@ export const FreeDrawDiagram = ({
       ctx.save();
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = annotation.color;
-      ctx.font = `bold ${annotation.size}px Arial`;
+      ctx.font = `${annotation.fontStyle} ${annotation.fontWeight} ${annotation.size}px Arial`;
       ctx.textBaseline = "top";
       const lines = String(annotation.text || "").split(/\r?\n/);
       const lineHeight = Math.max(annotation.size * 1.25, 14);
       lines.forEach((line, lineIndex) => {
-        ctx.fillText(line, annotation.x, annotation.y + lineIndex * lineHeight);
+        const lineY = annotation.y + lineIndex * lineHeight;
+        ctx.fillText(line, annotation.x, lineY);
+        if (annotation.underline) {
+          const measuredWidth = ctx.measureText(line).width;
+          const underlineY = lineY + annotation.size + 1;
+          ctx.beginPath();
+          ctx.moveTo(annotation.x, underlineY);
+          ctx.lineTo(annotation.x + measuredWidth, underlineY);
+          ctx.lineWidth = Math.max(1, annotation.size / 14);
+          ctx.strokeStyle = annotation.color;
+          ctx.stroke();
+        }
       });
       ctx.restore();
     });
@@ -224,7 +243,10 @@ export const FreeDrawDiagram = ({
         y: point.y,
         text: "",
         color: strokeColor,
-        size: Math.max(12, strokeWidth * 4),
+        size: textSize,
+        fontWeight: isBold ? "bold" : "normal",
+        fontStyle: isItalic ? "italic" : "normal",
+        underline: isUnderline,
       });
       return;
     }
@@ -305,6 +327,35 @@ export const FreeDrawDiagram = ({
     }
   }, [commitDraftTextAnnotation, draftTextAnnotation, mode]);
 
+  useEffect(() => {
+    setDraftTextAnnotation((previousDraft) => {
+      if (!previousDraft) {
+        return previousDraft;
+      }
+
+      const nextFontWeight: TextAnnotation["fontWeight"] = isBold ? "bold" : "normal";
+      const nextFontStyle: TextAnnotation["fontStyle"] = isItalic ? "italic" : "normal";
+      const nextUnderline = isUnderline;
+
+      if (
+        previousDraft.size === textSize &&
+        previousDraft.fontWeight === nextFontWeight &&
+        previousDraft.fontStyle === nextFontStyle &&
+        previousDraft.underline === nextUnderline
+      ) {
+        return previousDraft;
+      }
+
+      return {
+        ...previousDraft,
+        size: textSize,
+        fontWeight: nextFontWeight,
+        fontStyle: nextFontStyle,
+        underline: nextUnderline,
+      };
+    });
+  }, [isBold, isItalic, isUnderline, textSize]);
+
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (canvas?.hasPointerCapture(event.pointerId)) {
@@ -373,6 +424,64 @@ export const FreeDrawDiagram = ({
           />
           <span className="text-xs text-gray-600">{strokeWidth}px</span>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="diagram-text-size" className="text-xs font-medium text-gray-700">
+            Font
+          </Label>
+          <select
+            id="diagram-text-size"
+            aria-label="Textbox font size"
+            value={textSize}
+            onChange={(event) => setTextSize(Number(event.target.value))}
+            className="h-8 rounded border border-gray-300 bg-white px-2 text-xs text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            {TEXT_SIZE_OPTIONS.map((sizeOption) => (
+              <option key={sizeOption} value={sizeOption}>
+                {sizeOption}px
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={!isBold && !isItalic && !isUnderline ? "default" : "outline"}
+            onClick={() => {
+              setIsBold(false);
+              setIsItalic(false);
+              setIsUnderline(false);
+            }}
+          >
+            Regular
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={isBold ? "default" : "outline"}
+            onClick={() => setIsBold((previousValue) => !previousValue)}
+          >
+            Bold
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={isItalic ? "default" : "outline"}
+            onClick={() => setIsItalic((previousValue) => !previousValue)}
+          >
+            Italic
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={isUnderline ? "default" : "outline"}
+            onClick={() => setIsUnderline((previousValue) => !previousValue)}
+          >
+            Underline
+          </Button>
+        </div>
       </div>
 
       <div
@@ -413,16 +522,23 @@ export const FreeDrawDiagram = ({
                 discardDraftTextAnnotation();
               }
             }}
-            className="absolute z-20 min-h-8 min-w-20 resize-none rounded border border-gray-300 bg-white/95 px-2 py-1 text-sm shadow-sm outline-none focus:border-gray-500"
+            className="absolute z-20 h-8 min-w-[140px] max-w-[220px] resize-none overflow-hidden rounded border border-gray-300 bg-white px-2 text-xs shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
             style={{
               left: `${draftLeftPercent}%`,
               top: `${draftTopPercent}%`,
               transform: "translate(-2px, -2px)",
               color: draftTextAnnotation.color,
               fontSize: `${draftTextAnnotation.size}px`,
+              fontWeight: draftTextAnnotation.fontWeight,
+              fontStyle: draftTextAnnotation.fontStyle,
+              textDecoration: draftTextAnnotation.underline ? "underline" : "none",
               lineHeight: 1.2,
             }}
             placeholder="Type here"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            autoComplete="off"
           />
         ) : null}
         <canvas
