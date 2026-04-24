@@ -146,6 +146,54 @@ const toSortableTimestamp = (value: string) => {
   return parsed ? parsed.getTime() : 0;
 };
 
+const getRecordRecencyTimestamp = (record: PatientRecord) =>
+  Math.max(
+    toSortableTimestamp(record.updatedAt),
+    toSortableTimestamp(record.recordDate),
+    toSortableTimestamp(record.createdAt),
+  );
+
+const getPatientRecordDedupSignature = (record: PatientRecord) => {
+  const normalizedRecordDate = (record.recordDate || record.updatedAt || "").slice(0, 10);
+  const displayProcedure = detailText(
+    record.primaryProcedureName,
+    detailText(record.templateLabel, getTemplateLabel(record.templateType)),
+  );
+  const signature = [
+    detailText(record.patientDocId, "").toLowerCase(),
+    detailText(record.templateType, "").toLowerCase(),
+    detailText(displayProcedure, "").toLowerCase(),
+    detailText(normalizedRecordDate, "").toLowerCase(),
+  ].join("|");
+  const normalizedSignature = signature
+    .replace(/\|+/g, "|")
+    .replace(/^\|+/, "")
+    .replace(/\|+$/, "");
+
+  return normalizedSignature || `id:${record.id}`;
+};
+
+const dedupePatientRecordsForView = (records: PatientRecord[]) => {
+  const latestRecordBySignature = new Map<string, PatientRecord>();
+
+  records.forEach((record) => {
+    const signature = getPatientRecordDedupSignature(record);
+    const existingRecord = latestRecordBySignature.get(signature);
+    if (!existingRecord) {
+      latestRecordBySignature.set(signature, record);
+      return;
+    }
+
+    const currentTimestamp = getRecordRecencyTimestamp(record);
+    const existingTimestamp = getRecordRecencyTimestamp(existingRecord);
+    if (currentTimestamp >= existingTimestamp) {
+      latestRecordBySignature.set(signature, record);
+    }
+  });
+
+  return Array.from(latestRecordBySignature.values()).sort(sortRecordsByRecency);
+};
+
 const getPatientRecencyTimestamp = (patient: PatientSummary) =>
   Math.max(
     toSortableTimestamp(patient.latestRecordDate),
@@ -737,8 +785,10 @@ export const PatientsTab = ({
           ) : (
             <>
               {visiblePatients.map((patient, index) => {
-                const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin).sort(
-                  sortRecordsByRecency,
+                const patientRecords = dedupePatientRecordsForView(
+                  getVisiblePatientRecords(records, patient.id, showRecycleBin).sort(
+                    sortRecordsByRecency,
+                  ),
                 );
                 const latestRecord =
                   patientRecords.find((record) => record.id === patient.latestRecordId) ||
