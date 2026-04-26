@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo2, Redo2, RotateCcw } from "lucide-react";
-import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { formatDateTimeDDMMYYYYWithDashes, getLocalDateTimeValue } from "@/utils/dateFormatter";
 
 interface RectalCancerFormProps {
@@ -323,18 +322,6 @@ export const RectalCancerForm = ({
                   onCurrentPatientChange={onCurrentPatientChange}
                   use24HourTimeInputs
                   useDashDateInputs
-                />
-              </div>
-
-              {/* ASA Classification */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-800 mb-4">ASA Physical Status Classification</h3>
-                <ASAClassificationSection
-                  selectedASA={currentReport.rectalCancer.patientInfo?.asaScore || ''}
-                  onASAChange={(value) => updateRectalCancer('patientInfo', 'asaScore', value)}
-                  notes={currentReport.rectalCancer.patientInfo?.asaNotes || ''}
-                  onNotesChange={(value) => updateRectalCancer('patientInfo', 'asaNotes', value)}
-                  showNotes={true}
                 />
               </div>
 

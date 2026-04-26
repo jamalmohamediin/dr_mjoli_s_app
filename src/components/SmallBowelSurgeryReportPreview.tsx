@@ -328,6 +328,12 @@ export const SmallBowelSurgeryReportPreview = ({
                 ).join(", ")}
               </div>
             )}
+            {smallBowel?.procedure?.trocarNumber && (
+              <div>
+                <span className="font-medium">Trocar Number:</span>{" "}
+                {smallBowel.procedure.trocarNumber}
+              </div>
+            )}
             {procedurePerformed.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 <span className="font-medium mr-1">Procedure Performed:</span>

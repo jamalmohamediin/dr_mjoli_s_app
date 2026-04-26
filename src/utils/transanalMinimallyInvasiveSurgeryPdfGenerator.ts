@@ -71,6 +71,8 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
         { label: "Surgeon", value: formatSelectionList(preoperative.surgeons) },
         { label: "Assistant", value: formatSelectionList(preoperative.assistants) },
         { label: "Anesthetist", value: formatSelectionList(preoperative.anaesthetists) },
+        { label: "Start Time", value: String(preoperative.startTime || "").trim() },
+        { label: "End Time", value: String(preoperative.endTime || "").trim() },
         {
           label: "Pre-Operative Diagnosis",
           value: formatSelectionListWithOther(preoperative.diagnosis, preoperative.diagnosisOther),

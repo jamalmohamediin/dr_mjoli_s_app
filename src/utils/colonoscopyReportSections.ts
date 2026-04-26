@@ -98,10 +98,11 @@ export const buildColonoscopyReportSections = (
     { label: "Caecal Intubation Time", value: preoperative.caecalIntubationTime },
     { label: "Start of Withdrawal Time", value: preoperative.withdrawalStartTime },
     { label: "Duration of Withdrawal (Min)", value: preoperative.withdrawalDuration },
-    { label: "Procedure Urgency", value: preoperative.procedureUrgency, badges: true },
+    { label: "Urgency", value: preoperative.procedureUrgency, badges: true },
     {
-      label: "Preoperative Imaging",
-      value: joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
+      label: "Signs & Symptoms",
+      value: joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+      fullWidth: true,
     },
     {
       label: "Indication for Colonoscopy",
@@ -109,9 +110,8 @@ export const buildColonoscopyReportSections = (
       fullWidth: true,
     },
     {
-      label: "Signs & Symptoms",
-      value: joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
-      fullWidth: true,
+      label: "Preoperative Imaging",
+      value: joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
     },
   ];
 

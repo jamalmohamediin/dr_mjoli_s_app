@@ -22,6 +22,7 @@ import colonoscopyTemplateImage from "@/assets/colonoscopy-template-replacement.
 interface ColonoscopyFormProps {
   currentReport: any;
   updateTemplate: (section: string, field: string, value: any) => void;
+  diagramResetCounter?: number;
   onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
@@ -132,6 +133,7 @@ const bbpsScoreOptions = [
 export const ColonoscopyForm = ({
   currentReport,
   updateTemplate,
+  diagramResetCounter = 0,
   onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
@@ -684,6 +686,7 @@ export const ColonoscopyForm = ({
         </CardHeader>
         <CardContent>
           <FreeDrawDiagram
+            key={`colonoscopy-diagram-${diagramResetCounter}`}
             backgroundImage={colonoscopyTemplateImage}
             initialCanvasImageData={template.diagram?.canvasImageData || ""}
             maxWidth={300}

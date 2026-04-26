@@ -17,6 +17,10 @@ import {
   periAnalDiagramImages,
 } from "@/utils/periAnalDiagramConfig";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+import {
+  hasPdfDisplayValue,
+  isPostPreoperativeAlwaysVisibleField,
+} from "@/utils/templateDataHelpers";
 
 const PERI_ANAL_DIAGRAM_MARKING_SCALE = 1.8;
 
@@ -143,6 +147,91 @@ const createSurgicalDiagramCanvas = async (
   });
 };
 
+const trimDiagramWhitespace = async (
+  imageDataUrl: string | null,
+  padding = 10,
+): Promise<string | null> => {
+  if (!imageDataUrl) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const sourceImage = new Image();
+    sourceImage.onload = () => {
+      const sourceCanvas = document.createElement("canvas");
+      const sourceCtx = sourceCanvas.getContext("2d");
+      if (!sourceCtx) {
+        resolve(imageDataUrl);
+        return;
+      }
+
+      sourceCanvas.width = sourceImage.naturalWidth;
+      sourceCanvas.height = sourceImage.naturalHeight;
+      sourceCtx.drawImage(sourceImage, 0, 0);
+
+      const imageData = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+      const { data, width, height } = imageData;
+
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const offset = (y * width + x) * 4;
+          const red = data[offset];
+          const green = data[offset + 1];
+          const blue = data[offset + 2];
+          const alpha = data[offset + 3];
+          const isVisible = alpha > 10;
+          const isNearWhite = red > 245 && green > 245 && blue > 245;
+          if (isVisible && !isNearWhite) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+
+      if (maxX < minX || maxY < minY) {
+        resolve(imageDataUrl);
+        return;
+      }
+
+      const cropX = Math.max(0, minX - padding);
+      const cropY = Math.max(0, minY - padding);
+      const cropWidth = Math.min(width - cropX, maxX - minX + 1 + padding * 2);
+      const cropHeight = Math.min(height - cropY, maxY - minY + 1 + padding * 2);
+
+      const outputCanvas = document.createElement("canvas");
+      const outputCtx = outputCanvas.getContext("2d");
+      if (!outputCtx) {
+        resolve(imageDataUrl);
+        return;
+      }
+
+      outputCanvas.width = cropWidth;
+      outputCanvas.height = cropHeight;
+      outputCtx.drawImage(
+        sourceCanvas,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        cropWidth,
+        cropHeight,
+      );
+      resolve(outputCanvas.toDataURL("image/png"));
+    };
+    sourceImage.onerror = () => resolve(imageDataUrl);
+    sourceImage.src = imageDataUrl;
+  });
+};
+
 export const generatePeriAnalPDF = async (
   patientName: string,
   patientId: string,
@@ -175,27 +264,58 @@ export const generatePeriAnalPDF = async (
       return isSelected && hasMarkings;
     });
     const diagramCanvasEntries = await Promise.all(
-      selectedDiagramVariants.map(async (variant) => ({
-        ...variant,
-        canvas: await createSurgicalDiagramCanvas(
+      selectedDiagramVariants.map(async (variant) => {
+        const baseCanvas = await createSurgicalDiagramCanvas(
           diagramState.markingsByVariant?.[variant.key] || [],
           periAnalDiagramImages[variant.key],
-        ),
-      })),
+        );
+        const canvas =
+          variant.key === "sagittalAnalCanal"
+            ? await trimDiagramWhitespace(baseCanvas, 12)
+            : baseCanvas;
+        return {
+          ...variant,
+          canvas,
+        };
+      }),
     );
 
     const col1X = margin;
     const col2X = margin + 63;
     const col3X = margin + 126;
     const twoCol2X = margin + 95;
+    let postPreoperativeSectionActive = false;
 
     const txt = (value: any) => (value === undefined || value === null ? "" : String(value));
+    const shouldRenderField = (label: string, value: unknown) => {
+      if (!postPreoperativeSectionActive) {
+        return hasPdfDisplayValue(value);
+      }
+
+      return hasPdfDisplayValue(value) || isPostPreoperativeAlwaysVisibleField(label);
+    };
+    const shouldRenderRawCell = (raw: string) => {
+      const normalized = String(raw || "");
+      const separatorIndex = normalized.indexOf(":");
+      if (separatorIndex === -1) {
+        return hasPdfDisplayValue(normalized);
+      }
+
+      const label = normalized.slice(0, separatorIndex).trim();
+      const value = normalized.slice(separatorIndex + 1).trim();
+      return shouldRenderField(label, value);
+    };
 
     const ensureSpace = (height = 10) => {
       if (y + height > pageHeight - 20) {
         pdf.addPage();
         y = margin;
       }
+    };
+
+    const startNewPage = () => {
+      pdf.addPage();
+      y = margin;
     };
 
     const drawRule = () => {
@@ -207,6 +327,15 @@ export const generatePeriAnalPDF = async (
 
     const buildCellLayout = (rawValue: string, width: number) => {
       const raw = rawValue || "";
+      if (!raw.trim()) {
+        return {
+          isLabelValue: false,
+          labelLines: [] as string[],
+          valueLines: [] as string[],
+          lineCount: 0,
+          labelWidth: 0,
+        };
+      }
       const separatorIndex = raw.indexOf(":");
       if (separatorIndex === -1) {
         const lines = pdf.splitTextToSize(raw, width);
@@ -255,9 +384,13 @@ export const generatePeriAnalPDF = async (
     };
 
     const row3 = (a: string, b: string, c: string) => {
-      const cell1 = buildCellLayout(a, 58);
-      const cell2 = buildCellLayout(b, 58);
-      const cell3 = buildCellLayout(c, 58);
+      const values = [a, b, c].map((value) => (shouldRenderRawCell(value) ? value : ""));
+      const cell1 = buildCellLayout(values[0], 58);
+      const cell2 = buildCellLayout(values[1], 58);
+      const cell3 = buildCellLayout(values[2], 58);
+      if (cell1.lineCount === 0 && cell2.lineCount === 0 && cell3.lineCount === 0) {
+        return;
+      }
       const lines = Math.max(cell1.lineCount, cell2.lineCount, cell3.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
@@ -270,8 +403,12 @@ export const generatePeriAnalPDF = async (
     };
 
     const row2 = (a: string, b: string) => {
-      const cell1 = buildCellLayout(a, 88);
-      const cell2 = buildCellLayout(b, 88);
+      const values = [a, b].map((value) => (shouldRenderRawCell(value) ? value : ""));
+      const cell1 = buildCellLayout(values[0], 88);
+      const cell2 = buildCellLayout(values[1], 88);
+      if (cell1.lineCount === 0 && cell2.lineCount === 0) {
+        return;
+      }
       const lines = Math.max(cell1.lineCount, cell2.lineCount, 1);
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
@@ -286,6 +423,9 @@ export const generatePeriAnalPDF = async (
       const labelColumnWidth = 64;
       const valueColumnWidth = pageWidth - margin * 2 - labelColumnWidth - 2;
       entries.forEach((entry) => {
+        if (!shouldRenderField(entry.label, entry.value)) {
+          return;
+        }
         const labelLines = pdf.splitTextToSize(`${entry.label}:`, labelColumnWidth);
         const valueLines = pdf.splitTextToSize(entry.value || "", valueColumnWidth);
         const lines = Math.max(labelLines.length, valueLines.length, 1);
@@ -337,7 +477,13 @@ export const generatePeriAnalPDF = async (
     pdf.setFontSize(9);
 
     const row1 = (value: string) => {
+      if (!shouldRenderRawCell(value)) {
+        return;
+      }
       const layout = buildCellLayout(value, pageWidth - margin * 2);
+      if (layout.lineCount === 0) {
+        return;
+      }
       ensureSpace(layout.lineCount * lineHeight + 1);
       for (let lineIndex = 0; lineIndex < layout.lineCount; lineIndex += 1) {
         drawLayoutLine(layout, lineIndex, margin);
@@ -381,18 +527,18 @@ export const generatePeriAnalPDF = async (
       `Address: ${txt(info.address)}`
     );
 
-    if (txt(asaClassification)) {
-      row1(`ASA Physical Status Classification: ${asaClassification}`);
-    }
-    if (txt(info.asaNotes)) {
-      row1(`ASA Notes: ${txt(info.asaNotes)}`);
-    }
     if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
       row3(
         `Weight: ${txt(info.weight)}`,
         `Height: ${txt(info.height)}`,
         `BMI: ${txt(info.bmi)}`
       );
+    }
+    if (txt(asaClassification)) {
+      row1(`ASA Physical Status Classification: ${asaClassification}`);
+    }
+    if (txt(info.asaNotes)) {
+      row1(`ASA Notes: ${txt(info.asaNotes)}`);
     }
     if (txt(info.visitDate) || txt(info.visitTime)) {
       row3(
@@ -426,6 +572,7 @@ export const generatePeriAnalPDF = async (
         }`
       );
     }
+    postPreoperativeSectionActive = true;
 
     startSection("Findings Summary");
     writeEntries(
@@ -437,10 +584,18 @@ export const generatePeriAnalPDF = async (
     if (diagramCanvasEntries.length > 0) {
       const cellGap = 8;
       const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
-      const cellHeight = 58;
-      const titleOffset = 5;
-      const rowGap = 12;
+      const isFourDiagramLayout = diagramCanvasEntries.length >= 4;
+      const titleOffset = isFourDiagramLayout ? 4 : 5;
+      const rowGap = isFourDiagramLayout ? 6 : 12;
       const rowCount = Math.ceil(diagramCanvasEntries.length / 2);
+      let cellHeight = isFourDiagramLayout ? 46 : 58;
+      if (isFourDiagramLayout) {
+        const availableHeight = pageHeight - 20 - y;
+        const availableCellHeight = Math.floor((availableHeight - 26) / rowCount - rowGap - titleOffset);
+        if (availableCellHeight > 0) {
+          cellHeight = Math.max(34, Math.min(cellHeight, availableCellHeight));
+        }
+      }
       const diagramGridHeight = rowCount * (cellHeight + rowGap + titleOffset);
       const diagramSectionRequiredHeight = Math.max(60, diagramGridHeight + 24);
       ensureSpace(diagramSectionRequiredHeight);
@@ -465,10 +620,11 @@ export const generatePeriAnalPDF = async (
         if (entry.canvas) {
           const props = pdf.getImageProperties(entry.canvas);
           const ar = props.width / props.height;
-          let w = cellWidth - 4;
+          const inset = entry.key === "sagittalAnalCanal" ? 1 : 2;
+          let w = cellWidth - inset * 2;
           let h = w / ar;
-          if (h > cellHeight - 4) {
-            h = cellHeight - 4;
+          if (h > cellHeight - inset * 2) {
+            h = cellHeight - inset * 2;
             w = h * ar;
           }
           pdf.addImage(entry.canvas, "PNG", cellX + (cellWidth - w) / 2, boxY + (cellHeight - h) / 2, w, h);
@@ -478,6 +634,9 @@ export const generatePeriAnalPDF = async (
       });
 
       y = gridStartY + rowCount * (cellHeight + rowGap + titleOffset) + 2;
+      if (diagramCanvasEntries.length <= 2) {
+        startNewPage();
+      }
     }
 
     findingSections.forEach((section) => {
@@ -532,16 +691,17 @@ export const generatePeriAnalPDF = async (
     );
 
     startSection("Additional Information");
-    writeEntries([{ label: "Additional Information", value: txt(addInfo?.additionalInformation) }].filter((entry) => entry.value));
+    writeEntries([{ label: "Additional Information", value: txt(addInfo?.additionalInformation) }]);
 
     startSection("Post Operative Management");
-    row2(`Analgesia: ${txt(postOperativePlan?.analgesia)}`, `Sitz Baths: ${txt(postOperativePlan?.sitzBaths)}`);
-    row2(
-      `Antibiotics (If Indicated): ${txt(postOperativePlan?.antibiotics)}`,
-      `Packing Removal Time: ${txt(postOperativePlan?.packingRemovalTime)}`
-    );
-    row1(`Plan For Further Surgery: ${txt(postOperativePlan?.planForFurtherSurgery)}`);
-    row1(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`);
+    writeEntries([
+      { label: "Analgesia", value: txt(postOperativePlan?.analgesia) },
+      { label: "Sitz Baths", value: txt(postOperativePlan?.sitzBaths) },
+      { label: "Antibiotics (If Indicated)", value: txt(postOperativePlan?.antibiotics) },
+      { label: "Packing Removal Time", value: txt(postOperativePlan?.packingRemovalTime) },
+      { label: "Plan For Further Surgery", value: txt(postOperativePlan?.planForFurtherSurgery) },
+      { label: "Post Operative Management", value: txt(addInfo?.postOperativeManagement) },
+    ]);
 
     startSection("Surgeon's Signature");
     if (addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image")) {

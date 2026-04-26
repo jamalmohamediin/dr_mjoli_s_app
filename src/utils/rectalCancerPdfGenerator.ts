@@ -1,33 +1,20 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
+import { getFullASAText } from "./asaDescriptions";
 import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
 import {
   formatPatientGender,
   formatPatientStickerDate,
-  getPatientInfoPdfSections,
-  hasPatientStickerMode,
   getPdfSafePatientInfo,
 } from './patientSticker';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
+import {
+  hasPdfDisplayValue,
+  isPostPreoperativeAlwaysVisibleField,
+} from './templateDataHelpers';
 
 const RECTAL_DIAGRAM_MARKING_SCALE = 1.8;
-
-// Helper function to render label and value with different font weights
-const renderLabelValue = (pdf: any, label: string, value: string, x: number, y: number) => {
-  // Render label in semi-bold
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(label + ':', x, y);
-  
-  // Calculate the width of the label to position the value
-  const labelWidth = pdf.getTextWidth(label + ': ');
-  
-  // Render value in normal weight
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(value, x + labelWidth, y);
-  
-  return y; // Return current Y position
-};
 
 // Function to calculate signature dimensions while maintaining aspect ratio
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{width: number, height: number}> => {
@@ -171,7 +158,7 @@ export const generateRectalCancerPDF = async (
     console.log('Reconstruction Type:', rectalCancerData?.reconstruction?.reconstructionType);
     
     // Map new structure to old structure for backward compatibility
-    const mappedData = mapNewStructureToOld(rectalCancerData);
+    mapNewStructureToOld(rectalCancerData);
     
     // Process surgical diagram
     let diagramCanvas: string | null = null;
@@ -266,16 +253,34 @@ export const generateRectalCancerPDF = async (
     const col1X = margin;
     const col2X = margin + 65; // Better spacing for three columns
     const col3X = margin + 130; // Better spacing for three columns
-    const twoCol2X = margin + 95; // For two-column layouts
     const lineSpacing = 5; // Increased for better readability and spacing
-    const hasPrintableValue = (value: any) => String(value || '').trim().length > 0;
+    const bodyFontSize = 8.5;
+    const threeColumnWidth = 56;
+    const fullWidth = pageWidth - margin * 2;
+    let postPreoperativeSectionActive = false;
+    const hasPrintableValue = (value: any) => hasPdfDisplayValue(value);
     const txt = (value: any) => String(value || '').trim();
+    const shouldRenderInlineField = (text: string) => {
+      const normalized = String(text || '');
+      const separatorIndex = normalized.indexOf(':');
+      if (separatorIndex === -1) {
+        return hasPrintableValue(normalized);
+      }
+
+      const label = normalized.slice(0, separatorIndex).trim();
+      const value = normalized.slice(separatorIndex + 1).trim();
+      if (!postPreoperativeSectionActive) {
+        return hasPrintableValue(value);
+      }
+
+      return hasPrintableValue(value) || isPostPreoperativeAlwaysVisibleField(label);
+    };
     const writeColumnsRow = (
       columns: Array<{ text: string; x: number; width: number }>,
       spacing = lineSpacing,
     ) => {
       const rowLayouts = columns.map((column) => {
-        if (!hasPrintableValue(column.text)) {
+        if (!shouldRenderInlineField(column.text)) {
           return {
             isLabelValue: false,
             labelLines: [] as string[],
@@ -315,6 +320,9 @@ export const generateRectalCancerPDF = async (
         ...rowLayouts.map((layout) => layout.lineCount),
         1,
       );
+      if (rowLayouts.every((layout) => layout.lineCount === 0)) {
+        return;
+      }
       checkPageBreak(lineCount * spacing + 2);
 
       for (let index = 0; index < lineCount; index++) {
@@ -337,18 +345,6 @@ export const generateRectalCancerPDF = async (
         y += spacing;
       }
       pdf.setFont('helvetica', 'normal');
-    };
-    const writePatientRow = (row: string[]) => {
-      if (hasPrintableValue(row[0]) && !hasPrintableValue(row[1]) && !hasPrintableValue(row[2])) {
-        writeColumnsRow([{ text: row[0] || '', x: col1X, width: pageWidth - margin * 2 }]);
-        return;
-      }
-
-      writeColumnsRow([
-        { text: row[0] || '', x: col1X, width: 60 },
-        { text: row[1] || '', x: col2X, width: 60 },
-        { text: row[2] || '', x: col3X, width: 60 },
-      ]);
     };
     const addWrappedField = (
       label: string,
@@ -378,6 +374,191 @@ export const generateRectalCancerPDF = async (
       pdf.setFont('helvetica', 'normal');
     };
 
+    const drawSectionDivider = (spacingAfter: number = 6) => {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += spacingAfter;
+    };
+
+    const drawWrappedColumns = (
+      columns: Array<{ text: string; x: number; width: number }>,
+      lineHeight: number = 4,
+      rowGap: number = 1.5,
+    ) => {
+      const visibleColumns = columns.filter((column) => hasPrintableValue(column.text));
+      if (visibleColumns.length === 0) {
+        return;
+      }
+
+      const lineGroups = columns.map((column) =>
+        hasPrintableValue(column.text)
+          ? (() => {
+              const separatorIndex = column.text.indexOf(':');
+              if (separatorIndex === -1) {
+                return {
+                  isLabelValue: false,
+                  labelLines: [] as string[],
+                  valueLines: pdf.splitTextToSize(column.text, column.width) as string[],
+                  labelWidth: 0,
+                };
+              }
+
+              const labelText = `${column.text.slice(0, separatorIndex).trim()}:`;
+              const valueText = column.text.slice(separatorIndex + 1).trim();
+              const labelWidth = Math.min(36, Math.max(18, column.width * 0.42));
+              const valueWidth = Math.max(12, column.width - labelWidth - 2);
+              return {
+                isLabelValue: true,
+                labelLines: pdf.splitTextToSize(labelText, labelWidth) as string[],
+                valueLines: pdf.splitTextToSize(valueText, valueWidth) as string[],
+                labelWidth,
+              };
+            })()
+          : null,
+      );
+
+      const lineCount = Math.max(
+        1,
+        ...lineGroups.map((layout) =>
+          layout
+            ? Math.max(layout.labelLines.length, layout.valueLines.length, 1)
+            : 0,
+        ),
+      );
+
+      checkPageBreak(lineCount * lineHeight + rowGap + 1);
+
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+        columns.forEach((column, columnIndex) => {
+          const layout = lineGroups[columnIndex];
+          if (!layout) {
+            return;
+          }
+
+          if (layout.isLabelValue) {
+            if (layout.labelLines[lineIndex]) {
+              pdf.setFont('helvetica', 'bold');
+              pdf.text(layout.labelLines[lineIndex], column.x, y);
+            }
+            if (layout.valueLines[lineIndex]) {
+              pdf.setFont('helvetica', 'normal');
+              pdf.text(layout.valueLines[lineIndex], column.x + layout.labelWidth + 2, y);
+            }
+          } else if (layout.valueLines[lineIndex]) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(layout.valueLines[lineIndex], column.x, y);
+          }
+        });
+        y += lineHeight;
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      y += rowGap;
+    };
+
+    const drawWrappedTextBlock = (
+      text: string,
+      x: number,
+      width: number,
+      lineHeight: number = 4,
+      bottomGap: number = 1.5,
+    ) => {
+      if (!hasPrintableValue(text)) {
+        return;
+      }
+
+      const separatorIndex = text.indexOf(':');
+      if (separatorIndex === -1) {
+        const lines = pdf.splitTextToSize(text, width) as string[];
+        checkPageBreak(lines.length * lineHeight + bottomGap + 1);
+        lines.forEach((line: string) => {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(line, x, y);
+          y += lineHeight;
+        });
+        y += bottomGap;
+        return;
+      }
+
+      const labelText = `${text.slice(0, separatorIndex).trim()}:`;
+      const valueText = text.slice(separatorIndex + 1).trim();
+      const labelWidth = Math.min(62, Math.max(24, width * 0.4));
+      const valueWidth = Math.max(20, width - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
+      const valueLines = pdf.splitTextToSize(valueText, valueWidth) as string[];
+      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+      checkPageBreak(lineCount * lineHeight + bottomGap + 1);
+      for (let index = 0; index < lineCount; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(labelLines[index], x, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(valueLines[index], x + labelWidth + 2, y);
+        }
+        y += lineHeight;
+      }
+      pdf.setFont('helvetica', 'normal');
+      y += bottomGap;
+    };
+
+    const drawQuestionAnswerRows = (
+      rows: Array<{ label: string; value: string; alwaysVisible?: boolean }>,
+      options: {
+        labelX?: number;
+        valueX?: number;
+        labelWidth?: number;
+        valueWidth?: number;
+        lineHeight?: number;
+        rowGap?: number;
+      } = {},
+    ) => {
+      const labelX = options.labelX ?? margin;
+      const valueX = options.valueX ?? margin + 68;
+      const labelWidth = options.labelWidth ?? 62;
+      const valueWidth = options.valueWidth ?? pageWidth - margin - valueX;
+      const lineHeight = options.lineHeight ?? 4;
+      const rowGap = options.rowGap ?? 1.5;
+
+      rows.forEach(({ label, value, alwaysVisible = false }) => {
+        const normalizedValue = String(value || '').trim();
+        if (
+          !normalizedValue &&
+          !alwaysVisible &&
+          !(postPreoperativeSectionActive && isPostPreoperativeAlwaysVisibleField(label))
+        ) {
+          return;
+        }
+
+        const labelText = `${label}:`;
+        const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
+        const valueLines = normalizedValue
+          ? (pdf.splitTextToSize(normalizedValue, valueWidth) as string[])
+          : [];
+        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+        checkPageBreak(lineCount * lineHeight + rowGap + 1);
+
+        for (let index = 0; index < lineCount; index += 1) {
+          if (labelLines[index]) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(labelLines[index], labelX, y);
+          }
+          if (valueLines[index]) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(valueLines[index], valueX, y);
+          }
+          y += lineHeight;
+        }
+
+        pdf.setFont('helvetica', 'normal');
+        y += rowGap;
+      });
+    };
+
     const drawInlineLabelValue = (
       text: string,
       x: number,
@@ -385,6 +566,10 @@ export const generateRectalCancerPDF = async (
       width: number,
       spacing = lineSpacing,
     ) => {
+      if (!shouldRenderInlineField(text)) {
+        return currentY;
+      }
+
       const separatorIndex = text.indexOf(':');
       if (separatorIndex === -1) {
         const lines = pdf.splitTextToSize(text, width) as string[];
@@ -424,59 +609,79 @@ export const generateRectalCancerPDF = async (
 
     const normalizedPatientInfo = getPdfSafePatientInfo(patientInfo);
     const patientGender = formatPatientGender(normalizedPatientInfo);
-    const patientSections = hasPatientStickerMode(normalizedPatientInfo)
-      ? [
-          {
-            title: 'Patient Details',
-            rows: [
-              [
-                `Patient Name: ${txt(normalizedPatientInfo.name || patientName)}`,
-                `Gender: ${patientGender}`,
-                `Age: ${txt(normalizedPatientInfo.age)}`,
-              ],
-              [
-                `Patient ID: ${txt(normalizedPatientInfo.patientId || patientId)}`,
-                `Date Of Birth: ${formatPatientStickerDate(normalizedPatientInfo.dateOfBirth)}`,
-                `Address: ${txt(normalizedPatientInfo.address)}`,
-              ],
-            ].filter((row) => row.some((cell) => hasPrintableValue(cell.replace(/^[^:]+:\s*/, '')))),
-          },
-        ].filter((section) => section.rows.length > 0)
-      : getPatientInfoPdfSections(patientInfo, patientName, patientId);
+    const patientAsaClassification = Array.isArray(normalizedPatientInfo?.asaScore)
+      ? normalizedPatientInfo.asaScore
+          .filter(Boolean)
+          .map((item: string) => getFullASAText(item))
+          .join(', ')
+      : normalizedPatientInfo.asaScore
+        ? getFullASAText(normalizedPatientInfo.asaScore)
+        : "";
+    const patientNameValue = txt(normalizedPatientInfo.name || patientName);
+    const patientIdValue = txt(normalizedPatientInfo.patientId || patientId);
+    const patientDob = formatPatientStickerDate(normalizedPatientInfo.dateOfBirth);
+    const patientAddress = txt(normalizedPatientInfo.address);
+    const patientWeight = txt(normalizedPatientInfo.weight);
+    const patientHeight = txt(normalizedPatientInfo.height);
+    const patientBmi = txt(normalizedPatientInfo.bmi);
+    const patientVisitDate = formatPatientStickerDate(normalizedPatientInfo.visitDate);
+    const patientVisitTime = txt(normalizedPatientInfo.visitTime);
 
-    patientSections.forEach((section, sectionIndex) => {
-      if (section.title) {
-        checkPageBreak(7);
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(9);
-        pdf.text(section.title, margin, y);
-        y += 5;
-      }
-
+    const drawPatientSubsectionTitle = (title: string) => {
+      checkPageBreak(6);
+      pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      section.rows.forEach((row) => writePatientRow(row));
+      pdf.text(title, margin, y);
+      y += 4.5;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(bodyFontSize);
+    };
 
-      if (sectionIndex < patientSections.length - 1) {
-        y += 1;
-      }
-    });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(bodyFontSize);
 
-    y += 3;
-    
-    // Separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    
+    if (
+      hasPrintableValue(patientNameValue) ||
+      hasPrintableValue(patientGender) ||
+      hasPrintableValue(txt(normalizedPatientInfo.age)) ||
+      hasPrintableValue(patientIdValue) ||
+      hasPrintableValue(patientDob) ||
+      hasPrintableValue(patientAddress)
+    ) {
+      drawPatientSubsectionTitle('Patient Details');
+      drawWrappedColumns([
+        { text: `Patient Name: ${patientNameValue}`, x: col1X, width: threeColumnWidth },
+        { text: `Gender: ${patientGender}`, x: margin + 62, width: threeColumnWidth },
+        { text: `Age: ${txt(normalizedPatientInfo.age)}`, x: margin + 124, width: threeColumnWidth },
+      ]);
+      drawWrappedColumns([
+        { text: `Patient ID: ${patientIdValue}`, x: col1X, width: threeColumnWidth },
+        { text: `Date Of Birth: ${patientDob}`, x: margin + 62, width: threeColumnWidth },
+        { text: `Address: ${patientAddress}`, x: margin + 124, width: threeColumnWidth },
+      ]);
+    }
+
+    drawWrappedColumns([
+      { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
+      { text: `Height: ${patientHeight}`, x: margin + 62, width: threeColumnWidth },
+      { text: `BMI: ${patientBmi}`, x: margin + 124, width: threeColumnWidth },
+    ]);
+    drawWrappedTextBlock(`ASA Physical Status Classification: ${patientAsaClassification}`, margin, fullWidth);
+    drawWrappedTextBlock(`ASA Notes: ${txt(normalizedPatientInfo.asaNotes)}`, margin, fullWidth);
+    drawWrappedColumns([
+      { text: `Date: ${patientVisitDate}`, x: col1X, width: threeColumnWidth },
+      { text: `Time: ${patientVisitTime}`, x: margin + 62, width: threeColumnWidth },
+    ]);
+
+    drawSectionDivider();
+
     // PREOPERATIVE INFORMATION Section
     pdf.setFontSize(11);
     pdf.setFont('helvetica', 'bold');
     pdf.text('PREOPERATIVE INFORMATION', margin, y);
     y += 6;
     
-    pdf.setFontSize(9);
+    pdf.setFontSize(bodyFontSize);
     pdf.setFont('helvetica', 'normal');
     
     const surgeonText = rectalCancerData?.surgicalTeam?.surgeons?.filter(s => s.trim()).join(', ') || '';
@@ -505,30 +710,26 @@ export const generateRectalCancerPDF = async (
       })
       .join(', ');
 
-    writeColumnsRow([
-      { text: `Surgeon: ${surgeonText}`, x: col1X, width: 55 },
-      { text: `Assistant: ${assistantText}`, x: col2X, width: 55 },
-      { text: `Anaesthetist: ${anaesthetistText}`, x: col3X, width: 45 },
+    drawWrappedColumns([
+      { text: `Surgeon: ${surgeonText}`, x: col1X, width: threeColumnWidth },
+      { text: `Assistant: ${assistantText}`, x: margin + 62, width: threeColumnWidth },
+      { text: `Anaesthetist: ${anaesthetistText}`, x: margin + 124, width: threeColumnWidth },
     ]);
-    writeColumnsRow([
-      { text: `Start Time: ${startTime}`, x: col1X, width: 55 },
-      { text: `End Time: ${endTime}`, x: col2X, width: 55 },
-      { text: `Total Duration: ${totalDuration}`, x: col3X, width: 45 },
+    drawWrappedColumns([
+      { text: `Start Time: ${startTime}`, x: col1X, width: threeColumnWidth },
+      { text: `End Time: ${endTime}`, x: margin + 62, width: threeColumnWidth },
+      { text: `Total Duration: ${totalDuration}`, x: margin + 124, width: threeColumnWidth },
     ]);
-    writeColumnsRow([
-      { text: `Procedure Urgency: ${procedureUrgency}`, x: col1X, width: 55 },
-      { text: `Preoperative Imaging: ${imagingText}`, x: col2X, width: 55 },
-      { text: `Neoadjuvant Treatment: ${neoadjuvantTreatment}`, x: col3X, width: 45 },
+    drawWrappedColumns([
+      { text: `Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
+      { text: `Preoperative Imaging: ${imagingText}`, x: margin + 62, width: threeColumnWidth },
+      { text: `Neoadjuvant Treatment: ${neoadjuvantTreatment}`, x: margin + 124, width: threeColumnWidth },
     ]);
-    addWrappedField('Indication for Surgery', indicationText);
-    addWrappedField('Operation Description', operationDescription);
-    y += 3;
-    
-    // Separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
+    drawWrappedTextBlock(`Indication for Surgery: ${indicationText}`, margin, fullWidth);
+    drawWrappedTextBlock(`Operation Description: ${operationDescription}`, margin, fullWidth);
+    postPreoperativeSectionActive = true;
+
+    drawSectionDivider();
     
     // OPERATIVE FINDINGS Section
     pdf.setFontSize(11);
@@ -552,39 +753,40 @@ export const generateRectalCancerPDF = async (
         return option;
       })
       .join(', ');
-    const operativeCol2X = margin + 105;
-    
-    // Only show the operation findings fields if Colon or Rectum is selected
+    const operativeFindingsRows: Array<{ label: string; value: string; alwaysVisible?: boolean }> = [];
+
     if (isColonSelected || isRectumSelected) {
-      addWrappedField('Operation Findings', operationFindingsSelectionText);
+      operativeFindingsRows.push({
+        label: 'Operation Findings',
+        value: operationFindingsSelectionText,
+        alwaysVisible: true,
+      });
     }
-    
-    // Row 2 & 3: Rectum-specific fields (conditional - only show when Rectum is selected)
+
     if (isRectumSelected) {
       const findings = rectalCancerData?.findings?.description || '';
       const mesorectalCompleteness = rectalCancerData?.findings?.mesorectalCompleteness || '';
       const location = rectalCancerData?.findings?.location?.join(', ') || '';
       const completenessOfResection = rectalCancerData?.operationType?.resectionCompleteness || rectalCancerData?.findings?.completenessOfTumourResection || '';
 
-      writeColumnsRow([
-        { text: `Findings: ${findings}`, x: col1X, width: 85 },
-        { text: `Mesorectal Completeness: ${mesorectalCompleteness}`, x: operativeCol2X, width: 75 },
-      ]);
-      writeColumnsRow([
-        { text: `Location: ${location}`, x: col1X, width: 85 },
-        { text: `Completeness of Tumour Resection: ${completenessOfResection}`, x: operativeCol2X, width: 75 },
-      ]);
-      y += 3;
-    } else {
-      // Add some spacing if no rectum fields are shown
-      y += 4;
+      operativeFindingsRows.push(
+        { label: 'Findings', value: findings, alwaysVisible: true },
+        {
+          label: 'Mesorectal Completeness',
+          value: mesorectalCompleteness,
+          alwaysVisible: true,
+        },
+        { label: 'Location', value: location, alwaysVisible: true },
+        {
+          label: 'Completeness of Tumour Resection',
+          value: completenessOfResection,
+          alwaysVisible: true,
+        },
+      );
     }
-    
-    // Separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
+
+    drawQuestionAnswerRows(operativeFindingsRows);
+    drawSectionDivider();
     
     // TWO-COLUMN LAYOUT: PROCEDURE DETAILS (Left) | PORTS AND INCISIONS (Right)
     const procedureStartY = y;
@@ -596,7 +798,7 @@ export const generateRectalCancerPDF = async (
     
     // Column 2: PORTS AND INCISIONS (at same Y level)
     const portsCol1X = pageCenter + 10;
-    pdf.text('PORTS AND INCISIONS', portsCol1X, y);
+    pdf.text('PORTS AND INCISIONS', portsCol1X + 3, y);
     
     y += 6;
     
@@ -691,8 +893,8 @@ export const generateRectalCancerPDF = async (
     pdf.setFont('helvetica', 'normal');
     
     // Define column positions for legend
-    const legendCol1X = portsCol1X;
-    const legendCol2X = portsCol1X + 40;
+    const legendCol1X = portsCol1X + 4;
+    const legendCol2X = portsCol1X + 46;
     
     // ROW 1: Ports and Ileostomy
     let legendRow1Y = portsY;
@@ -889,217 +1091,159 @@ export const generateRectalCancerPDF = async (
                        reconstructionType?.toLowerCase().includes('coloanal');
     }
     
-    // RECONSTRUCTION - THREE COLUMN LAYOUT
-    const reconstructionStartY = y;
-    const reconCol1X = margin; // Column 1
-    const reconCol1Width = 65; // Maximum width for column 1 to prevent overlap
-    const reconCol2X = margin + 68; // Column 2 - adjusted spacing (moved back slightly)
-    const reconCol3X = margin + 135; // Column 3 - adjusted for better visibility
-    
-    let reconCol1Y = reconstructionStartY;
-    let reconCol2Y = reconstructionStartY;
-    let reconCol3Y = reconstructionStartY;
-    
-    // COLUMN 1 - Conditional fields based on reconstruction type
-    reconCol1Y = drawInlineLabelValue(
-      `Reconstruction Type: ${reconstructionTypeText}`,
-      reconCol1X,
-      reconCol1Y,
-      reconCol1Width,
-    );
-    
-    // Anastomosis fields (only show if "Anastomosis" is selected)
+    const reconstructionRows: Array<{ label: string; value: string; alwaysVisible?: boolean }> = [
+      {
+        label: 'Reconstruction Type',
+        value: reconstructionTypeText,
+        alwaysVisible: true,
+      },
+    ];
+    const anastomosisDetails = rectalCancerData?.reconstruction?.anastomosisDetails || {};
+    const anastomoticTechnique = anastomosisDetails?.technique || '';
+    const anastomoticTechniqueNormalized = String(anastomoticTechnique || '').toLowerCase();
+    const isSutureTechnique =
+      anastomoticTechniqueNormalized.includes('suture') ||
+      anastomoticTechniqueNormalized === 'suture';
+    const isStapledTechnique =
+      anastomoticTechniqueNormalized.includes('stapled') ||
+      anastomoticTechniqueNormalized === 'stapled';
+
     if (hasAnastomosis) {
-      // Site of Anastomosis
-      const anastomosisSite = rectalCancerData?.reconstruction?.anastomosisDetails?.site || '';
-      reconCol1Y = drawInlineLabelValue(
-        `Site of Anastomosis: ${anastomosisSite}`,
-        reconCol1X,
-        reconCol1Y,
-        reconCol1Width,
-      );
-      
-      // Configuration
-      const configuration = rectalCancerData?.reconstruction?.anastomosisDetails?.configuration || '';
-      reconCol1Y = drawInlineLabelValue(
-        `Configuration: ${configuration}`,
-        reconCol1X,
-        reconCol1Y,
-        reconCol1Width,
-      );
-      
-      // Anastomotic Technique
-      const technique = rectalCancerData?.reconstruction?.anastomosisDetails?.technique || '';
-      reconCol1Y = drawInlineLabelValue(
-        `Anastomotic Technique: ${technique}`,
-        reconCol1X,
-        reconCol1Y,
-        reconCol1Width,
-      );
-      
-      // Suture Material field (only show if "Suture" is selected as technique)
-      const techniqueStr = String(technique || '').toLowerCase();
-      const isSutureTechnique = techniqueStr.includes('suture') || techniqueStr === 'suture';
-      
-      if (isSutureTechnique) {
-        const sutureMaterial = rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterial || [];
-        const sutureMaterialOther = rectalCancerData?.reconstruction?.anastomosisDetails?.sutureMaterialOther || '';
-        
-        let sutureMaterialText = '';
-        if (Array.isArray(sutureMaterial) && sutureMaterial.length > 0) {
-          sutureMaterialText = sutureMaterial.map(material => 
-            material === 'Other' && sutureMaterialOther ? `Other: ${sutureMaterialOther}` : material
-          ).join(', ');
-        }
-        
-        reconCol1Y = drawInlineLabelValue(
-          `Suture Material: ${sutureMaterialText}`,
-          reconCol1X,
-          reconCol1Y,
-          reconCol1Width,
-        );
-      }
-    }
-    
-    // COLUMN 2 - Stapler sizes and additional anastomotic details (only show if "Anastomosis" and "Stapled" are selected)
-    if (hasAnastomosis) {
-      const technique = rectalCancerData?.reconstruction?.anastomosisDetails?.technique || '';
-      const techniqueStr = String(technique || '').toLowerCase();
-      const isStapledTechnique = techniqueStr.includes('stapled') || techniqueStr === 'stapled';
-      
-      if (isStapledTechnique) {
-      // Linear stapler sizes
-      const linearSizes: string[] = rectalCancerData?.reconstruction?.anastomosisDetails?.linearStaplerSize || [];
-      const linearOther: string = rectalCancerData?.reconstruction?.anastomosisDetails?.linearStaplerSizeOther || '';
-      let linearDisplay = '';
-      if (Array.isArray(linearSizes) && linearSizes.length > 0) {
-        linearDisplay = linearSizes.map((s: string) => (s === 'Other' && linearOther ? `Other: ${linearOther}` : s)).join(', ');
-      }
-      reconCol2Y = drawInlineLabelValue(
-        `Linear Stapler Sizes: ${linearDisplay}`,
-        reconCol2X,
-        reconCol2Y,
-        62,
+      reconstructionRows.push(
+        {
+          label: 'Site of Anastomosis',
+          value: anastomosisDetails?.site || '',
+          alwaysVisible: true,
+        },
+        {
+          label: 'Configuration',
+          value: anastomosisDetails?.configuration || '',
+          alwaysVisible: true,
+        },
+        {
+          label: 'Anastomotic Technique',
+          value: anastomoticTechnique,
+          alwaysVisible: true,
+        },
       );
 
-      // Circular stapler sizes
-      const circularSizes: string[] = rectalCancerData?.reconstruction?.anastomosisDetails?.circularStaplerSize || [];
-      const circularOther: string = rectalCancerData?.reconstruction?.anastomosisDetails?.circularStaplerSizeOther || '';
-      let circularDisplay = '';
-      if (Array.isArray(circularSizes) && circularSizes.length > 0) {
-        circularDisplay = circularSizes.map((s: string) => (s === 'Other' && circularOther ? `Other: ${circularOther}` : s)).join(', ');
+      if (isSutureTechnique) {
+        const sutureMaterial = Array.isArray(anastomosisDetails?.sutureMaterial)
+          ? anastomosisDetails.sutureMaterial
+          : [];
+        const sutureMaterialOther = anastomosisDetails?.sutureMaterialOther || '';
+        const sutureMaterialText = sutureMaterial
+          .map((material: string) =>
+            material === 'Other' && sutureMaterialOther ? `Other: ${sutureMaterialOther}` : material,
+          )
+          .join(', ');
+
+        reconstructionRows.push({
+          label: 'Suture Material',
+          value: sutureMaterialText,
+          alwaysVisible: true,
+        });
       }
-      reconCol2Y = drawInlineLabelValue(
-        `Circular Stapler Sizes: ${circularDisplay}`,
-        reconCol2X,
-        reconCol2Y,
-        62,
-      );
-      
-      // Anastomotic Height
-      const anastomoticHeight = rectalCancerData?.reconstruction?.anastomosisDetails?.anastomoticHeight || '';
-      const anastomoticHeightDisplay = anastomoticHeight && String(anastomoticHeight).trim() ? anastomoticHeight : 'N/A';
-      reconCol2Y = drawInlineLabelValue(
-        `Anastomotic Height: ${anastomoticHeightDisplay}`,
-        reconCol2X,
-        reconCol2Y,
-        62,
-      );
-      
-      // Doughnut Assessment
-      const doughnutAssessment = rectalCancerData?.reconstruction?.anastomosisDetails?.doughnutAssessment || '';
-      const doughnutAssessmentDisplay = doughnutAssessment && String(doughnutAssessment).trim() ? doughnutAssessment : 'N/A';
-      reconCol2Y = drawInlineLabelValue(
-        `Doughnut Assessment: ${doughnutAssessmentDisplay}`,
-        reconCol2X,
-        reconCol2Y,
-        62,
-      );
-      
-      // Air Leak Test
-      const airLeakTest = rectalCancerData?.reconstruction?.anastomosisDetails?.airLeakTest || '';
-      const airLeakTestDisplay = airLeakTest && String(airLeakTest).trim() ? airLeakTest : 'N/A';
-        reconCol2Y = drawInlineLabelValue(
-          `Air Leak Test: ${airLeakTestDisplay}`,
-          reconCol2X,
-          reconCol2Y,
-          62,
+
+      if (isStapledTechnique) {
+        const linearSizes = Array.isArray(anastomosisDetails?.linearStaplerSize)
+          ? anastomosisDetails.linearStaplerSize
+          : [];
+        const linearOther = anastomosisDetails?.linearStaplerSizeOther || '';
+        const circularSizes = Array.isArray(anastomosisDetails?.circularStaplerSize)
+          ? anastomosisDetails.circularStaplerSize
+          : [];
+        const circularOther = anastomosisDetails?.circularStaplerSizeOther || '';
+
+        reconstructionRows.push(
+          {
+            label: 'Linear Stapler Sizes',
+            value: linearSizes
+              .map((size: string) => (size === 'Other' && linearOther ? `Other: ${linearOther}` : size))
+              .join(', '),
+            alwaysVisible: true,
+          },
+          {
+            label: 'Circular Stapler Sizes',
+            value: circularSizes
+              .map((size: string) =>
+                size === 'Other' && circularOther ? `Other: ${circularOther}` : size,
+              )
+              .join(', '),
+            alwaysVisible: true,
+          },
+          {
+            label: 'Anastomotic Height',
+            value: String(anastomosisDetails?.anastomoticHeight || '').trim() || 'N/A',
+            alwaysVisible: true,
+          },
+          {
+            label: 'Doughnut Assessment',
+            value: String(anastomosisDetails?.doughnutAssessment || '').trim() || 'N/A',
+            alwaysVisible: true,
+          },
+          {
+            label: 'Air Leak Test',
+            value: String(anastomosisDetails?.airLeakTest || '').trim() || 'N/A',
+            alwaysVisible: true,
+          },
         );
       }
+
+      reconstructionRows.push({
+        label: 'Indocyanine Green (ICG) Test',
+        value: rectalCancerData?.reconstruction?.anastomoticTesting?.icgTest || '',
+        alwaysVisible: true,
+      });
     }
-    
-    // COLUMN 3 - ICG Test and Stoma details (conditional)
-    // ICG Test field (only show if "Anastomosis" is selected)
-    if (hasAnastomosis) {
-      const icgTest = rectalCancerData?.reconstruction?.anastomoticTesting?.icgTest || '';
-      reconCol3Y = drawInlineLabelValue(
-        `Indocyanine Green (ICG) Test: ${icgTest}`,
-        reconCol3X,
-        reconCol3Y,
-        56,
-      );
-    }
-    
-    // Stoma details (only show if "Stoma" is selected)
+
     if (isStoma) {
-      // Stoma Configuration
-      const stomaConfiguration = rectalCancerData?.reconstruction?.stomaDetails?.configuration || '';
-      reconCol3Y = drawInlineLabelValue(
-        `Stoma Configuration: ${stomaConfiguration}`,
-        reconCol3X,
-        reconCol3Y,
-        56,
-      );
-      
-      // Reason for Stoma
       const reasonForStoma = rectalCancerData?.reconstruction?.stomaDetails?.reasonForStoma || '';
       const reasonForStomaOther = rectalCancerData?.reconstruction?.stomaDetails?.reasonForStomaOther || '';
-      
+
       let reasonForStomaText = '';
       if (Array.isArray(reasonForStoma)) {
-        reasonForStomaText = reasonForStoma.map(reason => 
-          reason === 'Other' && reasonForStomaOther ? `Other: ${reasonForStomaOther}` : reason
-        ).join(', ');
+        reasonForStomaText = reasonForStoma
+          .map((reason: string) =>
+            reason === 'Other' && reasonForStomaOther ? `Other: ${reasonForStomaOther}` : reason,
+          )
+          .join(', ');
       } else {
         reasonForStomaText = String(reasonForStoma || '');
         if (reasonForStomaText === 'Other' && reasonForStomaOther) {
           reasonForStomaText = `Other: ${reasonForStomaOther}`;
         }
       }
-      
-      reconCol3Y = drawInlineLabelValue(
-        `Reason for Stoma: ${reasonForStomaText}`,
-        reconCol3X,
-        reconCol3Y,
-        56,
+
+      reconstructionRows.push(
+        {
+          label: 'Stoma Configuration',
+          value: rectalCancerData?.reconstruction?.stomaDetails?.configuration || '',
+          alwaysVisible: true,
+        },
+        {
+          label: 'Reason for Stoma',
+          value: reasonForStomaText,
+          alwaysVisible: true,
+        },
       );
     }
-    
+
     // Handle "Other" reconstruction type details
     const hasOtherReconstruction = Array.isArray(reconstructionType) 
       ? reconstructionType.includes('Other') 
       : reconstructionType?.toLowerCase() === 'other';
     
     if (hasOtherReconstruction) {
-      const reconstructionOther = rectalCancerData?.reconstruction?.reconstructionOther || '';
-      if (reconstructionOther) {
-        reconCol1Y = drawInlineLabelValue(
-          `Other Reconstruction Details: ${reconstructionOther}`,
-          reconCol1X,
-          reconCol1Y,
-          reconCol1Width,
-        );
-      }
+      reconstructionRows.push({
+        label: 'Other Reconstruction Details',
+        value: rectalCancerData?.reconstruction?.reconstructionOther || '',
+        alwaysVisible: true,
+      });
     }
-    
-    // Update Y position to the maximum of all three columns
-    y = Math.max(reconCol1Y, reconCol2Y, reconCol3Y) + 10;
-    
-    // Line separator after RECONSTRUCTION
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
+
+    drawQuestionAnswerRows(reconstructionRows);
+    drawSectionDivider();
     
     // CLOSURE Section
     checkPageBreak(65);
@@ -1218,7 +1362,10 @@ export const generateRectalCancerPDF = async (
     const pointsOfDifficulty = rectalCancerData?.operativeEvents?.pointsOfDifficulty?.join(', ') || '';
     const difficultyOther = rectalCancerData?.operativeEvents?.pointsOfDifficultyOther ? `, ${rectalCancerData.operativeEvents.pointsOfDifficultyOther}` : '';
     const pointsOfDifficultyText = `${pointsOfDifficulty}${difficultyOther}`;
-    const pointsOfDifficultyFinal = (pointsOfDifficultyText && pointsOfDifficultyText.trim() && pointsOfDifficultyText.trim() !== ', ') ? pointsOfDifficultyText : 'N/A';
+    const pointsOfDifficultyFinal =
+      pointsOfDifficultyText && pointsOfDifficultyText.trim() && pointsOfDifficultyText.trim() !== ', '
+        ? pointsOfDifficultyText
+        : '';
     
     y = drawInlineLabelValue(
       `Points of Difficulty: ${pointsOfDifficultyFinal}`,
@@ -1229,7 +1376,7 @@ export const generateRectalCancerPDF = async (
     
     // Intraoperative Events/Complications
     const intraOpEvents = rectalCancerData?.operativeEvents?.intraoperativeEvents?.join(', ') || '';
-    const intraOpEventsFinal = (intraOpEvents && intraOpEvents.trim()) ? intraOpEvents : 'N/A';
+    const intraOpEventsFinal = (intraOpEvents && intraOpEvents.trim()) ? intraOpEvents : '';
     y = drawInlineLabelValue(
       `Intraoperative Events/Complications: ${intraOpEventsFinal}`,
       margin,
@@ -1254,45 +1401,28 @@ export const generateRectalCancerPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Specimen Extraction Site
-    const specimenExtractionSite = rectalCancerData?.operativeEvents?.specimenExtraction || '';
-    const specimenExtractionSiteFinal = (specimenExtractionSite && specimenExtractionSite.trim()) ? specimenExtractionSite : 'N/A';
-    y = drawInlineLabelValue(
-      `Specimen Extraction Site: ${specimenExtractionSiteFinal}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    
-    // Specimen Sent to Laboratory
-    const specimenSentToLab = rectalCancerData?.operativeEvents?.specimenSentToLab || '';
-    const specimenSentToLabFinal = (specimenSentToLab && specimenSentToLab.trim()) ? specimenSentToLab : 'N/A';
-    y = drawInlineLabelValue(
-      `Specimen Sent to Laboratory: ${specimenSentToLabFinal}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    
-    // Specify Laboratory Sent to
-    const laboratoryName = rectalCancerData?.operativeEvents?.laboratoryName || '';
-    const laboratoryNameFinal = (laboratoryName && laboratoryName.trim()) ? laboratoryName : 'N/A';
-    y = drawInlineLabelValue(
-      `Specify Laboratory Sent to: ${laboratoryNameFinal}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    y += 8;
-    
-    // Line separator
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
+    drawQuestionAnswerRows([
+      {
+        label: 'Specimen Extraction Site',
+        value: rectalCancerData?.operativeEvents?.specimenExtraction || '',
+        alwaysVisible: true,
+      },
+      {
+        label: 'Specimen Sent to Laboratory',
+        value: rectalCancerData?.operativeEvents?.specimenSentToLab || '',
+        alwaysVisible: true,
+      },
+      {
+        label: 'Specify Laboratory Sent to',
+        value: rectalCancerData?.operativeEvents?.laboratoryName || '',
+        alwaysVisible: true,
+      },
+    ]);
+    y += 2;
+    drawSectionDivider();
     
     // ADDITIONAL NOTES Section
-    const additionalNotes = rectalCancerData?.additionalInfo?.additionalInformation?.trim() || 'N/A';
+    const additionalNotes = rectalCancerData?.additionalInfo?.additionalInformation?.trim() || '';
     const additionalNotesLines = pdf.splitTextToSize(
       `Additional Notes: ${additionalNotes}`,
       pageWidth - (margin * 2)
@@ -1329,67 +1459,55 @@ export const generateRectalCancerPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    const postOpManagement = rectalCancerData?.additionalInfo?.postOperativeManagement?.trim() || 'N/A';
-    checkPageBreak(lineSpacing + 18); // Header + content + spacing
-    y = drawInlineLabelValue(
-      `Post Operative Management: ${postOpManagement}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    y += 6; // Extra spacing
-    
-    // Line separator
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    checkPageBreak(40); // Ensure space for signature block
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 18; // Slightly more spacing to move signature lower
-    
-    // Signature section with small spacing under separator
+    const postOpManagement = rectalCancerData?.additionalInfo?.postOperativeManagement?.trim() || '';
+    drawQuestionAnswerRows([
+      {
+        label: 'Post Operative Management',
+        value: postOpManagement,
+        alwaysVisible: true,
+      },
+    ]);
+    y += 2;
+    drawSectionDivider(15);
+    checkPageBreak(32);
     
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // Signature and Date on same line - Fixed alignment
-    const signatureCol2X = pageCenter + 5; // Define proper position for date column
+    const signatureY = y;
+    const signatureCol1X = margin;
+    const signatureCol2X = margin + 100;
     pdf.setFont('helvetica', 'bold');
-    pdf.text("Surgeon's Signature:", margin, y);
-    pdf.text("Date & Time:", signatureCol2X, y);
+    pdf.text("Surgeon's Signature:", signatureCol1X, signatureY);
+    pdf.text("Date & Time:", signatureCol2X, signatureY);
     pdf.setFont('helvetica', 'normal');
     
-    // Handle signature (if available) - Fixed field path
     if (rectalCancerData?.additionalInfo?.surgeonSignature) {
       if (rectalCancerData.additionalInfo.surgeonSignature.startsWith('data:image')) {
         try {
-          // Calculate proper dimensions asynchronously
           const dimensions = await calculateSignatureDimensions(rectalCancerData.additionalInfo.surgeonSignature);
           
           pdf.addImage(
             rectalCancerData.additionalInfo.surgeonSignature, 
             'PNG', 
-            margin + 45, 
-            y - dimensions.height + 3, 
+            signatureCol1X + 40, 
+            signatureY - dimensions.height + 3, 
             dimensions.width, 
             dimensions.height
           );
         } catch (error) {
           console.error('Error adding signature image:', error);
-          pdf.text('[Signature]', margin + 45, y);
+          pdf.text('[Signature]', signatureCol1X + 40, signatureY);
         }
       } else {
-        pdf.text(rectalCancerData.additionalInfo.surgeonSignature, margin + 45, y);
+        pdf.text(rectalCancerData.additionalInfo.surgeonSignature, signatureCol1X + 40, signatureY);
       }
     }
     
-    // Add current date - Fixed alignment and format
     const currentDate = rectalCancerData?.additionalInfo?.dateTime 
       ? formatDateTimeDDMMYYYYWithDashes(rectalCancerData.additionalInfo.dateTime)
       : formatDateTimeDDMMYYYYWithDashes(new Date());
-    
-    // Calculate proper spacing for the date value
-    const dateTimeLabelWidth = pdf.getTextWidth('Date & Time: ');
-    pdf.text(currentDate, signatureCol2X + dateTimeLabelWidth, y);
+    pdf.text(currentDate, signatureCol2X + 25, signatureY);
     
     // Calculate total pages and add footer to each page
     const totalPages = pdf.internal.getNumberOfPages();

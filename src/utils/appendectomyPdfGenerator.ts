@@ -5,6 +5,10 @@ import { getFullASAText } from './asaDescriptions';
 import { formatPatientGender, formatPatientStickerDate, getPdfSafePatientInfo } from './patientSticker';
 import { drawRectalStylePortsAndIncisions } from './pdfPortsAndIncisionsLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
+import {
+  hasPdfDisplayValue,
+  isPostPreoperativeAlwaysVisibleField,
+} from './templateDataHelpers';
 
 const APPENDECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
 
@@ -202,7 +206,18 @@ export const generateAppendectomyPDF = async (
 
     const hasPrintableValue = (value: any) => {
       const text = getTextValue(value);
-      return text.length > 0 && text !== 'Not specified' && text !== 'None';
+      const separatorIndex = text.indexOf(':');
+      if (separatorIndex !== -1) {
+        const label = text.slice(0, separatorIndex).trim();
+        const answer = text.slice(separatorIndex + 1).trim();
+        if (isPostPreoperativeAlwaysVisibleField(label)) {
+          return true;
+        }
+
+        return hasPdfDisplayValue(answer) && answer !== 'Not specified' && answer !== 'None';
+      }
+
+      return hasPdfDisplayValue(text) && text !== 'Not specified' && text !== 'None';
     };
 
     const formatSelectionList = (values: any, otherValue?: string) => {
@@ -435,6 +450,7 @@ export const generateAppendectomyPDF = async (
       : hasPrintableValue(patientInfo?.asaScore)
         ? getFullASAText(patientInfo.asaScore)
         : '';
+    const asaNotes = getTextValue(patientInfo?.asaNotes);
 
     const drawPatientSubsectionTitle = (title: string) => {
       checkPageBreak(6);
@@ -470,12 +486,13 @@ export const generateAppendectomyPDF = async (
       ]);
     }
 
-    drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
     drawWrappedColumns([
       { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
       { text: `Height: ${patientHeight}`, x: col2X, width: threeColumnWidth },
       { text: `BMI: ${patientBmi}`, x: col3X, width: threeColumnWidth },
     ]);
+    drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
+    drawWrappedTextBlock(`ASA Notes: ${asaNotes}`, margin, fullWidth);
 
     drawSectionDivider();
     
@@ -509,7 +526,7 @@ export const generateAppendectomyPDF = async (
       { text: `Total Duration: ${totalDuration}`, x: col3X, width: threeColumnWidth },
     ]);
     drawWrappedColumns([
-      { text: `Procedure Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
+      { text: `Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
       { text: `Preoperative Imaging: ${imaging}`, x: col2X, width: pageWidth - margin - col2X },
     ]);
     drawWrappedTextBlock(`Indication for Surgery: ${indication}`, margin, fullWidth);
@@ -569,6 +586,7 @@ export const generateAppendectomyPDF = async (
     let procedureY = sectionStartY + 6.5;
     let diagramY = sectionStartY + 6.5;
     const diagramImageData = diagrams && diagrams.length > 0 ? await createSurgicalDiagramCanvas(diagrams) : null;
+    const closureData = appendectomyData?.closure || {};
     
     // PROCEDURE DETAILS Content (Left Column)
     pdf.setFontSize(bodyFontSize);
@@ -593,8 +611,10 @@ export const generateAppendectomyPDF = async (
 
         const labelText = `${text.slice(0, separatorIndex).trim()}:`;
         const valueText = text.slice(separatorIndex + 1).trim();
-        const labelWidth = Math.min(34, Math.max(18, maxWidth * 0.42));
-        const valueWidth = Math.max(14, maxWidth - labelWidth - 2);
+        const labelWidth = Math.min(40, Math.max(20, maxWidth * 0.46));
+        const valueGap = 4;
+        const valueRightPadding = 6;
+        const valueWidth = Math.max(14, maxWidth - labelWidth - valueGap - valueRightPadding);
         const labelLines = pdf.splitTextToSize(labelText, labelWidth);
         const valueLines = pdf.splitTextToSize(valueText, valueWidth);
         const lineCount = Math.max(labelLines.length, valueLines.length, 1);
@@ -605,7 +625,7 @@ export const generateAppendectomyPDF = async (
           }
           if (valueLines[index]) {
             pdf.setFont('helvetica', 'normal');
-            pdf.text(valueLines[index], procedureX + labelWidth + 2, procedureY);
+            pdf.text(valueLines[index], procedureX + labelWidth + valueGap, procedureY);
           }
           procedureY += 3.7;
         }
@@ -675,6 +695,28 @@ export const generateAppendectomyPDF = async (
     const drainPlacement = getTextValue(procedure.drainPlacement);
     const drainText = drainPlacement + (hasPrintableValue(procedure.drainLocation) ? ` (${procedure.drainLocation})` : '');
     addContentLine(`Drain Placement: ${drainText}`, 5.5);
+
+    const difficulty = formatSelectionList(
+      closureData.operativeDifficulty,
+      closureData.operativeDifficultyOther,
+    );
+    addContentLine(`Intra-Operative Difficulty: ${difficulty}`);
+
+    const complications = (
+      Array.isArray(closureData.complications) ? closureData.complications : [closureData.complications]
+    )
+      .map((complication: string) => {
+        if (complication === 'Visceral Injury' && hasPrintableValue(closureData.visceralInjuryDetail)) {
+          return `Visceral Injury: ${closureData.visceralInjuryDetail}`;
+        }
+        if (complication === 'Other' && hasPrintableValue(closureData.complicationOther)) {
+          return `Other: ${closureData.complicationOther}`;
+        }
+        return getTextValue(complication);
+      })
+      .filter(Boolean)
+      .join(', ');
+    addContentLine(`Intraoperative Complications: ${complications}`);
     
     // PORTS AND INCISIONS Content (Right Column)
     const { diagramBottomY } = drawRectalStylePortsAndIncisions({
@@ -694,33 +736,6 @@ export const generateAppendectomyPDF = async (
     pdf.addPage();
     currentPage++;
     y = margin;
-    
-    // COMPLICATIONS Section (moved to page 2, above CLOSURE)
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('COMPLICATIONS', margin, y);
-    y += 8;
-
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'normal');
-
-    const difficulty = appendectomyData?.closure?.operativeDifficulty?.join(', ') || '';
-    if (difficulty && difficulty.trim() && difficulty !== 'Not specified' && difficulty !== 'None') {
-      drawWrappedTextBlock(`Intra-Operative Difficulty: ${difficulty}`, margin, fullWidth, 4, 2);
-    }
-
-    const complications = Array.isArray(appendectomyData?.closure?.complications)
-      ? appendectomyData.closure.complications.join(', ')
-      : appendectomyData?.closure?.complications || '';
-    if (complications && complications.trim() && complications !== 'Not specified' && complications !== 'None') {
-      drawWrappedTextBlock(`Intra-Operative Complications: ${complications}`, margin, fullWidth, 4, 2);
-    }
-
-    // Add separator line after COMPLICATIONS
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.1);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 10;
 
     // CLOSURE Section (full width with side-by-side layout)
     const closureSectionY = y;
@@ -734,7 +749,7 @@ export const generateAppendectomyPDF = async (
     // CLOSURE Content with side-by-side layout
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
-    const closure = appendectomyData?.closure || {};
+    const closure = closureData;
     
     // Set up two-column layout for closure fields
     const closureCol1X = margin;
@@ -843,9 +858,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const additionalNotes = closure.additionalNotes || '';
-    if (additionalNotes && additionalNotes.trim() && additionalNotes !== 'Not specified' && additionalNotes !== 'None') {
-      drawWrappedTextBlock(`Additional Notes: ${additionalNotes}`, margin, fullWidth, 4, 6);
-    }
+    drawWrappedTextBlock(`Additional Notes: ${additionalNotes}`, margin, fullWidth, 4, 6);
     
     // Add separator line after NOTES
     pdf.setDrawColor(0, 0, 0);
@@ -863,9 +876,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const postOpManagement = closure.postOperativeManagement || '';
-    if (postOpManagement && postOpManagement.trim() && postOpManagement !== 'Not specified' && postOpManagement !== 'None') {
-      drawWrappedTextBlock(`Post Operative Management: ${postOpManagement}`, margin, fullWidth, 4, 6);
-    }
+    drawWrappedTextBlock(`Post Operative Management: ${postOpManagement}`, margin, fullWidth, 4, 6);
     
     // Add separator line after POST OPERATIVE MANAGEMENT
     pdf.setDrawColor(0, 0, 0);

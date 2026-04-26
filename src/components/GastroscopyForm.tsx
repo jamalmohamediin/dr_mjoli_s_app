@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
-import { DateTimeDDMMYYYY24HourInput } from "@/components/Time24HourInput";
+import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { GastroscopyDiagramCanvas } from "@/components/GastroscopyDiagramCanvas";
 import {
   CheckboxGrid,
@@ -23,6 +23,7 @@ import gastroscopyTemplateImage from "@/assets/gastroscopy-template-replacement.
 interface GastroscopyFormProps {
   currentReport: any;
   updateTemplate: (section: string, field: string, value: any) => void;
+  diagramResetCounter?: number;
   onBulkPatientInfoUpdate?: (updates: Record<string, any>) => void;
   currentExtractedPatientInfo?: any;
   onCurrentPatientChange?: (patientInfo: any) => void;
@@ -180,6 +181,7 @@ type FindingSectionKey = "pharynxLarynx" | "oesophagus" | "stomach" | "duodenum"
 export const GastroscopyForm = ({
   currentReport,
   updateTemplate,
+  diagramResetCounter = 0,
   onBulkPatientInfoUpdate,
   currentExtractedPatientInfo,
   onCurrentPatientChange,
@@ -222,6 +224,44 @@ export const GastroscopyForm = ({
     });
   };
 
+  const calculateDuration = React.useCallback((startTime: string, endTime: string) => {
+    if (!startTime || !endTime) {
+      return "";
+    }
+
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const [endHour, endMinute] = endTime.split(":").map(Number);
+
+    if (
+      Number.isNaN(startHour) ||
+      Number.isNaN(startMinute) ||
+      Number.isNaN(endHour) ||
+      Number.isNaN(endMinute)
+    ) {
+      return "";
+    }
+
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    const durationMinutes = endTotalMinutes - startTotalMinutes;
+
+    return durationMinutes >= 0 ? String(durationMinutes) : "";
+  }, []);
+
+  const handlePreoperativeTimeChange = React.useCallback(
+    (field: "startTime" | "endTime", value: string) => {
+      updateTemplate("preoperative", field, value);
+
+      const startTime = field === "startTime" ? value : preoperative.startTime || "";
+      const endTime = field === "endTime" ? value : preoperative.endTime || "";
+
+      if (startTime && endTime) {
+        updateTemplate("preoperative", "duration", calculateDuration(startTime, endTime));
+      }
+    },
+    [calculateDuration, preoperative.endTime, preoperative.startTime, updateTemplate],
+  );
+
   const toggleFindingSection = (section: FindingSectionKey) => {
     setExpandedSections((previous) => ({
       ...previous,
@@ -229,7 +269,6 @@ export const GastroscopyForm = ({
     }));
   };
 
-  const findingSelected = (values: unknown, option: string) => toArray(values).includes(option);
   const toggleFindingValue = (values: unknown, option: string) => {
     const currentValues = toArray(values);
     return currentValues.includes(option)
@@ -333,6 +372,7 @@ export const GastroscopyForm = ({
             onCurrentPatientChange={onCurrentPatientChange}
             use24HourTimeInputs
             useDashDateInputs
+            forceSectionedLayout
           />
         </CardContent>
       </Card>
@@ -342,19 +382,41 @@ export const GastroscopyForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Preoperative Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <MultiValueTextField label="Endoscopist" values={preoperative.endoscopists || [""]} placeholder="Enter endoscopist name" onChange={(value) => updateTemplate("preoperative", "endoscopists", value)} />
-          <MultiValueTextField label="Surgeon Name" values={preoperative.surgeons || [""]} placeholder="Enter surgeon name" onChange={(value) => updateTemplate("preoperative", "surgeons", value)} />
-          <MultiValueTextField label="Anesthetist" values={preoperative.anaesthetists || [""]} placeholder="Enter anesthetist name" onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)} />
+          <div className="space-y-4 rounded-md border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-800">Clinical Team</h3>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <MultiValueTextField label="Endoscopist" values={preoperative.endoscopists || [""]} placeholder="Enter endoscopist name" onChange={(value) => updateTemplate("preoperative", "endoscopists", value)} />
+              <MultiValueTextField label="Surgeon Name" values={preoperative.surgeons || [""]} placeholder="Enter surgeon name" onChange={(value) => updateTemplate("preoperative", "surgeons", value)} />
+              <MultiValueTextField label="Anesthetist" values={preoperative.anaesthetists || [""]} placeholder="Enter anesthetist name" onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)} />
+            </div>
+          </div>
 
-          <RadioGrid label="Procedure Urgency" options={procedureUrgencyOptions} value={preoperative.procedureUrgency || ""} onChange={(value) => updateTemplate("preoperative", "procedureUrgency", value)} columns="grid-cols-2 md:grid-cols-4" />
-          <CheckboxGrid label="Preoperative Imaging" options={preoperativeImagingOptions} values={preoperative.preoperativeImaging} onChange={(value) => updateTemplate("preoperative", "preoperativeImaging", value)} columns="grid-cols-2 md:grid-cols-5" />
-          <OptionalOtherInput enabled={toArray(preoperative.preoperativeImaging).includes("Other")} value={preoperative.preoperativeImagingOther || ""} placeholder="Specify other imaging" onChange={(value) => updateTemplate("preoperative", "preoperativeImagingOther", value)} />
+          <div className="space-y-4 rounded-md border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-800">Procedure Planning</h3>
+            <RadioGrid label="Procedure Urgency" options={procedureUrgencyOptions} value={preoperative.procedureUrgency || ""} onChange={(value) => updateTemplate("preoperative", "procedureUrgency", value)} columns="grid-cols-2 md:grid-cols-4" />
+            <CheckboxGrid label="Preoperative Imaging" options={preoperativeImagingOptions} values={preoperative.preoperativeImaging} onChange={(value) => updateTemplate("preoperative", "preoperativeImaging", value)} columns="grid-cols-2 md:grid-cols-5" />
+            <OptionalOtherInput enabled={toArray(preoperative.preoperativeImaging).includes("Other")} value={preoperative.preoperativeImagingOther || ""} placeholder="Specify other imaging" onChange={(value) => updateTemplate("preoperative", "preoperativeImagingOther", value)} />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Start Time</Label>
+                <Time24HourInput value={preoperative.startTime || ""} onChange={(value) => handlePreoperativeTimeChange("startTime", value)} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">End Time</Label>
+                <Time24HourInput value={preoperative.endTime || ""} onChange={(value) => handlePreoperativeTimeChange("endTime", value)} />
+              </div>
+              <LabeledInput label="Total Duration (Min)" value={preoperative.duration || ""} onChange={(value) => updateTemplate("preoperative", "duration", value)} placeholder="Auto-calculated or enter manually" />
+            </div>
+          </div>
 
-          <CheckboxGrid label="Indications for Gastroscopy" options={indicationOptions} values={preoperative.indications} onChange={(value) => updateTemplate("preoperative", "indications", value)} />
-          <OptionalOtherInput enabled={toArray(preoperative.indications).includes("Other")} value={preoperative.indicationOther || ""} placeholder="Specify other indication" onChange={(value) => updateTemplate("preoperative", "indicationOther", value)} />
-          <CheckboxGrid label="Signs & Symptoms" options={symptomOptions} values={preoperative.signsSymptoms} onChange={(value) => updateTemplate("preoperative", "signsSymptoms", value)} />
-          <OptionalOtherInput enabled={toArray(preoperative.signsSymptoms).includes("Other")} value={preoperative.signsSymptomsOther || ""} placeholder="Specify other sign/symptom" onChange={(value) => updateTemplate("preoperative", "signsSymptomsOther", value)} />
-          <CheckboxGrid label="Extent of Examination" options={extentOptions} values={preoperative.extentOfExamination} onChange={(value) => updateTemplate("preoperative", "extentOfExamination", value)} columns="grid-cols-2 md:grid-cols-4" />
+          <div className="space-y-4 rounded-md border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-800">Presentation</h3>
+            <CheckboxGrid label="Indications for Gastroscopy" options={indicationOptions} values={preoperative.indications} onChange={(value) => updateTemplate("preoperative", "indications", value)} />
+            <OptionalOtherInput enabled={toArray(preoperative.indications).includes("Other")} value={preoperative.indicationOther || ""} placeholder="Specify other indication" onChange={(value) => updateTemplate("preoperative", "indicationOther", value)} />
+            <CheckboxGrid label="Signs & Symptoms" options={symptomOptions} values={preoperative.signsSymptoms} onChange={(value) => updateTemplate("preoperative", "signsSymptoms", value)} />
+            <OptionalOtherInput enabled={toArray(preoperative.signsSymptoms).includes("Other")} value={preoperative.signsSymptomsOther || ""} placeholder="Specify other sign/symptom" onChange={(value) => updateTemplate("preoperative", "signsSymptomsOther", value)} />
+            <CheckboxGrid label="Extent of Examination" options={extentOptions} values={preoperative.extentOfExamination} onChange={(value) => updateTemplate("preoperative", "extentOfExamination", value)} columns="grid-cols-2 md:grid-cols-4" />
+          </div>
 
           <div className="rounded-md border border-gray-200">
             <button
@@ -588,10 +650,15 @@ export const GastroscopyForm = ({
         </CardHeader>
         <CardContent>
           <GastroscopyDiagramCanvas
+            key={`gastroscopy-diagram-${diagramResetCounter}`}
             imageSrc={gastroscopyTemplateImage}
             initialCanvasImageData={template.diagram?.canvasImageData || ""}
+            initialDrawingImageData={template.diagram?.drawingImageData || ""}
+            initialTextAnnotations={template.diagram?.textAnnotations || []}
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
+              updateTemplate("diagram", "drawingImageData", data.drawingImageData || "");
+              updateTemplate("diagram", "textAnnotations", data.textAnnotations || []);
               updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
             }}
           />
@@ -603,38 +670,43 @@ export const GastroscopyForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Interventions / Therapy</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <CheckboxGrid label="Interventions / Therapy" options={interventionOptions} values={interventions.interventions} onChange={(value) => updateTemplate("interventions", "interventions", value)} />
-
-          {findingSelected(interventions.interventions, "Dilatation") ? (
-            <div className="space-y-4 border-t pt-4">
-              <CheckboxGrid label="Dilatation Type" options={dilatationOptions} values={interventions.dilatationTypes} onChange={(value) => updateTemplate("interventions", "dilatationTypes", value)} columns="grid-cols-3" />
-              <LabeledInput label="Max Dilatation (mm)" value={interventions.maxDilatationMm || ""} onChange={(value) => updateTemplate("interventions", "maxDilatationMm", value)} />
-            </div>
-          ) : null}
-
-          {findingSelected(interventions.interventions, "Banding") ? (
-            <LabeledInput label="No Of Bands Applied" value={interventions.bandingCount || ""} onChange={(value) => updateTemplate("interventions", "bandingCount", value)} />
-          ) : null}
-
-          {findingSelected(interventions.interventions, "Haemoclip") ? (
-            <LabeledInput label="No Of Clips Applied" value={interventions.clipCount || ""} onChange={(value) => updateTemplate("interventions", "clipCount", value)} />
-          ) : null}
-
-          {findingSelected(interventions.interventions, "Stent Insertion") ? (
-            <div className="space-y-4">
-              <CheckboxGrid label="Stent Type" options={["Fully Covered Stent", "Partially Covered Stent", "Uncovered Stent"]} values={interventions.stentTypes} onChange={(value) => updateTemplate("interventions", "stentTypes", value)} columns="grid-cols-3" />
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <LabeledInput label="Length (cm)" value={interventions.stentLengthCm || ""} onChange={(value) => updateTemplate("interventions", "stentLengthCm", value)} />
-                <LabeledInput label="Diameter (mm)" value={interventions.stentDiameterMm || ""} onChange={(value) => updateTemplate("interventions", "stentDiameterMm", value)} />
-              </div>
-            </div>
-          ) : null}
-
-          {findingSelected(interventions.interventions, "Injection Therapy") ? (
-            <LabeledInput label="Agent" value={interventions.injectionAgent || ""} onChange={(value) => updateTemplate("interventions", "injectionAgent", value)} placeholder="Specify injection agent" />
-          ) : null}
-
-          <OptionalOtherInput enabled={findingSelected(interventions.interventions, "Other")} value={interventions.other || ""} placeholder="Specify other intervention" onChange={(value) => updateTemplate("interventions", "other", value)} />
+          {renderFindingOptionList(
+            "Interventions / Therapy",
+            interventionOptions,
+            interventions.interventions,
+            (value) => updateTemplate("interventions", "interventions", value),
+            (option) => {
+              switch (option) {
+                case "Dilatation":
+                  return (
+                    <>
+                      <CheckboxGrid label="Dilatation Type" options={dilatationOptions} values={interventions.dilatationTypes} onChange={(value) => updateTemplate("interventions", "dilatationTypes", value)} columns="grid-cols-3" />
+                      <LabeledInput label="Max Dilatation (mm)" value={interventions.maxDilatationMm || ""} onChange={(value) => updateTemplate("interventions", "maxDilatationMm", value)} />
+                    </>
+                  );
+                case "Banding":
+                  return <LabeledInput label="No Of Bands Applied" value={interventions.bandingCount || ""} onChange={(value) => updateTemplate("interventions", "bandingCount", value)} />;
+                case "Haemoclip":
+                  return <LabeledInput label="No Of Clips Applied" value={interventions.clipCount || ""} onChange={(value) => updateTemplate("interventions", "clipCount", value)} />;
+                case "Stent Insertion":
+                  return (
+                    <>
+                      <CheckboxGrid label="Stent Type" options={["Fully Covered Stent", "Partially Covered Stent", "Uncovered Stent"]} values={interventions.stentTypes} onChange={(value) => updateTemplate("interventions", "stentTypes", value)} columns="grid-cols-3" />
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <LabeledInput label="Length (cm)" value={interventions.stentLengthCm || ""} onChange={(value) => updateTemplate("interventions", "stentLengthCm", value)} />
+                        <LabeledInput label="Diameter (mm)" value={interventions.stentDiameterMm || ""} onChange={(value) => updateTemplate("interventions", "stentDiameterMm", value)} />
+                      </div>
+                    </>
+                  );
+                case "Injection Therapy":
+                  return <LabeledInput label="Agent" value={interventions.injectionAgent || ""} onChange={(value) => updateTemplate("interventions", "injectionAgent", value)} placeholder="Specify injection agent" />;
+                case "Other":
+                  return <LabeledInput label="Specify Other Intervention" value={interventions.other || ""} onChange={(value) => updateTemplate("interventions", "other", value)} placeholder="Specify other intervention" />;
+                default:
+                  return null;
+              }
+            },
+          )}
         </CardContent>
       </Card>
 

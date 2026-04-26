@@ -11,6 +11,13 @@ const LIVE_TEMPLATE_DRAFT_COLLECTION = "development_state";
 const LIVE_TEMPLATE_DRAFT_DOCUMENT = "live_template_draft";
 const LIVE_TEMPLATE_DRAFT_QUEUE_KEY = "live_template_draft_queue_v1";
 const LIVE_TEMPLATE_DRAFT_SESSION_KEY = "live_template_draft_session_v1";
+let inMemoryQueuedLiveTemplateDraft: LiveTemplateDraftSnapshot | null = null;
+let hasShownLiveDraftQuotaWarning = false;
+let hasShownLiveDraftParseWarning = false;
+let liveDraftQueueLocalStorageUnavailable = false;
+let cachedLiveTemplateDraftSessionId = "";
+let nextLiveTemplateDraftSyncAttemptAt = 0;
+const LIVE_TEMPLATE_DRAFT_SYNC_RETRY_MS = 15000;
 
 export interface LiveTemplateDraftSnapshot {
   schemaVersion: number;
@@ -50,7 +57,10 @@ const parseStoredDraft = (rawValue: string | null) => {
   try {
     return JSON.parse(rawValue) as LiveTemplateDraftSnapshot;
   } catch (error) {
-    console.error("Failed to parse live template draft cache", error);
+    if (!hasShownLiveDraftParseWarning) {
+      hasShownLiveDraftParseWarning = true;
+      console.error("Failed to parse live template draft cache", error);
+    }
     return null;
   }
 };
@@ -60,12 +70,37 @@ const saveStoredDraft = (snapshot: LiveTemplateDraftSnapshot | null) => {
     return;
   }
 
+  inMemoryQueuedLiveTemplateDraft = snapshot;
+
   if (!snapshot) {
-    localStorage.removeItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY);
+    if (!liveDraftQueueLocalStorageUnavailable) {
+      try {
+        localStorage.removeItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY);
+      } catch (error) {
+        console.warn("Failed to clear queued live template draft from localStorage", error);
+      }
+    }
     return;
   }
 
-  localStorage.setItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY, JSON.stringify(snapshot));
+  if (liveDraftQueueLocalStorageUnavailable) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY, JSON.stringify(snapshot));
+    liveDraftQueueLocalStorageUnavailable = false;
+    hasShownLiveDraftQuotaWarning = false;
+  } catch (error) {
+    liveDraftQueueLocalStorageUnavailable = true;
+    if (!hasShownLiveDraftQuotaWarning) {
+      hasShownLiveDraftQuotaWarning = true;
+      console.warn(
+        "Live template draft queue exceeded localStorage capacity; using in-memory fallback.",
+        error,
+      );
+    }
+  }
 };
 
 export const getLiveTemplateDraftSessionId = () => {
@@ -73,16 +108,30 @@ export const getLiveTemplateDraftSessionId = () => {
     return "server-session";
   }
 
-  const existing = localStorage.getItem(LIVE_TEMPLATE_DRAFT_SESSION_KEY);
-  if (existing) {
-    return existing;
+  if (cachedLiveTemplateDraftSessionId) {
+    return cachedLiveTemplateDraftSessionId;
+  }
+
+  try {
+    const existing = localStorage.getItem(LIVE_TEMPLATE_DRAFT_SESSION_KEY);
+    if (existing) {
+      cachedLiveTemplateDraftSessionId = existing;
+      return existing;
+    }
+  } catch {
+    // Fall back to in-memory session id when localStorage cannot be read.
   }
 
   const nextSessionId =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `live-draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  localStorage.setItem(LIVE_TEMPLATE_DRAFT_SESSION_KEY, nextSessionId);
+  cachedLiveTemplateDraftSessionId = nextSessionId;
+  try {
+    localStorage.setItem(LIVE_TEMPLATE_DRAFT_SESSION_KEY, nextSessionId);
+  } catch {
+    // Keep in-memory session id when localStorage quota is exceeded.
+  }
   return nextSessionId;
 };
 
@@ -99,10 +148,27 @@ export const createLiveTemplateDraftSnapshot = (
 
 export const loadQueuedLiveTemplateDraftSync = () => {
   if (typeof window === "undefined") {
-    return null;
+    return inMemoryQueuedLiveTemplateDraft;
   }
 
-  return parseStoredDraft(localStorage.getItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY));
+  if (liveDraftQueueLocalStorageUnavailable) {
+    return inMemoryQueuedLiveTemplateDraft;
+  }
+
+  try {
+    const storedDraft = parseStoredDraft(
+      localStorage.getItem(LIVE_TEMPLATE_DRAFT_QUEUE_KEY),
+    );
+
+    if (storedDraft) {
+      inMemoryQueuedLiveTemplateDraft = storedDraft;
+      return storedDraft;
+    }
+  } catch (error) {
+    console.warn("Failed to load queued live template draft from localStorage", error);
+  }
+
+  return inMemoryQueuedLiveTemplateDraft;
 };
 
 export const queueLiveTemplateDraftSync = (snapshot: LiveTemplateDraftSnapshot) => {
@@ -119,6 +185,10 @@ export const processQueuedLiveTemplateDraftSync = async () => {
     return { processed: false, pending: Boolean(loadQueuedLiveTemplateDraftSync()) };
   }
 
+  if (Date.now() < nextLiveTemplateDraftSyncAttemptAt) {
+    return { processed: false, pending: Boolean(loadQueuedLiveTemplateDraftSync()) };
+  }
+
   const snapshot = loadQueuedLiveTemplateDraftSync();
   if (!snapshot) {
     return { processed: false, pending: false };
@@ -129,17 +199,24 @@ export const processQueuedLiveTemplateDraftSync = async () => {
     return { processed: false, pending: true };
   }
 
-  await setDoc(
-    draftRef,
-    {
-      ...snapshot,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await setDoc(
+      draftRef,
+      {
+        ...snapshot,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
 
-  clearQueuedLiveTemplateDraftSync();
-  return { processed: true, pending: false };
+    nextLiveTemplateDraftSyncAttemptAt = 0;
+    clearQueuedLiveTemplateDraftSync();
+    return { processed: true, pending: false };
+  } catch (error) {
+    nextLiveTemplateDraftSyncAttemptAt = Date.now() + LIVE_TEMPLATE_DRAFT_SYNC_RETRY_MS;
+    console.error("Failed to sync queued live template draft", error);
+    return { processed: false, pending: true };
+  }
 };
 
 export const loadLiveTemplateDraft = async () => {

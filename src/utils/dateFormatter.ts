@@ -119,7 +119,37 @@ export const formatDateDDMMYYYYWithDashes = (
 ): string => {
   if (!date) return '';
 
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const parseDateValue = (rawValue: Date | string) => {
+    if (rawValue instanceof Date) {
+      return rawValue;
+    }
+
+    const normalized = String(rawValue || "").trim();
+    if (!normalized) {
+      return new Date(NaN);
+    }
+
+    const ddMmYyyyMatch = normalized.match(
+      /^(\d{2})[-/](\d{2})[-/](\d{4})(?:[ T](\d{2}):(\d{2}))?$/,
+    );
+    if (ddMmYyyyMatch) {
+      const day = Number(ddMmYyyyMatch[1]);
+      const month = Number(ddMmYyyyMatch[2]) - 1;
+      const year = Number(ddMmYyyyMatch[3]);
+      const hours = Number(ddMmYyyyMatch[4] || "0");
+      const minutes = Number(ddMmYyyyMatch[5] || "0");
+      return new Date(year, month, day, hours, minutes);
+    }
+
+    const parsedDate = new Date(normalized);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+
+    return new Date(NaN);
+  };
+
+  const d = parseDateValue(date);
 
   if (Number.isNaN(d.getTime())) {
     return '';
@@ -137,7 +167,37 @@ export const formatDateTimeDDMMYYYYWithDashes = (
 ): string => {
   if (!date) return '';
 
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const parseDateValue = (rawValue: Date | string) => {
+    if (rawValue instanceof Date) {
+      return rawValue;
+    }
+
+    const normalized = String(rawValue || "").trim();
+    if (!normalized) {
+      return new Date(NaN);
+    }
+
+    const ddMmYyyyMatch = normalized.match(
+      /^(\d{2})[-/](\d{2})[-/](\d{4})(?:[ T](\d{2}):(\d{2}))?$/,
+    );
+    if (ddMmYyyyMatch) {
+      const day = Number(ddMmYyyyMatch[1]);
+      const month = Number(ddMmYyyyMatch[2]) - 1;
+      const year = Number(ddMmYyyyMatch[3]);
+      const hours = Number(ddMmYyyyMatch[4] || "0");
+      const minutes = Number(ddMmYyyyMatch[5] || "0");
+      return new Date(year, month, day, hours, minutes);
+    }
+
+    const parsedDate = new Date(normalized);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+
+    return new Date(NaN);
+  };
+
+  const d = parseDateValue(date);
 
   if (Number.isNaN(d.getTime())) {
     return '';

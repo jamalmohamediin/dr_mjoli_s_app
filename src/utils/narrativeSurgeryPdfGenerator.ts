@@ -372,23 +372,21 @@ const generateOpenGeneralSurgeryPdf = async (
     drawFullWidthLabeledRows(narrativeEntries);
   }
 
-  if (hasText(formatAnswerValue(narrative.postOperativeManagement))) {
-    y += 2;
-    ensureSpace(20, 22);
-    drawRule();
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text("POST OPERATIVE MANAGEMENT", margin, y);
-    y += 7;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-    drawFullWidthLabeledRows([
-      {
-        label: "Post Operative Management",
-        value: narrative.postOperativeManagement,
-      },
-    ]);
-  }
+  y += 2;
+  ensureSpace(20, 22);
+  drawRule();
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.text("POST OPERATIVE MANAGEMENT", margin, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  drawFullWidthLabeledRows([
+    {
+      label: "Post Operative Management",
+      value: narrative.postOperativeManagement,
+    },
+  ]);
 
   y += 2;
   ensureSpace(20, 20);

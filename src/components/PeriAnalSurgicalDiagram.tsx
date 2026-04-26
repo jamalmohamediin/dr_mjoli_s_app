@@ -79,6 +79,8 @@ const createMarkingId = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
+const TEXT_FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64, 72];
+
 export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = ({
   diagramImage,
   onUpdate,
@@ -89,6 +91,12 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const imageRef = useRef<HTMLImageElement>(null);
   const drawingStrokeRef = useRef<Point[] | null>(null);
   const isDrawingRef = useRef(false);
+  const isErasingRef = useRef(false);
+  const eraseDirtyRef = useRef(false);
+  const movingTextMarkIdRef = useRef<string | null>(null);
+  const movingTextMarkIndexRef = useRef<number | null>(null);
+  const movingTextOffsetRef = useRef<Point | null>(null);
+  const currentMarkingsRef = useRef<PeriAnalMarking[]>(initialMarkings || []);
   const textInputRef = useRef<HTMLInputElement>(null);
   const serializedInitialMarkings = JSON.stringify(initialMarkings || []);
   const lastCommittedMarkingsRef = useRef(serializedInitialMarkings);
@@ -99,7 +107,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const [activeTool, setActiveTool] = useState<DiagramTool>("draw");
   const [strokeColor, setStrokeColor] = useState("#111111");
   const [strokeWidth, setStrokeWidth] = useState(3);
-  const [textFontSize, setTextFontSize] = useState(16);
+  const [textFontSize, setTextFontSize] = useState(32);
   const [textFontStyle, setTextFontStyle] = useState<TextFontStyle>("regular");
   const [textUnderline, setTextUnderline] = useState(false);
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
@@ -248,6 +256,20 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
   }, [drawMarking, draftStroke, markings]);
 
+  const cloneMarkings = useCallback((nextMarkings: PeriAnalMarking[]) => {
+    return JSON.parse(JSON.stringify(nextMarkings || []));
+  }, []);
+
+  const setLocalMarkings = useCallback(
+    (nextMarkings: PeriAnalMarking[]) => {
+      const clonedMarkings = cloneMarkings(nextMarkings);
+      currentMarkingsRef.current = clonedMarkings;
+      setMarkings(clonedMarkings);
+      return clonedMarkings;
+    },
+    [cloneMarkings],
+  );
+
   useEffect(() => {
     const diagramChanged = previousDiagramImageRef.current !== diagramImage;
     const isLocalEcho = serializedInitialMarkings === lastCommittedMarkingsRef.current;
@@ -256,13 +278,19 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
       return;
     }
 
-    setMarkings(initialMarkings || []);
+    currentMarkingsRef.current = cloneMarkings(initialMarkings || []);
+    setMarkings(currentMarkingsRef.current);
     setDraftStroke(null);
     setTextEditor(null);
     setTextDraft("");
+    isErasingRef.current = false;
+    eraseDirtyRef.current = false;
+    movingTextMarkIdRef.current = null;
+    movingTextMarkIndexRef.current = null;
+    movingTextOffsetRef.current = null;
     previousDiagramImageRef.current = diagramImage;
     lastCommittedMarkingsRef.current = serializedInitialMarkings;
-  }, [diagramImage, initialMarkings, serializedInitialMarkings]);
+  }, [cloneMarkings, diagramImage, initialMarkings, serializedInitialMarkings]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -289,10 +317,9 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   }, [redrawCanvas]);
 
   const commitMarkings = (nextMarkings: PeriAnalMarking[]) => {
-    const clonedMarkings = JSON.parse(JSON.stringify(nextMarkings || []));
+    const clonedMarkings = setLocalMarkings(nextMarkings);
     const serialized = JSON.stringify(clonedMarkings);
     lastCommittedMarkingsRef.current = serialized;
-    setMarkings(clonedMarkings);
     onUpdate(clonedMarkings);
   };
 
@@ -336,15 +363,85 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     return false;
   };
 
-  const eraseAtPoint = (point: Point) => {
-    for (let index = markings.length - 1; index >= 0; index -= 1) {
-      if (isMarkingHit(markings[index], point)) {
-        const nextMarkings = markings.filter((_, markIndex) => markIndex !== index);
-        commitMarkings(nextMarkings);
-        return;
+  const findTopMostMarkIndexAtPoint = useCallback(
+    (
+      point: Point,
+      matcher: (mark: PeriAnalMarking) => boolean = () => true,
+      sourceMarkings: PeriAnalMarking[] = currentMarkingsRef.current,
+    ) => {
+      for (let index = sourceMarkings.length - 1; index >= 0; index -= 1) {
+        const mark = sourceMarkings[index];
+        if (matcher(mark) && isMarkingHit(mark, point)) {
+          return index;
+        }
       }
+      return -1;
+    },
+    [],
+  );
+
+  const eraseAtPoint = (point: Point) => {
+    const sourceMarkings = currentMarkingsRef.current;
+    const targetIndex = findTopMostMarkIndexAtPoint(point, () => true, sourceMarkings);
+    if (targetIndex < 0) return;
+
+    const nextMarkings = sourceMarkings.filter((_, markIndex) => markIndex !== targetIndex);
+    const clonedMarkings = setLocalMarkings(nextMarkings);
+    const serialized = JSON.stringify(clonedMarkings);
+    if (serialized !== lastCommittedMarkingsRef.current) {
+      eraseDirtyRef.current = true;
+      lastCommittedMarkingsRef.current = serialized;
     }
   };
+
+  const getTextMarkingAtPoint = useCallback(
+    (point: Point) => {
+      const sourceMarkings = currentMarkingsRef.current;
+      const targetIndex = findTopMostMarkIndexAtPoint(
+        point,
+        (mark) => mark?.type === "textBox",
+        sourceMarkings,
+      );
+      if (targetIndex < 0) {
+        return null;
+      }
+      return {
+        targetIndex,
+        targetMark: sourceMarkings[targetIndex],
+      };
+    },
+    [findTopMostMarkIndexAtPoint],
+  );
+
+  const moveTextMarking = useCallback(
+    (point: Point) => {
+      if (
+        (movingTextMarkIdRef.current === null && movingTextMarkIndexRef.current === null) ||
+        !movingTextOffsetRef.current
+      ) {
+        return;
+      }
+
+      const sourceMarkings = currentMarkingsRef.current;
+      const nextMarkings = sourceMarkings.map((mark, index) => {
+        const isTargetByIndex =
+          movingTextMarkIndexRef.current !== null && index === movingTextMarkIndexRef.current;
+        const isTargetById =
+          movingTextMarkIdRef.current !== null && mark?.id === movingTextMarkIdRef.current;
+        if ((!isTargetByIndex && !isTargetById) || mark?.type !== "textBox") {
+          return mark;
+        }
+        return {
+          ...mark,
+          x: point.x - movingTextOffsetRef.current!.x,
+          y: point.y - movingTextOffsetRef.current!.y,
+        };
+      });
+
+      setLocalMarkings(nextMarkings);
+    },
+    [setLocalMarkings],
+  );
 
   const commitTextEditor = useCallback(() => {
     if (!textEditor) return;
@@ -358,7 +455,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
 
     const fontWeight = textFontStyle === "bold" ? "700" : "400";
     const nextMarkings = [
-      ...markings,
+      ...currentMarkingsRef.current,
       {
         id: createMarkingId(),
         type: "textBox",
@@ -377,7 +474,6 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     setTextEditor(null);
     setTextDraft("");
   }, [
-    markings,
     strokeColor,
     textDraft,
     textEditor,
@@ -432,7 +528,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
 
     const nextMarkings = [
-      ...markings,
+      ...currentMarkingsRef.current,
       {
         id: createMarkingId(),
         type: "drawStroke",
@@ -445,7 +541,24 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     isDrawingRef.current = false;
     drawingStrokeRef.current = null;
     setDraftStroke(null);
-  }, [markings, strokeColor, strokeWidth]);
+  }, [strokeColor, strokeWidth]);
+
+  const finishErase = useCallback(() => {
+    if (eraseDirtyRef.current) {
+      eraseDirtyRef.current = false;
+      commitMarkings(currentMarkingsRef.current);
+    }
+    isErasingRef.current = false;
+  }, [commitMarkings]);
+
+  const finishTextMove = useCallback(() => {
+    if (movingTextMarkIdRef.current !== null || movingTextMarkIndexRef.current !== null) {
+      commitMarkings(currentMarkingsRef.current);
+    }
+    movingTextMarkIdRef.current = null;
+    movingTextMarkIndexRef.current = null;
+    movingTextOffsetRef.current = null;
+  }, [commitMarkings]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
@@ -454,6 +567,17 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     if (activeTool === "text") {
       if (textEditor) {
         commitTextEditor();
+      }
+      const hitText = getTextMarkingAtPoint(point);
+      if (hitText) {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        movingTextMarkIdRef.current = hitText.targetMark?.id || null;
+        movingTextMarkIndexRef.current = hitText.targetIndex;
+        movingTextOffsetRef.current = {
+          x: point.x - (hitText.targetMark?.x || 0),
+          y: point.y - (hitText.targetMark?.y || 0),
+        };
+        return;
       }
       openTextEditorAtPoint(point);
       return;
@@ -464,6 +588,9 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
 
     if (activeTool === "erase") {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      isErasingRef.current = true;
+      eraseDirtyRef.current = false;
       eraseAtPoint(point);
       return;
     }
@@ -481,12 +608,25 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = getCanvasCoordinatesFromPoint(event.clientX, event.clientY);
+
+    if (activeTool === "text" && (movingTextMarkIdRef.current !== null || movingTextMarkIndexRef.current !== null)) {
+      event.preventDefault();
+      moveTextMarking(point);
+      return;
+    }
+
+    if (activeTool === "erase" && isErasingRef.current) {
+      event.preventDefault();
+      eraseAtPoint(point);
+      return;
+    }
+
     if (activeTool !== "draw" || !isDrawingRef.current || !drawingStrokeRef.current) {
       return;
     }
 
     event.preventDefault();
-    const point = getCanvasCoordinatesFromPoint(event.clientX, event.clientY);
     drawingStrokeRef.current = [...drawingStrokeRef.current, point];
     setDraftStroke({
       id: "draft",
@@ -498,6 +638,20 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activeTool === "erase") {
+      event.preventDefault();
+      finishErase();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+
+    if (activeTool === "text") {
+      event.preventDefault();
+      finishTextMove();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+
     if (activeTool !== "draw") return;
     event.preventDefault();
     finishStroke();
@@ -505,17 +659,44 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   };
 
   const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activeTool === "erase") {
+      event.preventDefault();
+      finishErase();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+
+    if (activeTool === "text") {
+      event.preventDefault();
+      finishTextMove();
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      return;
+    }
+
     if (activeTool !== "draw") return;
     event.preventDefault();
     finishStroke();
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
+  const handlePointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      return;
+    }
+    handlePointerCancel(event);
+  };
+
   useEffect(() => {
+    if (activeTool !== "erase" && isErasingRef.current) {
+      finishErase();
+    }
     if (activeTool !== "text" && textEditor) {
       commitTextEditor();
     }
-  }, [activeTool, textEditor, commitTextEditor]);
+    if (activeTool !== "text" && (movingTextMarkIdRef.current !== null || movingTextMarkIndexRef.current !== null)) {
+      finishTextMove();
+    }
+  }, [activeTool, textEditor, commitTextEditor, finishErase, finishTextMove]);
 
   return (
     <div className="space-y-4">
@@ -582,7 +763,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
                 onChange={(event) => setTextFontSize(Number(event.target.value))}
                 className="h-8 rounded border border-gray-300 bg-white px-2 text-xs"
               >
-                {[12, 14, 16, 18, 20, 24, 28, 32].map((size) => (
+                {TEXT_FONT_SIZES.map((size) => (
                   <option key={size} value={size}>
                     {size}px
                   </option>
@@ -637,7 +818,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
-            onPointerLeave={handlePointerCancel}
+            onPointerLeave={handlePointerLeave}
             className="mx-auto block h-auto w-full max-w-[520px] select-none"
             style={{
               cursor: activeTool === "text" ? "text" : "crosshair",
@@ -678,4 +859,3 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     </div>
   );
 };
-

@@ -34,6 +34,7 @@ interface PatientInfoFieldsProps {
   use24HourTimeInputs?: boolean;
   useDashDateInputs?: boolean;
   stackFieldRows?: boolean;
+  forceSectionedLayout?: boolean;
 }
 
 const createThumbnailDataUrl = (file: File) =>
@@ -87,6 +88,7 @@ export const PatientInfoFields = ({
   use24HourTimeInputs = false,
   useDashDateInputs = false,
   stackFieldRows = false,
+  forceSectionedLayout = false,
 }: PatientInfoFieldsProps) => {
   const normalizedInfo = normalizePatientInfo(patientInfo);
   const normalizedCurrentExtractedPatient = normalizePatientInfo(currentExtractedPatientInfo);
@@ -797,7 +799,7 @@ export const PatientInfoFields = ({
         )}
       </div>
 
-      {stickerMode ? (
+      {stickerMode || forceSectionedLayout ? (
         renderExpandedFields()
       ) : (
         <>

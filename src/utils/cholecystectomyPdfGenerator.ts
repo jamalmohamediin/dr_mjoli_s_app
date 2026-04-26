@@ -8,6 +8,10 @@ import { getFullASAText } from "@/utils/asaDescriptions";
 import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
+import {
+  hasPdfDisplayValue,
+  isPostPreoperativeAlwaysVisibleField,
+} from "@/utils/templateDataHelpers";
 
 const CHOLECYSTECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
 
@@ -133,6 +137,7 @@ export const generateCholecystectomyPDF = async (
     const col2X = margin + 63;
     const col3X = margin + 126;
     const twoCol2X = margin + 95;
+    let postPreoperativeSectionActive = false;
 
     const ensureSpace = (h = 10) => {
       if (y + h > pageHeight - 20) {
@@ -161,11 +166,29 @@ export const generateCholecystectomyPDF = async (
     };
 
     const txt = (v: any) => (v === undefined || v === null ? "" : String(v));
+    const shouldRenderCell = (rawValue: string) => {
+      const raw = String(rawValue || "");
+      const separatorIndex = raw.indexOf(":");
+      if (separatorIndex === -1) {
+        return hasPdfDisplayValue(raw);
+      }
+
+      const label = raw.slice(0, separatorIndex).trim();
+      const value = raw.slice(separatorIndex + 1).trim();
+      if (!postPreoperativeSectionActive) {
+        return hasPdfDisplayValue(value);
+      }
+
+      return hasPdfDisplayValue(value) || isPostPreoperativeAlwaysVisibleField(label);
+    };
 
     const rowFull = (text: string) => {
       const normalized = text || "";
       const separatorIndex = normalized.indexOf(":");
       if (separatorIndex === -1) {
+        if (!shouldRenderCell(normalized)) {
+          return;
+        }
         const lines = pdf.splitTextToSize(normalized, pageWidth - margin * 2);
         ensureSpace(lines.length * lineHeight + 1);
         lines.forEach((line: string) => {
@@ -173,6 +196,10 @@ export const generateCholecystectomyPDF = async (
           pdf.text(line, col1X, y);
           y += lineHeight;
         });
+        return;
+      }
+
+      if (!shouldRenderCell(normalized)) {
         return;
       }
 
@@ -200,8 +227,18 @@ export const generateCholecystectomyPDF = async (
     };
 
     const row3 = (a: string, b: string, c: string) => {
+      const cells = [a, b, c].map((value) => (shouldRenderCell(value) ? value : ""));
       const buildCellLayout = (rawValue: string, width: number) => {
         const raw = rawValue || "";
+        if (!raw.trim()) {
+          return {
+            isLabelValue: false,
+            labelLines: [] as string[],
+            valueLines: [] as string[],
+            lineCount: 0,
+            labelWidth: 0,
+          };
+        }
         const separatorIndex = raw.indexOf(":");
         if (separatorIndex === -1) {
           const lines = pdf.splitTextToSize(raw, width);
@@ -249,10 +286,13 @@ export const generateCholecystectomyPDF = async (
         }
       };
 
-      const cell1 = buildCellLayout(a, 58);
-      const cell2 = buildCellLayout(b, 58);
-      const cell3 = buildCellLayout(c, 58);
+      const cell1 = buildCellLayout(cells[0], 58);
+      const cell2 = buildCellLayout(cells[1], 58);
+      const cell3 = buildCellLayout(cells[2], 58);
       const lines = Math.max(cell1.lineCount, cell2.lineCount, cell3.lineCount, 1);
+      if (lines <= 0 || (cell1.lineCount === 0 && cell2.lineCount === 0 && cell3.lineCount === 0)) {
+        return;
+      }
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
         drawLayoutLine(cell1, i, col1X);
@@ -264,8 +304,18 @@ export const generateCholecystectomyPDF = async (
     };
 
     const row2 = (a: string, b: string) => {
+      const cells = [a, b].map((value) => (shouldRenderCell(value) ? value : ""));
       const buildCellLayout = (rawValue: string, width: number) => {
         const raw = rawValue || "";
+        if (!raw.trim()) {
+          return {
+            isLabelValue: false,
+            labelLines: [] as string[],
+            valueLines: [] as string[],
+            lineCount: 0,
+            labelWidth: 0,
+          };
+        }
         const separatorIndex = raw.indexOf(":");
         if (separatorIndex === -1) {
           const lines = pdf.splitTextToSize(raw, width);
@@ -313,13 +363,90 @@ export const generateCholecystectomyPDF = async (
         }
       };
 
-      const cell1 = buildCellLayout(a, 88);
-      const cell2 = buildCellLayout(b, 88);
+      const cell1 = buildCellLayout(cells[0], 88);
+      const cell2 = buildCellLayout(cells[1], 88);
       const lines = Math.max(cell1.lineCount, cell2.lineCount, 1);
+      if (lines <= 0 || (cell1.lineCount === 0 && cell2.lineCount === 0)) {
+        return;
+      }
       ensureSpace(lines * lineHeight + 1);
       for (let i = 0; i < lines; i++) {
         drawLayoutLine(cell1, i, col1X);
         drawLayoutLine(cell2, i, twoCol2X);
+        y += lineHeight;
+      }
+      pdf.setFont("helvetica", "normal");
+    };
+
+    const rowAlignedToPreopImagingColumn = (text: string) => {
+      const normalized = text || "";
+      if (!shouldRenderCell(normalized)) {
+        return;
+      }
+
+      const x = col2X;
+      const width = pageWidth - margin - col2X;
+      const separatorIndex = normalized.indexOf(":");
+      if (separatorIndex === -1) {
+        const lines = pdf.splitTextToSize(normalized, width);
+        if (!lines.length) {
+          return;
+        }
+        ensureSpace(lines.length * lineHeight + 1);
+        lines.forEach((line: string) => {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(line, x, y);
+          y += lineHeight;
+        });
+        return;
+      }
+
+      const label = `${normalized.slice(0, separatorIndex).trim()}:`;
+      const value = normalized.slice(separatorIndex + 1).trim();
+      const labelWidth = Math.min(34, Math.max(20, width * 0.38));
+      const valueWidth = Math.max(16, width - labelWidth - 2);
+      const labelLines = pdf.splitTextToSize(label, labelWidth);
+      const valueLines = pdf.splitTextToSize(value, valueWidth);
+      const lines = Math.max(labelLines.length, valueLines.length, 1);
+      ensureSpace(lines * lineHeight + 1);
+      for (let i = 0; i < lines; i += 1) {
+        if (labelLines[i]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[i], x, y);
+        }
+        if (valueLines[i]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[i], x + labelWidth + 2, y);
+        }
+        y += lineHeight;
+      }
+      pdf.setFont("helvetica", "normal");
+    };
+
+    const rowQuestionAnswer = (question: string, answer: string) => {
+      const answerText = txt(answer).trim();
+      if (!hasPdfDisplayValue(answerText)) {
+        return;
+      }
+
+      const questionText = `${question}:`;
+      const questionX = col1X;
+      const questionWidth = 72;
+      const answerX = questionX + questionWidth + 4;
+      const answerWidth = pageWidth - margin - answerX;
+      const questionLines = pdf.splitTextToSize(questionText, questionWidth);
+      const answerLines = pdf.splitTextToSize(answerText, answerWidth);
+      const lines = Math.max(questionLines.length, answerLines.length, 1);
+      ensureSpace(lines * lineHeight + 1);
+      for (let i = 0; i < lines; i += 1) {
+        if (questionLines[i]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(questionLines[i], questionX, y);
+        }
+        if (answerLines[i]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(answerLines[i], answerX, y);
+        }
         y += lineHeight;
       }
       pdf.setFont("helvetica", "normal");
@@ -429,11 +556,13 @@ export const generateCholecystectomyPDF = async (
       `Address: ${txt(info.address)}`
     );
     y += 1;
-    rowFull(`ASA Physical Status Classification: ${asaClassification}`);
-    if (txt(info.asaNotes)) {
+    row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
+    if (hasPdfDisplayValue(asaClassification)) {
+      rowFull(`ASA Physical Status Classification: ${asaClassification}`);
+    }
+    if (hasPdfDisplayValue(txt(info.asaNotes))) {
       rowFull(`ASA Notes: ${txt(info.asaNotes)}`);
     }
-    row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
     y += 2;
 
     sec("PREOPERATIVE INFORMATION");
@@ -444,22 +573,27 @@ export const generateCholecystectomyPDF = async (
     );
     row3(`Start Time: ${txt(preop?.startTime)}`, `End Time: ${txt(preop?.endTime)}`, `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`);
     row3(
-      `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
+      `Urgency: ${txt(preop?.procedureUrgency)}`,
       `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`,
       ""
     );
-    rowFull(`Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`);
-    rowFull(`Operation Description: ${txt(preop?.operationDescription)}`);
+    rowAlignedToPreopImagingColumn(
+      `Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`
+    );
+    rowAlignedToPreopImagingColumn(`Operation Description: ${txt(preop?.operationDescription)}`);
     y += 2;
+    postPreoperativeSectionActive = true;
 
     sec("INTRAOPERATIVE FINDINGS");
-    row2(
-      `Gallbladder Appearance: ${joinSelections(toArray(intra?.gallbladderAppearance), intra?.gallbladderAppearanceOther)}`,
-      `Adhesions to Gallbladder: ${txt(intra?.adhesionsToGallbladder)}`
+    rowQuestionAnswer(
+      "Gallbladder Appearance",
+      joinSelections(toArray(intra?.gallbladderAppearance), intra?.gallbladderAppearanceOther)
     );
-    rowFull(`Stones Present: ${txt(intra?.stonesPresent)}`);
+    rowQuestionAnswer("Adhesions to Gallbladder", txt(intra?.adhesionsToGallbladder));
+    rowQuestionAnswer("Stones Present", txt(intra?.stonesPresent));
     if (hasStonesPresent) {
-      row2(`Type of Stones: ${typeOfStonesText}`, `Size of Stones: ${txt(intra?.sizeOfStones)}`);
+      rowQuestionAnswer("Type of Stones", typeOfStonesText);
+      rowQuestionAnswer("Size of Stones", txt(intra?.sizeOfStones));
     }
     y += 2;
 
@@ -486,8 +620,8 @@ export const generateCholecystectomyPDF = async (
     const addLeftCh = (label: string, value: string) => {
       const labelText = `${label}:`;
       const valueText = value || "";
-      const labelWidth = Math.min(34, Math.max(20, leftWCh * 0.42));
-      const valueWidth = Math.max(18, leftWCh - labelWidth - 2);
+      const labelWidth = Math.min(40, Math.max(24, leftWCh * 0.5));
+      const valueWidth = Math.max(14, leftWCh - labelWidth - 4);
       const labelLines = pdf.splitTextToSize(labelText, labelWidth);
       const valueLines = pdf.splitTextToSize(valueText, valueWidth);
       const lines = Math.max(labelLines.length, valueLines.length, 1);
@@ -498,7 +632,7 @@ export const generateCholecystectomyPDF = async (
         }
         if (valueLines[index]) {
           pdf.setFont("helvetica", "normal");
-          pdf.text(valueLines[index], leftXCh + labelWidth + 2, lyCh);
+          pdf.text(valueLines[index], leftXCh + labelWidth + 4, lyCh);
         }
         lyCh += lineHeight;
       }
@@ -516,11 +650,6 @@ export const generateCholecystectomyPDF = async (
     if (txt(proc?.gallbladderDecompressionRequired) === "Yes") {
       addLeftCh("Type of Fluid Drained from Gall Bladder", decompressionFluidTypeText);
     }
-    addLeftCh("Critical View of Safety Confirmation", criticalViewSafetyConfirmationText);
-    addLeftCh("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
-    addLeftCh("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
-    addLeftCh("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
-    addLeftCh("Critical View of Safety - Two Structures Entering Gallbladder Confirmed", txt(proc?.twoStructuresConfirmed));
 
     let ryCh = blockTopCh + 2;
     const { diagramBottomY } = drawRectalStylePortsAndIncisions({
@@ -541,6 +670,15 @@ export const generateCholecystectomyPDF = async (
     y = margin;
 
     sec("PROCEDURE DETAILS");
+    rowFull(`Critical View of Safety Confirmation: ${criticalViewSafetyConfirmationText}`);
+    rowFull(`Critical View of Safety - Calot's Triangle Dissected: ${txt(proc?.calotsTriangleDissected)}`);
+    rowFull(`Critical View of Safety - Cystic Duct Identified: ${txt(proc?.cysticDuctIdentified)}`);
+    rowFull(`Critical View of Safety - Cystic Artery Identified: ${txt(proc?.cysticArteryIdentified)}`);
+    rowFull(
+      `Critical View of Safety - Two Structures Entering Gallbladder Confirmed: ${txt(
+        proc?.twoStructuresConfirmed
+      )}`
+    );
     rowFull(`Cystic Duct Control: ${joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther)}`);
     rowFull(`Cystic Artery Control: ${joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther)}`);
     rowFull(
@@ -562,6 +700,18 @@ export const generateCholecystectomyPDF = async (
     );
     rowFull(`Use Of Specimen Bag: ${txt(proc?.useOfSpecimenBag)}`);
     rowFull(`Peritoneal Lavage: ${peritonealLavageText}`);
+    rowFull(
+      `Points of Difficulty: ${joinSelections(
+        toArray(closure?.intraoperativeDifficulty),
+        closure?.intraoperativeDifficultyOther
+      )}`
+    );
+    rowFull(
+      `Intraoperative Events/Complications: ${joinSelections(
+        toArray(closure?.complications),
+        closure?.complicationsOther
+      )}`
+    );
 
     sec("CLOSURE");
     rowFull(`Drain Insertion: ${txt(proc?.drainInsertion)}`);
@@ -583,20 +733,6 @@ export const generateCholecystectomyPDF = async (
     rowFull(`Skin Closure: ${txt(closure?.skinClosure)}`);
     rowFull(`Skin Material Used: ${joinSelections(toArray(closure?.skinClosureMethod), closure?.skinClosureOther)}`);
 
-    sec("COMPLICATIONS");
-    rowFull(
-      `Points of Difficulty: ${joinSelections(
-        toArray(closure?.intraoperativeDifficulty),
-        closure?.intraoperativeDifficultyOther
-      )}`
-    );
-    rowFull(
-      `Intraoperative Events/Complications: ${joinSelections(
-        toArray(closure?.complications),
-        closure?.complicationsOther
-      )}`
-    );
-
     sec("SPECIMEN");
     rowFull("Specimen: Gallbladder");
     rowFull(`Use Of Specimen Bag: ${txt(closure?.useOfSpecimenBag)}`);
@@ -610,16 +746,43 @@ export const generateCholecystectomyPDF = async (
     rowFull(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`);
 
     sec("SURGEON'S SIGNATURE");
-    if (addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image")) {
-      ensureSpace(24);
+    ensureSpace(24);
+    const signatureY = y;
+    const signatureCol1X = margin;
+    const signatureCol2X = margin + 100;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text("Surgeon's Signature:", signatureCol1X, signatureY);
+    pdf.text("Date & Time:", signatureCol2X, signatureY);
+    pdf.setFont("helvetica", "normal");
+
+    const hasImageSignature =
+      addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image");
+
+    if (hasImageSignature) {
       const sig = await calculateSignatureDimensions(addInfo.surgeonSignature);
-      pdf.addImage(addInfo.surgeonSignature, "PNG", margin, y, sig.width, sig.height);
-      y += sig.height + 3;
+      pdf.addImage(
+        addInfo.surgeonSignature,
+        "PNG",
+        signatureCol1X + 40,
+        signatureY - sig.height + 3,
+        sig.width,
+        sig.height
+      );
+    } else if (hasPdfDisplayValue(txt(addInfo?.surgeonSignatureText))) {
+      pdf.text(txt(addInfo?.surgeonSignatureText), signatureCol1X + 40, signatureY);
     }
-    row2(
-      `Typed Signature: ${txt(addInfo?.surgeonSignatureText)}`,
-      `Date/Time: ${addInfo?.dateTime ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime) : ""}`
+
+    pdf.text(
+      addInfo?.dateTime
+        ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime)
+        : formatDateTimeDDMMYYYYWithDashes(new Date()),
+      signatureCol2X + 25,
+      signatureY
     );
+
+    y = signatureY + 20;
 
     return { success: true, blob: pdf.output("blob") };
   } catch (error) {

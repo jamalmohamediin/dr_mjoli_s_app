@@ -22,7 +22,6 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
-import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import {
   DateTimeDDMMYYYY24HourInput,
@@ -344,19 +343,6 @@ export const SmallBowelSurgeryForm = ({
                   onCurrentPatientChange={onCurrentPatientChange}
                   use24HourTimeInputs
                   useDashDateInputs
-                />
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-800 mb-4">
-                  ASA Physical Status Classification
-                </h3>
-                <ASAClassificationSection
-                  selectedASA={smallBowel.patientInfo?.asaScore || ""}
-                  onASAChange={(value) => updateSmallBowel("patientInfo", "asaScore", value)}
-                  notes={smallBowel.patientInfo?.asaNotes || ""}
-                  onNotesChange={(value) => updateSmallBowel("patientInfo", "asaNotes", value)}
-                  showNotes={true}
                 />
               </div>
 
@@ -913,9 +899,22 @@ export const SmallBowelSurgeryForm = ({
                         onChange={(e) =>
                           updateSmallBowel("procedure", "reasonForConversionOther", e.target.value)
                         }
-                      />
-                    </div>
-                  )}
+                        />
+                      </div>
+                    )}
+                  <div className="mt-3">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Trocar Number:
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Enter trocar number"
+                      value={smallBowel.procedure?.trocarNumber || ""}
+                      onChange={(e) =>
+                        updateSmallBowel("procedure", "trocarNumber", e.target.value)
+                      }
+                    />
+                  </div>
                 </div>
               )}
 

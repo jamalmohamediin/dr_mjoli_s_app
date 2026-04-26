@@ -77,7 +77,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
     complications.complicationOther,
   );
 
-  const procedureDetailEntries: StructuredTemplatePdfSection["entries"] = [
+  const generalProcedureEntries: StructuredTemplatePdfSection["entries"] = [
     { label: "General Procedure", subheading: true },
     { label: "Description Of Procedure", value: procedure.description || "" },
     {
@@ -92,121 +92,125 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
         : "",
     },
     { label: "Trocar Number", value: isConvertedToOpen ? procedure.trocarNumber || "" : "" },
-    ...(showOpenRepairSection
-      ? [
-          { label: "Open Inguinal Hernia Repair", subheading: true },
-          {
-            label: "Incision Used",
-            value: formatSelection(procedure.incisionUsed, procedure.incisionOther),
-          },
-          {
-            label: "Length Of Incision",
-            value: formatCmValue(procedure.incisionLength),
-          },
-          {
-            label: "External Oblique Aponeurosis Incised",
-            value: formatChoice(procedure.externalObliqueAponeurosisIncised),
-          },
-          {
-            label: "Cord Structures",
-            value: formatChoiceList(procedure.cordStructures),
-          },
-          {
-            label: "Nerves Identified",
-            value: formatChoiceList(procedure.nervesIdentified),
-          },
-          {
-            label: "Ilioinguinal Preserved",
-            value: formatChoice(procedure.ilioinguinalPreserved),
-          },
-          {
-            label: "Iliohypogastric Preserved",
-            value: formatChoice(procedure.iliohypogastricPreserved),
-          },
-          {
-            label: "Genital Branch Preserved",
-            value: formatChoice(procedure.genitalBranchPreserved),
-          },
-          {
-            label: "Sac Management",
-            value: formatChoiceList(procedure.sacManagement),
-          },
-          {
-            label: "Deep Ring Reconstruction",
-            value: formatChoice(procedure.deepRingReconstruction),
-          },
-          {
-            label: "Repair Technique",
-            value: formatChoiceList(procedure.repairTechnique),
-          },
-          ...(hasTissueRepair
-            ? [
-                { label: "Tissue Reconstruction", subheading: true },
-                {
-                  label: "Posterior Wall Tissue Reconstruction",
-                  value: formatSelection(
-                    procedure.tissueReconstruction,
-                    procedure.tissueReconstructionOther,
-                  ),
-                },
-                { label: "Suture Material Used", value: procedure.sutureMaterial || "" },
-                {
-                  label: "Suture Method",
-                  value: formatChoice(procedure.sutureMethod),
-                },
-              ]
-            : []),
-          ...(hasMeshRepair
-            ? [
-                { label: "Mesh Repair", subheading: true },
-                { label: "Mesh Inserted", value: procedure.meshInserted || "" },
-                {
-                  label: "Mesh Size Length (Cm)",
-                  value: formatCmValue(procedure.meshSizeLength),
-                },
-                {
-                  label: "Mesh Size Width (Cm)",
-                  value: formatCmValue(procedure.meshSizeWidth),
-                },
-                {
-                  label: "Mesh Positioning",
-                  value: formatSelection(
-                    procedure.meshPositioning,
-                    procedure.meshPositioningOther,
-                  ),
-                },
-                { label: "Fixation", value: formatChoiceList(procedure.fixation) },
-                {
-                  label: "Fixation Points",
-                  value: formatSelection(
-                    procedure.fixationPoints,
-                    procedure.fixationPointsOther,
-                  ),
-                },
-              ]
-            : []),
-          { label: "Closure", subheading: true },
-          {
-            label: "External Oblique Aponeurosis",
-            value: formatChoice(closure.externalObliqueClosure),
-          },
-          {
-            label: "Subcutaneous Tissue",
-            value: formatChoice(closure.subcutaneousTissueClosure),
-          },
-          {
-            label: "Skin Closure",
-            value: formatChoiceList(closure.skinClosureOpen),
-          },
-          {
-            label: "Local Anaesthetic Infiltration",
-            value: formatChoice(closure.localAnaestheticOpen),
-          },
-        ]
-      : []),
+  ];
+
+  const openProcedureEntries: StructuredTemplatePdfSection["entries"] = showOpenRepairSection
+    ? [
+        { label: "Open Inguinal Hernia Repair", subheading: true },
+        {
+          label: "Incision Used",
+          value: formatSelection(procedure.incisionUsed, procedure.incisionOther),
+        },
+        {
+          label: "Length Of Incision",
+          value: formatCmValue(procedure.incisionLength),
+        },
+        {
+          label: "External Oblique Aponeurosis Incised",
+          value: formatChoice(procedure.externalObliqueAponeurosisIncised),
+        },
+        {
+          label: "Cord Structures",
+          value: formatChoiceList(procedure.cordStructures),
+        },
+        {
+          label: "Nerves Identified",
+          value: formatChoiceList(procedure.nervesIdentified),
+        },
+        {
+          label: "Ilioinguinal Preserved",
+          value: formatChoice(procedure.ilioinguinalPreserved),
+        },
+        {
+          label: "Iliohypogastric Preserved",
+          value: formatChoice(procedure.iliohypogastricPreserved),
+        },
+        {
+          label: "Genital Branch Preserved",
+          value: formatChoice(procedure.genitalBranchPreserved),
+        },
+        {
+          label: "Sac Management",
+          value: formatChoiceList(procedure.sacManagement),
+        },
+        {
+          label: "Deep Ring Reconstruction",
+          value: formatChoice(procedure.deepRingReconstruction),
+        },
+        {
+          label: "Repair Technique",
+          value: formatChoiceList(procedure.repairTechnique),
+        },
+        ...(hasTissueRepair
+          ? [
+              { label: "Tissue Reconstruction", subheading: true },
+              {
+                label: "Posterior Wall Tissue Reconstruction",
+                value: formatSelection(
+                  procedure.tissueReconstruction,
+                  procedure.tissueReconstructionOther,
+                ),
+              },
+              { label: "Suture Material Used", value: procedure.sutureMaterial || "" },
+              {
+                label: "Suture Method",
+                value: formatChoice(procedure.sutureMethod),
+              },
+            ]
+          : []),
+        ...(hasMeshRepair
+          ? [
+              { label: "Mesh Repair", subheading: true },
+              { label: "Mesh Inserted", value: procedure.meshInserted || "" },
+              {
+                label: "Mesh Size Length (Cm)",
+                value: formatCmValue(procedure.meshSizeLength),
+              },
+              {
+                label: "Mesh Size Width (Cm)",
+                value: formatCmValue(procedure.meshSizeWidth),
+              },
+              {
+                label: "Mesh Positioning",
+                value: formatSelection(
+                  procedure.meshPositioning,
+                  procedure.meshPositioningOther,
+                ),
+              },
+              { label: "Fixation", value: formatChoiceList(procedure.fixation) },
+              {
+                label: "Fixation Points",
+                value: formatSelection(
+                  procedure.fixationPoints,
+                  procedure.fixationPointsOther,
+                ),
+              },
+            ]
+          : []),
+        { label: "Closure", subheading: true },
+        {
+          label: "External Oblique Aponeurosis",
+          value: formatChoice(closure.externalObliqueClosure),
+        },
+        {
+          label: "Subcutaneous Tissue",
+          value: formatChoice(closure.subcutaneousTissueClosure),
+        },
+        {
+          label: "Skin Closure",
+          value: formatChoiceList(closure.skinClosureOpen),
+        },
+        {
+          label: "Local Anaesthetic Infiltration",
+          value: formatChoice(closure.localAnaestheticOpen),
+        },
+      ]
+    : [];
+
+  const laparoscopicContinuationEntries: StructuredTemplatePdfSection["entries"] = [
     ...(showLaparoscopicRepairSection
       ? [
-          { label: "Laparoscopic Inguinal Hernia Repair (TEP / TAPP)", subheading: true },
+          { label: "Laparoscopic Inguinal Hernia Repair (TEP / TAPP)", value: "", keepWhenEmpty: true },
           {
             label: "Laparoscopic Approach",
             value: formatChoice(procedure.laparoscopicApproach),
@@ -258,11 +262,14 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
           },
         ]
       : []),
-    ...(complicationsValue
-      ? [
-          { label: "Complications", subheading: true },
-          { label: "Complications", value: complicationsValue },
-        ]
+    ...(complicationsValue ? [{ label: "Complications", value: complicationsValue }] : []),
+  ];
+
+  const primaryProcedureEntries: StructuredTemplatePdfSection["entries"] = [
+    ...generalProcedureEntries,
+    ...openProcedureEntries,
+    ...(!showLaparoscopicRepairSection && complicationsValue
+      ? [{ label: "Complications", subheading: true }, { label: "Complications", value: complicationsValue }]
       : []),
   ];
 
@@ -281,17 +288,17 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
             preoperative.preoperativeImagingOther,
           ),
         },
-        { label: "Start Time (24-hour)", value: preoperative.startTime || "" },
-        { label: "End Time (24-hour)", value: preoperative.endTime || "" },
+        { label: "Start Time", value: preoperative.startTime || "" },
+        { label: "End Time", value: preoperative.endTime || "" },
         {
           label: "Duration Of Operation (In Minutes)",
           value: preoperative.duration || "",
         },
-        { label: "Operation Description", value: preoperative.operationDescription || "" },
         {
           label: "Indication For Surgery",
           value: formatSelection(preoperative.indication, preoperative.indicationOther),
         },
+        { label: "Operation Description", value: preoperative.operationDescription || "" },
         { label: "Urgency", value: formatChoice(preoperative.urgency) },
       ],
     },
@@ -316,8 +323,21 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
     {
       title: "Procedure Details",
       layout: "label-value-three-column",
-      entries: procedureDetailEntries,
+      entries: primaryProcedureEntries,
     },
+    ...(laparoscopicContinuationEntries.length > 0
+      ? [
+          {
+            title: "Procedure Details",
+            layout: "label-value-table" as const,
+            columns: 2 as const,
+            startOnNewPage: true,
+            fixedLabelWidth: 34,
+            labelGap: 3,
+            entries: laparoscopicContinuationEntries,
+          },
+        ]
+      : []),
     {
       title: "Additional Notes",
       layout: "label-value-table",
@@ -338,6 +358,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
   return generateStructuredTemplatePdf({
     title: "INGUINAL HERNIA REPAIR REPORT",
     patientInfo: patientInfo || data?.patientInfo,
+    patientInfoLayout: "appendectomy",
     sections,
     diagram: diagramImageData
       ? {
@@ -345,6 +366,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
           imageData: diagramImageData,
           placement: "inlineRight",
           sectionTitle: "Procedure Details",
+          inlineValueOffset: 4,
         }
       : undefined,
     signature: {
@@ -352,5 +374,6 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
       dateTime: additionalInfo.dateTime || getLocalDateTimeValue(),
       alwaysShow: true,
     },
+    signatureLayout: "appendectomy",
   });
 };

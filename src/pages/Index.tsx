@@ -35,7 +35,6 @@ import { NarrativeSurgeryForm } from "@/components/NarrativeSurgeryForm";
 import { NarrativeSurgeryReportPreview } from "@/components/NarrativeSurgeryReportPreview";
 import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
-import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientsTab } from "@/components/patients/PatientsTab";
 import { ReportsTab } from "@/components/reports/ReportsTab";
 import { captureReportAsPDF, saveDraft, DiagramCapture } from "@/utils/pdfGenerator";
@@ -100,11 +99,10 @@ import {
   DEFAULT_CLINICIAN_NAME,
 } from "@/utils/clinicianDefaults";
 import {
-  createInitialPeriAnalDiagramMarkings,
-  DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
   periAnalDiagramImages,
   periAnalDiagramLabels,
 } from "@/utils/periAnalDiagramConfig";
+import { parsePeriAnalDiagramState } from "@/utils/periAnalHelpers";
 import {
   createInitialPatientInfoState,
   createPatientStickerSyncSnapshot,
@@ -147,10 +145,241 @@ const hasMeaningfulPatientInfoData = (patientInfo: any): boolean =>
     return Boolean(value);
   });
 
+const AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS = new Set([
+  "patientInfo",
+  "preoperative",
+  "surgicalTeam",
+  "procedureDetails",
+  "section1",
+  "surgeonSignatureText",
+  "endoscopistName",
+  "doctorSignature",
+  "doctorName",
+  "activeDiagramVariant",
+]);
+
+const DEFAULT_CLINICIAN_NAME_NORMALIZED = DEFAULT_CLINICIAN_NAME.toLowerCase();
+
+const hasMeaningfulPostPreoperativeValue = (
+  value: unknown,
+  currentKey?: string,
+): boolean => {
+  if (currentKey && AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS.has(currentKey)) {
+    return false;
+  }
+
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return false;
+    }
+
+    if (trimmed.toLowerCase() === DEFAULT_CLINICIAN_NAME_NORMALIZED) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasMeaningfulPostPreoperativeValue(entry));
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).some(([key, entry]) =>
+      hasMeaningfulPostPreoperativeValue(entry, key),
+    );
+  }
+
+  return false;
+};
+
+const omitObjectKeys = (source: any, keysToSkip: string[]) =>
+  Object.entries(source && typeof source === "object" ? source : {}).reduce(
+    (next, [key, value]) => {
+      if (!keysToSkip.includes(key)) {
+        next[key] = value;
+      }
+      return next;
+    },
+    {} as Record<string, unknown>,
+  );
+
+const getTemplatePostPreoperativePayload = (
+  reportSnapshot: any,
+  templateType: TemplateType,
+) => {
+  switch (templateType) {
+    case "gastroscopy":
+      return omitObjectKeys(reportSnapshot?.gastroscopy, ["patientInfo", "preoperative"]);
+    case "colonoscopy":
+      return omitObjectKeys(reportSnapshot?.colonoscopy, ["patientInfo", "preoperative"]);
+    case "appendectomy":
+      return omitObjectKeys(reportSnapshot?.appendectomy, ["patientInfo", "preoperative"]);
+    case "ventralHernia":
+      return omitObjectKeys(reportSnapshot?.ventralHernia, ["patientInfo", "preoperative"]);
+    case "rectalCancer":
+      return omitObjectKeys(reportSnapshot?.rectalCancer, [
+        "patientInfo",
+        "surgicalTeam",
+        "procedureDetails",
+        "section1",
+      ]);
+    case "smallBowel":
+      return omitObjectKeys(reportSnapshot?.smallBowel, ["patientInfo", "preoperative"]);
+    case "cholecystectomy":
+      return omitObjectKeys(reportSnapshot?.cholecystectomy, ["patientInfo", "preoperative"]);
+    case "periAnal":
+      return omitObjectKeys(reportSnapshot?.periAnal, ["patientInfo", "preoperative"]);
+    case "inguinalHernia":
+      return omitObjectKeys(reportSnapshot?.inguinalHernia, ["patientInfo", "preoperative"]);
+    case "transanalMinimallyInvasiveSurgery":
+      return omitObjectKeys(reportSnapshot?.transanalMinimallyInvasiveSurgery, [
+        "patientInfo",
+        "preoperative",
+      ]);
+    case "openGeneralSurgery":
+      return omitObjectKeys(reportSnapshot?.openGeneralSurgery, ["patientInfo", "preoperative"]);
+    case "openAbdominalSurgery":
+      return omitObjectKeys(reportSnapshot?.openAbdominalSurgery, ["patientInfo", "preoperative"]);
+    case "procedure":
+    default:
+      return {
+        gastroscopyFindings: reportSnapshot?.gastroscopyFindings,
+        colonoscopyFindings: reportSnapshot?.colonoscopyFindings,
+        procedureFindings: reportSnapshot?.procedureFindings,
+        specimen: reportSnapshot?.specimen,
+        conclusion: reportSnapshot?.conclusion,
+        followUp: reportSnapshot?.followUp,
+        signature: reportSnapshot?.signature,
+        gastroscopyCanvasData: reportSnapshot?.gastroscopyCanvasData,
+        colonoscopyCanvasData: reportSnapshot?.colonoscopyCanvasData,
+      };
+  }
+};
+
+const hasTemplateProgressBeyondPreoperative = (
+  reportSnapshot: any,
+  templateType: TemplateType,
+): boolean =>
+  hasMeaningfulPostPreoperativeValue(
+    getTemplatePostPreoperativePayload(reportSnapshot, templateType),
+  );
+
 const LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS = 8000;
 
-const cloneStringArray = (value: any, fallback: string[] = []) =>
-  Array.isArray(value) && value.length > 0 ? [...value] : [...fallback];
+const cloneStringArray = (value: any, fallback: string[] = []) => {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? [...value] : [...fallback];
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [value];
+  }
+
+  return [...fallback];
+};
+
+const createInitialAppendectomyPreoperativeState = (source: any = {}) => ({
+  surgeons: cloneStringArray(source.surgeons, createDefaultClinicianList()),
+  assistants: cloneStringArray(source.assistants, [""]),
+  assistant1: source.assistant1 || "",
+  assistant2: source.assistant2 || "",
+  anaesthetists: cloneStringArray(source.anaesthetists, [""]),
+  anaesthetist: source.anaesthetist || "",
+  duration: source.duration || "",
+  startTime: source.startTime || "",
+  endTime: source.endTime || "",
+  procedureUrgency: cloneStringArray(source.procedureUrgency),
+  indication: cloneStringArray(source.indication),
+  indicationOther: source.indicationOther || "",
+  imaging: cloneStringArray(source.imaging),
+  imagingOther: source.imagingOther || "",
+});
+
+const createInitialAppendectomyIntraoperativeState = (source: any = {}) => ({
+  operationFindings: source.operationFindings || "",
+  appendixAppearance: cloneStringArray(source.appendixAppearance),
+  abscess: source.abscess || "",
+  peritonitis: cloneStringArray(source.peritonitis),
+  otherFindings: source.otherFindings || "",
+});
+
+const createInitialAppendectomyProcedureState = (source: any = {}) => ({
+  approach: cloneStringArray(source.approach),
+  reasonForConversion: cloneStringArray(source.reasonForConversion),
+  reasonForConversionOther: source.reasonForConversionOther || "",
+  operationDescription: source.operationDescription || "",
+  incisionType: cloneStringArray(source.incisionType),
+  incisionOther: source.incisionOther || "",
+  trocarPlacement: source.trocarPlacement || "",
+  directionOfDissection: cloneStringArray(source.directionOfDissection),
+  directionOfDissectionOther: source.directionOfDissectionOther || "",
+  mesoAppendixExcision: cloneStringArray(source.mesoAppendixExcision),
+  divisionMethod: cloneStringArray(source.divisionMethod),
+  divisionOther: source.divisionOther || "",
+  mesenteryControl: cloneStringArray(source.mesenteryControl),
+  mesenteryOther: source.mesenteryOther || "",
+  removalOfAppendix: cloneStringArray(source.removalOfAppendix),
+  removalOfAppendixOther: source.removalOfAppendixOther || "",
+  lavage: source.lavage || "",
+  drainPlacement: source.drainPlacement || "",
+  drainLocation: source.drainLocation || "",
+});
+
+const createInitialAppendectomyClosureState = (source: any = {}) => ({
+  operativeDifficulty: cloneStringArray(source.operativeDifficulty),
+  operativeDifficultyOther: source.operativeDifficultyOther || "",
+  complications: cloneStringArray(source.complications),
+  complicationDetails: source.complicationDetails || "",
+  visceralInjuryDetail: source.visceralInjuryDetail || "",
+  complicationOther: source.complicationOther || "",
+  fascialClosure: cloneStringArray(source.fascialClosure),
+  fascialClosureOther: source.fascialClosureOther || "",
+  fascialMaterial: cloneStringArray(source.fascialMaterial),
+  fascialMaterialOther: source.fascialMaterialOther || "",
+  skinClosure: cloneStringArray(source.skinClosure),
+  skinOther: source.skinOther || "",
+  skinMaterial: cloneStringArray(source.skinMaterial),
+  skinMaterialOther: source.skinMaterialOther || "",
+  pathology: source.pathology || "",
+  laboratoryName: source.laboratoryName || "",
+  otherSpecimens: source.otherSpecimens || "",
+  specimenDetails: source.specimenDetails || "",
+  additionalNotes: source.additionalNotes || "",
+  postOperativeManagement: source.postOperativeManagement || "",
+  surgeonSignature: source.surgeonSignature || "",
+  surgeonSignatureText: source.surgeonSignatureText ?? DEFAULT_CLINICIAN_NAME,
+  dateTime: source.dateTime || "",
+});
+
+const createInitialAppendectomyProcedureFindingsState = (source: any = {}) => ({
+  findings: source.findings || "",
+  additionalNotes: source.additionalNotes || "",
+});
+
+const createInitialAppendectomyState = (source: any = {}) => ({
+  patientInfo: createInitialPatientInfoState(source.patientInfo),
+  preoperative: createInitialAppendectomyPreoperativeState(source.preoperative),
+  intraoperative: createInitialAppendectomyIntraoperativeState(source.intraoperative),
+  procedure: createInitialAppendectomyProcedureState(source.procedure),
+  closure: createInitialAppendectomyClosureState(source.closure),
+  procedureFindings: createInitialAppendectomyProcedureFindingsState(
+    source.procedureFindings,
+  ),
+});
 
 const createInitialVentralHerniaPreoperativeState = (source: any = {}) => ({
   surgeons: cloneStringArray(source.surgeons, createDefaultClinicianList()),
@@ -260,81 +489,348 @@ const createInitialVentralHerniaState = (source: any = {}) => ({
   ),
 });
 
-const normalizeReportPatientInfos = (report: any) => ({
-  ...report,
-  patientInfo: createInitialPatientInfoState(report?.patientInfo),
-  gastroscopy: report?.gastroscopy
-    ? {
-        ...report.gastroscopy,
-        patientInfo: createInitialPatientInfoState(report.gastroscopy?.patientInfo),
-      }
-    : report?.gastroscopy,
-  colonoscopy: report?.colonoscopy
-    ? {
-        ...report.colonoscopy,
-        patientInfo: createInitialPatientInfoState(report.colonoscopy?.patientInfo),
-      }
-    : report?.colonoscopy,
-  appendectomy: report?.appendectomy
-    ? {
-        ...report.appendectomy,
-        patientInfo: createInitialPatientInfoState(report.appendectomy?.patientInfo),
-      }
-    : report?.appendectomy,
-  ventralHernia: report?.ventralHernia
-    ? createInitialVentralHerniaState(report.ventralHernia)
-    : report?.ventralHernia,
-  rectalCancer: report?.rectalCancer
-    ? {
-        ...report.rectalCancer,
-        patientInfo: createInitialPatientInfoState(report.rectalCancer?.patientInfo),
-      }
-    : report?.rectalCancer,
-  smallBowel: report?.smallBowel
-    ? {
-        ...report.smallBowel,
-        patientInfo: createInitialPatientInfoState(report.smallBowel?.patientInfo),
-      }
-    : report?.smallBowel,
-  cholecystectomy: report?.cholecystectomy
-    ? {
-        ...report.cholecystectomy,
-        patientInfo: createInitialPatientInfoState(report.cholecystectomy?.patientInfo),
-      }
-    : report?.cholecystectomy,
-  periAnal: report?.periAnal
-    ? {
-        ...report.periAnal,
-        patientInfo: createInitialPatientInfoState(report.periAnal?.patientInfo),
-      }
-    : report?.periAnal,
-  inguinalHernia: report?.inguinalHernia
-    ? {
-        ...report.inguinalHernia,
-        patientInfo: createInitialPatientInfoState(report.inguinalHernia?.patientInfo),
-      }
-    : report?.inguinalHernia,
-  transanalMinimallyInvasiveSurgery: report?.transanalMinimallyInvasiveSurgery
-    ? {
-        ...report.transanalMinimallyInvasiveSurgery,
-        patientInfo: createInitialPatientInfoState(
-          report.transanalMinimallyInvasiveSurgery?.patientInfo,
-        ),
-      }
-    : report?.transanalMinimallyInvasiveSurgery,
-  openGeneralSurgery: report?.openGeneralSurgery
-    ? {
-        ...report.openGeneralSurgery,
-        patientInfo: createInitialPatientInfoState(report.openGeneralSurgery?.patientInfo),
-      }
-    : report?.openGeneralSurgery,
-  openAbdominalSurgery: report?.openAbdominalSurgery
-    ? {
-        ...report.openAbdominalSurgery,
-        patientInfo: createInitialPatientInfoState(report.openAbdominalSurgery?.patientInfo),
-      }
-    : report?.openAbdominalSurgery,
+const createInitialRectalCancerState = () => ({
+  patientInfo: createInitialPatientInfoState(),
+  surgicalTeam: {
+    surgeons: createDefaultClinicianList(),
+    assistants: [""],
+    anaesthetists: [""],
+    anaesthetist: "",
+  },
+  procedureDetails: {
+    startTime: "",
+    endTime: "",
+    duration: "",
+    procedureUrgency: "",
+    preoperativeImaging: [] as string[],
+    preoperativeImagingOther: "",
+    operationDescription: "",
+    additionalNotes: "",
+    postOperativeManagement: "",
+  },
+  operationType: {
+    type: [] as string[],
+    operationFindings: "",
+    operationFindingsOptions: [] as string[],
+    operationFindingsOther: "",
+    rectumOperationType: [] as string[],
+    rectumOperationOther: "",
+    neoadjuvantTreatment: "",
+    neoadjuvantDetails: "",
+    radiationDetails: "",
+    chemotherapyRegimen: "",
+  },
+  findings: {
+    description: "",
+    tClassification: "",
+    nClassification: "",
+    mClassification: "",
+    location: [] as string[],
+    mesorectalCompleteness: "",
+    completenessOfTumourResection: "",
+  },
+  surgicalApproach: {
+    primaryApproach: [] as string[],
+    primaryApproachOther: "",
+    conversionReason: [] as string[],
+    conversionReasonOther: "",
+    trocarNumber: "",
+  },
+  mobilizationAndResection: {
+    extentOfMobilization: [] as string[],
+    extentOfMobilizationOther: "",
+    vesselLigation: [] as string[],
+    vesselLigationOther: "",
+    imvLigation: "",
+    hemostasisTechnique: [] as string[],
+    hemostasisTechniqueOther: "",
+    lymphNodeDissection: "",
+    lymphNodeDissectionOther: "",
+    proximalTransection: [] as string[],
+    proximalTransectionOther: "",
+    distalTransection: [] as string[],
+    distalTransectionOther: "",
+    analCanalTransection: [] as string[],
+    analCanalTransectionOther: "",
+    enBlocResection: [] as string[],
+    enBlocResectionOther: "",
+  },
+  reconstruction: {
+    reconstructionType: [] as string[],
+    reconstructionOther: "",
+    anastomosisDetails: {
+      site: "",
+      configuration: "",
+      configurationOther: "",
+      technique: "",
+      sutureMaterial: [] as string[],
+      sutureMaterialOther: "",
+      linearStaplerSize: [] as string[],
+      linearStaplerSizeOther: "",
+      circularStaplerSize: [] as string[],
+      circularStaplerSizeOther: "",
+      anastomoticHeight: "",
+      doughnutAssessment: "",
+      airLeakTest: "",
+    },
+    anastomoticTesting: {
+      icgTest: "",
+    },
+    stomaDetails: {
+      configuration: "",
+      configurationOther: "",
+      reasonForStoma: [] as string[],
+      reasonForStomaOther: "",
+    },
+  },
+  operativeEvents: {
+    pointsOfDifficulty: [] as string[],
+    pointsOfDifficultyOther: "",
+    intraoperativeEvents: [] as string[],
+    intraoperativeEventsOther: "",
+    specimenExtraction: "",
+    specimenExtractionOther: "",
+    specimenSentToLab: "",
+    laboratoryName: "",
+    woundProtector: "",
+    drainInsertion: "",
+    drainType: [] as string[],
+    drainTypeOther: "",
+    intraPeritonealPlacement: [] as string[],
+    intraPeritonealPlacementOther: "",
+    drainExitSite: [] as string[],
+    drainExitSiteOther: "",
+  },
+  closure: {
+    fascialClosure: [] as string[],
+    fascialSutureMaterial: [] as string[],
+    fascialSutureMaterialOther: "",
+    skinClosure: [] as string[],
+    skinClosureMaterial: [] as string[],
+    skinClosureMaterialOther: "",
+  },
+  additionalInfo: {
+    additionalInformation: "",
+    postOperativeManagement: "",
+    surgeonSignature: "",
+    surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
+    dateTime: "",
+  },
+  section1: {
+    operationType: [] as string[],
+    rectumOperationType: [] as string[],
+    rectumOperationOther: "",
+    procedureUrgency: "",
+    neoadjuvantTreatment: "",
+    surgeons: createDefaultClinicianList(),
+    assistant1: "",
+    assistant2: "",
+    anaesthetists: [""],
+    duration: "",
+    asaScore: "",
+    emergencyOperation: "",
+    preoperativeChemoRadio: "",
+    previousAbdominalSurgery: "",
+    indication: "",
+    indicationOther: "",
+    tClassification: "",
+    nClassification: "",
+    mClassification: "",
+    tumorDistance: "",
+    tumorHeight: "",
+  },
+  section2: {
+    approach: [] as string[],
+    approachOther: "",
+    conversionReason: [] as string[],
+    conversionOther: "",
+    complications: [] as string[],
+    complicationDetails: "",
+  },
+  section3: {
+    vesselLigation: [] as string[],
+    nervePreservation: [] as string[],
+    resectionType: [] as string[],
+    resectionOther: "",
+    proximalMargin: "",
+    distalMargin: "",
+    tmeQuality: "",
+    lymphNodeDissection: "",
+  },
+  section4: {
+    reconstructionType: "",
+    anastomosisType: [] as string[],
+    anastomosisTechnique: [] as string[],
+    leakTestPerformed: "",
+    leakTestResult: "",
+    protectiveStoma: "",
+    stomaType: [] as string[],
+    stomaReason: [] as string[],
+    stomaReasonOther: "",
+  },
+  section5: {
+    operativeTime: "",
+    bloodLoss: "",
+    transfusionRequired: "",
+    additionalProcedures: [] as string[],
+    additionalProceduresOther: "",
+    fascialClosure: [] as string[],
+    sutureMaterial: "",
+    surgeonSignature: "",
+    date: "",
+  },
+  procedureFindings: {
+    findings: "",
+    additionalNotes: "",
+  },
 });
+
+const restoreLegacyEndoscopyDiagramFields = (report: any) => {
+  if (!report || typeof report !== "object") {
+    return report;
+  }
+
+  const hydratedReport = {
+    ...report,
+  };
+
+  const hydrateLegacyDiagram = (
+    templateKey: "gastroscopy" | "colonoscopy",
+    legacyCanvasKey: "gastroscopyCanvasData" | "colonoscopyCanvasData",
+    legacyFindingsKey: "gastroscopyFindings" | "colonoscopyFindings",
+  ) => {
+    const templateState =
+      hydratedReport?.[templateKey] && typeof hydratedReport[templateKey] === "object"
+        ? hydratedReport[templateKey]
+        : {};
+    const templateDiagram =
+      templateState?.diagram && typeof templateState.diagram === "object"
+        ? templateState.diagram
+        : {};
+    const templateCanvasImage = String(templateDiagram.canvasImageData || "").trim();
+    const legacyCanvasImage = String(hydratedReport?.[legacyCanvasKey] || "").trim();
+    const legacyFindings =
+      hydratedReport?.[legacyFindingsKey] && typeof hydratedReport[legacyFindingsKey] === "object"
+        ? hydratedReport[legacyFindingsKey]
+        : null;
+    const legacyFindingsCanvasImage = String(legacyFindings?.canvasImageData || "").trim();
+    const resolvedCanvasImage =
+      templateCanvasImage || legacyCanvasImage || legacyFindingsCanvasImage;
+
+    if (!resolvedCanvasImage) {
+      return;
+    }
+
+    if (!templateCanvasImage) {
+      const initialTemplateState =
+        templateKey === "gastroscopy"
+          ? createInitialGastroscopyState()
+          : createInitialColonoscopyState();
+
+      hydratedReport[templateKey] = {
+        ...initialTemplateState,
+        ...templateState,
+        diagram: {
+          ...(initialTemplateState as any)?.diagram,
+          ...(templateDiagram || {}),
+          canvasImageData: resolvedCanvasImage,
+        },
+      };
+    }
+
+    if (!legacyCanvasImage) {
+      hydratedReport[legacyCanvasKey] = resolvedCanvasImage;
+    }
+
+    hydratedReport[legacyFindingsKey] = {
+      ...(legacyFindings || {}),
+      findings: Array.isArray(legacyFindings?.findings) ? legacyFindings.findings : [],
+      canvasImageData: resolvedCanvasImage,
+    };
+  };
+
+  hydrateLegacyDiagram("gastroscopy", "gastroscopyCanvasData", "gastroscopyFindings");
+  hydrateLegacyDiagram("colonoscopy", "colonoscopyCanvasData", "colonoscopyFindings");
+
+  return hydratedReport;
+};
+
+const normalizeReportPatientInfos = (report: any) => {
+  const normalizedReport = {
+    ...report,
+    patientInfo: createInitialPatientInfoState(report?.patientInfo),
+    gastroscopy: report?.gastroscopy
+      ? {
+          ...report.gastroscopy,
+          patientInfo: createInitialPatientInfoState(report.gastroscopy?.patientInfo),
+        }
+      : report?.gastroscopy,
+    colonoscopy: report?.colonoscopy
+      ? {
+          ...report.colonoscopy,
+          patientInfo: createInitialPatientInfoState(report.colonoscopy?.patientInfo),
+        }
+      : report?.colonoscopy,
+    appendectomy: report?.appendectomy
+      ? createInitialAppendectomyState(report.appendectomy)
+      : report?.appendectomy,
+    ventralHernia: report?.ventralHernia
+      ? createInitialVentralHerniaState(report.ventralHernia)
+      : report?.ventralHernia,
+    rectalCancer: report?.rectalCancer
+      ? {
+          ...report.rectalCancer,
+          patientInfo: createInitialPatientInfoState(report.rectalCancer?.patientInfo),
+        }
+      : report?.rectalCancer,
+    smallBowel: report?.smallBowel
+      ? {
+          ...report.smallBowel,
+          patientInfo: createInitialPatientInfoState(report.smallBowel?.patientInfo),
+        }
+      : report?.smallBowel,
+    cholecystectomy: report?.cholecystectomy
+      ? {
+          ...report.cholecystectomy,
+          patientInfo: createInitialPatientInfoState(report.cholecystectomy?.patientInfo),
+        }
+      : report?.cholecystectomy,
+    periAnal: report?.periAnal
+      ? {
+          ...report.periAnal,
+          patientInfo: createInitialPatientInfoState(report.periAnal?.patientInfo),
+        }
+      : report?.periAnal,
+    inguinalHernia: report?.inguinalHernia
+      ? {
+          ...report.inguinalHernia,
+          patientInfo: createInitialPatientInfoState(report.inguinalHernia?.patientInfo),
+        }
+      : report?.inguinalHernia,
+    transanalMinimallyInvasiveSurgery: report?.transanalMinimallyInvasiveSurgery
+      ? {
+          ...report.transanalMinimallyInvasiveSurgery,
+          patientInfo: createInitialPatientInfoState(
+            report.transanalMinimallyInvasiveSurgery?.patientInfo,
+          ),
+        }
+      : report?.transanalMinimallyInvasiveSurgery,
+    openGeneralSurgery: report?.openGeneralSurgery
+      ? {
+          ...report.openGeneralSurgery,
+          patientInfo: createInitialPatientInfoState(report.openGeneralSurgery?.patientInfo),
+        }
+      : report?.openGeneralSurgery,
+    openAbdominalSurgery: report?.openAbdominalSurgery
+      ? {
+          ...report.openAbdominalSurgery,
+          patientInfo: createInitialPatientInfoState(report.openAbdominalSurgery?.patientInfo),
+        }
+      : report?.openAbdominalSurgery,
+  };
+
+  return restoreLegacyEndoscopyDiagramFields(normalizedReport);
+};
 
 const getCurrentExtractedPatientInfoFromReport = (report: any) => {
   const candidates = [
@@ -499,238 +995,9 @@ const Index = () => {
     },
     gastroscopy: createInitialGastroscopyState(),
     colonoscopy: createInitialColonoscopyState(),
-    appendectomy: {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      intraoperative: {
-        appendixAppearance: [],
-        abscess: '',
-        peritonitis: [],
-        otherFindings: ''
-      },
-      procedure: {
-        approach: [],
-        reasonForConversion: '',
-        operationDescription: '',
-        incisionType: [],
-        incisionOther: '',
-        trocarPlacement: '',
-        divisionMethod: [],
-        divisionOther: '',
-        mesenteryControl: [],
-        mesenteryOther: '',
-        lavage: '',
-        drainPlacement: '',
-        drainLocation: ''
-      },
-      closure: {
-        fascialClosure: '',
-        skinClosure: [],
-        skinOther: '',
-        complications: '',
-        complicationDetails: '',
-        pathology: '',
-        otherSpecimens: '',
-        specimenDetails: '',
-        surgeonSignature: '',
-        surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
-        dateTime: ''
-      },
-      // Store appendicectomy-specific diagram findings
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    },
+    appendectomy: createInitialAppendectomyState(),
     ventralHernia: createInitialVentralHerniaState(),
-            rectalCancer: {
-      patientInfo: createInitialPatientInfoState(),
-      surgicalTeam: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetist: ''
-      },
-      procedureDetails: {
-        duration: '',
-        procedureUrgency: ''
-      },
-      operationType: {
-        type: [], // 'Colon' or 'Rectum'
-        operationFindings: '',
-        operationFindingsOptions: [],
-        operationFindingsOther: '',
-        rectumOperationType: [],
-        rectumOperationOther: '',
-        neoadjuvantTreatment: '',
-        radiationDetails: '',
-        chemotherapyRegimen: ''
-      },
-      findings: {
-        description: '',
-        tClassification: '',
-        nClassification: '',
-        mClassification: '',
-        location: [], // 'High', 'Middle', 'Low'
-        mesorectalCompleteness: '',
-        completenessOfTumourResection: ''
-      },
-      surgicalApproach: {
-        primaryApproach: [] as string[],
-        conversionReason: [],
-        conversionReasonOther: ''
-      },
-      mobilizationAndResection: {
-        extentOfMobilization: [],
-        extentOfMobilizationOther: '',
-        vesselLigation: [],
-        vesselLigationOther: '',
-        imvLigation: '',
-        hemostasisTechnique: [],
-        hemostasisTechniqueOther: '',
-        lymphNodeDissection: '',
-        lymphNodeDissectionOther: '',
-        proximalTransection: '',
-        distalTransection: '',
-        analCanalTransection: [],
-        analCanalTransectionOther: '',
-        enBlocResection: [],
-        enBlocResectionOther: ''
-      },
-      reconstruction: {
-        reconstructionType: '',
-        reconstructionOther: '',
-        anastomosisDetails: {
-          site: '',
-          configuration: '',
-          configurationOther: '',
-          technique: '',
-          sutureMaterial: [],
-          sutureMaterialOther: '',
-          linearStaplerSize: [],
-          linearStaplerSizeOther: '',
-          circularStaplerSize: [],
-          circularStaplerSizeOther: '',
-          anastomoticHeight: '',
-          doughnutAssessment: '',
-          airLeakTest: ''
-        },
-        anastomoticTesting: {
-          icgTest: ''
-        },
-        stomaDetails: {
-          configuration: '',
-          configurationOther: '',
-          reasonForStoma: [],
-          reasonForStomaOther: ''
-        }
-      },
-      operativeEvents: {
-        pointsOfDifficulty: [],
-        pointsOfDifficultyOther: '',
-        intraoperativeEvents: [],
-        intraoperativeEventsOther: '',
-        specimenExtraction: '',
-        specimenExtractionOther: '',
-        woundProtector: '',
-        drainInsertion: '',
-        drainType: [],
-        drainTypeOther: '',
-        intraPeritonealPlacement: [],
-        intraPeritonealPlacementOther: '',
-        drainExitSite: [],
-        drainExitSiteOther: ''
-      },
-      closure: {
-        fascialClosure: [],
-        fascialSutureMaterial: [],
-        fascialSutureMaterialOther: '',
-        skinClosure: [],
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: ''
-      },
-      additionalInfo: {
-        additionalInformation: '',
-        postOperativeManagement: '',
-        surgeonSignature: '',
-        surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
-        dateTime: ''
-      },
-      // Legacy fields for backward compatibility
-      section1: {
-        operationType: [],
-        rectumOperationType: [],
-        rectumOperationOther: '',
-        procedureUrgency: '',
-        neoadjuvantTreatment: '',
-        surgeons: createDefaultClinicianList(),
-        assistant1: '',
-        assistant2: '',
-        anaesthetists: [''],
-        duration: '',
-        asaScore: '',
-        emergencyOperation: '',
-        preoperativeChemoRadio: '',
-        previousAbdominalSurgery: '',
-        indication: '',
-        indicationOther: '',
-        tClassification: '',
-        nClassification: '',
-        mClassification: '',
-        tumorDistance: '',
-        tumorHeight: ''
-      },
-      section2: {
-        approach: [],
-        approachOther: '',
-        conversionReason: [],
-        conversionOther: '',
-        complications: [],
-        complicationDetails: ''
-      },
-      section3: {
-        vesselLigation: [],
-        nervePreservation: [],
-        resectionType: [],
-        resectionOther: '',
-        proximalMargin: '',
-        distalMargin: '',
-        tmeQuality: '',
-        lymphNodeDissection: ''
-      },
-      section4: {
-        reconstructionType: '',
-        anastomosisType: [],
-        anastomosisTechnique: [],
-        leakTestPerformed: '',
-        leakTestResult: '',
-        protectiveStoma: '',
-        stomaType: [],
-        stomaReason: [],
-        stomaReasonOther: ''
-      },
-	      section5: {
-	        operativeTime: '',
-	        bloodLoss: '',
-	        transfusionRequired: '',
-	        additionalProcedures: [],
-	        additionalProceduresOther: '',
-	        fascialClosure: [],
-	        sutureMaterial: '',
-	        surgeonSignature: '',
-	        date: ''
-	      }
-	    },
+    rectalCancer: createInitialRectalCancerState(),
 	      smallBowel: createInitialSmallBowelSurgeryState(),
 	      cholecystectomy: createInitialCholecystectomyState(),
 	      periAnal: createInitialPeriAnalState(),
@@ -796,23 +1063,14 @@ const Index = () => {
   });
 
   // Appendectomy history management for undo/redo
+  const initialAppendectomyState = createInitialAppendectomyState(currentReport.appendectomy);
   const [appendectomyHistory, setAppendectomyHistory] = useState({
-    patientInfo: [createInitialPatientInfoState(currentReport.appendectomy?.patientInfo)],
-    preoperative: [currentReport.appendectomy?.preoperative || {
-      surgeons: createDefaultClinicianList(), assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
-    }],
-    intraoperative: [currentReport.appendectomy?.intraoperative || {
-      appendixAppearance: [], abscess: '', peritonitis: [], otherFindings: ''
-    }],
-    procedure: [currentReport.appendectomy?.procedure || {
-      approach: [], reasonForConversion: '', operationDescription: '', incisionType: [], incisionOther: '', trocarPlacement: '', divisionMethod: [], divisionOther: '', mesenteryControl: [], mesenteryOther: '', lavage: '', drainPlacement: '', drainLocation: ''
-    }],
-    closure: [currentReport.appendectomy?.closure || {
-      fascialClosure: '', fascialClosureOther: '', fascialMaterial: [], fascialMaterialOther: '', skinClosure: [], skinOther: '', skinMaterial: [], skinMaterialOther: '', operativeDifficulty: [], operativeDifficultyOther: '', complications: '', complicationDetails: '', visceralInjuryDetail: '', complicationOther: '', pathology: '', laboratoryName: '', otherSpecimens: '', specimenDetails: '', additionalNotes: '', postOperativeManagement: '', surgeonSignature: '', surgeonSignatureText: DEFAULT_CLINICIAN_NAME, dateTime: ''
-    }],
-    procedureFindings: [currentReport.appendectomy?.procedureFindings || {
-      findings: '', additionalNotes: ''
-    }]
+    patientInfo: [initialAppendectomyState.patientInfo],
+    preoperative: [initialAppendectomyState.preoperative],
+    intraoperative: [initialAppendectomyState.intraoperative],
+    procedure: [initialAppendectomyState.procedure],
+    closure: [initialAppendectomyState.closure],
+    procedureFindings: [initialAppendectomyState.procedureFindings],
   });
   const [appendectomyHistoryIndex, setAppendectomyHistoryIndex] = useState({
     patientInfo: 0,
@@ -1084,6 +1342,27 @@ const Index = () => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [diagramUpdateTrigger, setDiagramUpdateTrigger] = useState(0);
+  type TemplateDiagramResetKey =
+    | "gastroscopy"
+    | "colonoscopy"
+    | "inguinalHernia"
+    | "openAbdominalSurgery"
+    | "periAnal";
+  const [templateDiagramResetCounter, setTemplateDiagramResetCounter] = useState<
+    Record<TemplateDiagramResetKey, number>
+  >({
+    gastroscopy: 0,
+    colonoscopy: 0,
+    inguinalHernia: 0,
+    openAbdominalSurgery: 0,
+    periAnal: 0,
+  });
+  const bumpTemplateDiagramResetCounter = (templateKey: TemplateDiagramResetKey) => {
+    setTemplateDiagramResetCounter((previous) => ({
+      ...previous,
+      [templateKey]: previous[templateKey] + 1,
+    }));
+  };
   const [isEditingConclusion, setIsEditingConclusion] = useState(false);
   const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
@@ -1277,13 +1556,22 @@ const Index = () => {
   const activeTemplatePatientInfo = createInitialPatientInfoState(
     getTemplatePatientInfo(currentReport, activeTemplateType),
   );
+  const periAnalDiagramState = parsePeriAnalDiagramState(
+    currentReport.periAnal?.procedureFindings,
+  );
+  const editingSavedRecord =
+    editingPatientContext
+      ? patientDatabaseCache.records.find(
+          (record) => record.id === editingPatientContext.recordId,
+        ) || null
+      : null;
   const isEditingSavedPatientRecord = Boolean(
-    editingPatientContext &&
-      patientDatabaseCache.records.some((record) => record.id === editingPatientContext.recordId),
+    editingSavedRecord && editingSavedRecord.templateType === activeTemplateType,
   );
   const canCurrentSessionDrivePatientAutosave = () =>
     !isFirebaseConfigured ||
     (typeof navigator !== "undefined" && !navigator.onLine) ||
+    hasPendingLocalLiveTemplateChangesRef.current ||
     lastLiveTemplateDraftAuthorSessionIdRef.current === liveTemplateDraftSessionId;
 
   const resolveSilentPatientAutosaveTarget = (
@@ -1873,27 +2161,18 @@ const Index = () => {
         });
 
         const restoredVentralHernia = createInitialVentralHerniaState(restoredReport.ventralHernia);
+        const restoredAppendectomy = createInitialAppendectomyState(restoredReport.appendectomy);
 
         setCurrentReport(restoredReport);
         setHistory([JSON.parse(JSON.stringify(restoredReport))]);
         setHistoryIndex(0);
         setAppendectomyHistory({
-          patientInfo: [restoredReport.appendectomy?.patientInfo || createInitialPatientInfoState()],
-          preoperative: [restoredReport.appendectomy?.preoperative || {
-            surgeons: createDefaultClinicianList(), assistants: [''], anaesthetists: [''], duration: '', startTime: '', endTime: '', indication: [], indicationOther: '', imaging: [], imagingOther: ''
-          }],
-          intraoperative: [restoredReport.appendectomy?.intraoperative || {
-            appendixAppearance: [], abscess: '', peritonitis: [], otherFindings: ''
-          }],
-          procedure: [restoredReport.appendectomy?.procedure || {
-            approach: [], reasonForConversion: '', operationDescription: '', incisionType: [], incisionOther: '', trocarPlacement: '', divisionMethod: [], divisionOther: '', mesenteryControl: [], mesenteryOther: '', lavage: '', drainPlacement: '', drainLocation: ''
-          }],
-          closure: [restoredReport.appendectomy?.closure || {
-            fascialClosure: '', skinClosure: [], skinOther: '', complications: '', complicationDetails: '', pathology: '', otherSpecimens: '', specimenDetails: '', surgeonSignature: '', surgeonSignatureText: DEFAULT_CLINICIAN_NAME, dateTime: ''
-          }],
-          procedureFindings: [restoredReport.appendectomy?.procedureFindings || {
-            findings: '', additionalNotes: ''
-          }]
+          patientInfo: [restoredAppendectomy.patientInfo],
+          preoperative: [restoredAppendectomy.preoperative],
+          intraoperative: [restoredAppendectomy.intraoperative],
+          procedure: [restoredAppendectomy.procedure],
+          closure: [restoredAppendectomy.closure],
+          procedureFindings: [restoredAppendectomy.procedureFindings],
         });
         setAppendectomyHistoryIndex({
           patientInfo: 0,
@@ -2249,7 +2528,10 @@ const Index = () => {
       }
 
       try {
-        await processQueuedLiveTemplateDraftSync();
+        const result = await processQueuedLiveTemplateDraftSync();
+        if (!result.processed) {
+          return;
+        }
         liveTemplateDraftSignatureRef.current = pendingDraft.payloadSignature;
         hasPendingLocalLiveTemplateChangesRef.current = false;
         latestLocalLiveTemplateEditAtRef.current =
@@ -2371,7 +2653,10 @@ const Index = () => {
 
       if (typeof navigator !== "undefined" && navigator.onLine) {
         void processQueuedLiveTemplateDraftSync()
-          .then(() => {
+          .then((result) => {
+            if (!result.processed) {
+              return;
+            }
             liveTemplateDraftSignatureRef.current = payloadSignature;
             hasPendingLocalLiveTemplateChangesRef.current = false;
             latestLocalLiveTemplateEditAtRef.current = snapshot.updatedAtIso;
@@ -2404,8 +2689,19 @@ const Index = () => {
     const trimmedName = String(patientInfo.name || "").trim();
     const trimmedDob = String(patientInfo.dateOfBirth || "").trim();
     const trimmedPatientId = String(patientInfo.patientId || "").trim().toLowerCase();
+    const hasAutosaveIdentity = Boolean((trimmedName && trimmedDob) || trimmedPatientId);
+    const hasProgressBeyondPreoperative = hasTemplateProgressBeyondPreoperative(
+      currentReport,
+      activeTemplateType,
+    );
 
-    if (!trimmedName || !trimmedDob) {
+    if (!hasAutosaveIdentity) {
+      patientListAutosaveSignatureRef.current = "";
+      pendingPatientAutosaveContextRef.current = null;
+      return;
+    }
+
+    if (!hasProgressBeyondPreoperative && !editingPatientContext) {
       patientListAutosaveSignatureRef.current = "";
       pendingPatientAutosaveContextRef.current = null;
       return;
@@ -2441,7 +2737,6 @@ const Index = () => {
         editingPatientContext ? "update" : "create",
         {
           silent: true,
-          requireNameAndDob: true,
           targetContext,
         },
       )
@@ -2557,8 +2852,6 @@ const Index = () => {
   };
 
   const updateReport = (section: keyof typeof currentReport, data: any) => {
-    console.log(`[Index updateReport] section: ${section}`, data);
-    
     // Handle findings data
     if (section === 'gastroscopyFindings') {
       setCurrentReport(prev => ({
@@ -2861,55 +3154,7 @@ const Index = () => {
   };
 
   const clearAppendectomy = (section: keyof typeof appendectomyHistory) => {
-    const initialState = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      intraoperative: {
-        appendixAppearance: [],
-        abscess: '',
-        peritonitis: [],
-        otherFindings: ''
-      },
-      procedure: {
-        approach: [],
-        reasonForConversion: '',
-        operationDescription: '',
-        incisionType: [],
-        incisionOther: '',
-        trocarPlacement: '',
-        divisionMethod: [],
-        divisionOther: '',
-        mesenteryControl: [],
-        mesenteryOther: '',
-        lavage: '',
-        drainPlacement: '',
-        drainLocation: ''
-      },
-      closure: {
-        fascialClosure: '',
-        skinClosure: [],
-        skinOther: '',
-        complications: '',
-        complicationDetails: '',
-        pathology: '',
-        otherSpecimens: '',
-        specimenDetails: '',
-        surgeonSignature: '',
-        surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
-        dateTime: ''
-      }
-    };
+    const initialState = createInitialAppendectomyState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -3057,86 +3302,17 @@ const Index = () => {
   };
 
   const clearRectalCancer = (section: keyof typeof rectalCancerHistory) => {
+    const initialRectalCancer = createInitialRectalCancerState();
     const initialState = {
-      patientInfo: createInitialPatientInfoState(),
-      operationType: {
-        type: [],
-        typeOther: '',
-        operationFindings: '',
-        operationFindingsOptions: [],
-        operationFindingsOther: '',
-        neoadjuvantTreatment: '',
-        neoadjuvantDetails: ''
-      },
-      surgicalApproach: {
-        primaryApproach: [],
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: ''
-      },
-      mobilizationAndResection: {
-        extentOfMobilization: [],
-        extentOfMobilizationOther: '',
-        vesselLigation: [],
-        vesselLigationOther: '',
-        imvLigation: '',
-        hemostasisTechnique: [],
-        hemostasisTechniqueOther: '',
-        lymphNodeDissection: '',
-        lymphNodeDissectionOther: '',
-        proximalTransection: [],
-        proximalTransectionOther: '',
-        distalTransection: [],
-        distalTransectionOther: '',
-        analCanalTransection: [],
-        analCanalTransectionOther: '',
-        enBlocResection: [],
-        enBlocResectionOther: '',
-        mobilization: [],
-        mobilizationOther: '',
-        mesorectalExcision: [],
-        mesorectalExcisionOther: '',
-        distanceFromAnalVerge: ''
-      },
-      reconstruction: {
-        reconstructionType: [],
-        anastomosisDetails: {},
-        stomaDetails: {},
-        reconstructionOther: ''
-      },
-      operativeEvents: {
-        intraoperativeComplications: [],
-        intraoperativeComplicationsOther: '',
-        drainInsertion: '',
-        drainDetails: '',
-        specimenExtraction: '',
-        extractionSite: '',
-        additionalProcedures: []
-      },
-      closure: {
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: ''
-      },
-      procedureDetails: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        additionalNotes: '',
-        postOperativeManagement: ''
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
+      patientInfo: initialRectalCancer.patientInfo,
+      operationType: initialRectalCancer.operationType,
+      surgicalApproach: initialRectalCancer.surgicalApproach,
+      mobilizationAndResection: initialRectalCancer.mobilizationAndResection,
+      reconstruction: initialRectalCancer.reconstruction,
+      operativeEvents: initialRectalCancer.operativeEvents,
+      closure: initialRectalCancer.closure,
+      procedureDetails: initialRectalCancer.procedureDetails,
+      procedureFindings: initialRectalCancer.procedureFindings,
     };
 
     setCurrentReport(prev => ({
@@ -3162,102 +3338,7 @@ const Index = () => {
   };
 
   const clearAllRectalCancerData = (showToast = true) => {
-    const initialRectalCancer = {
-      patientInfo: createInitialPatientInfoState(),
-      surgicalTeam: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetist: ''
-      },
-      operationType: {
-        type: [],
-        typeOther: '',
-        operationFindings: '',
-        operationFindingsOptions: [],
-        operationFindingsOther: '',
-        neoadjuvantTreatment: '',
-        neoadjuvantDetails: ''
-      },
-      surgicalApproach: {
-        primaryApproach: [],
-        conversionReason: [],
-        conversionReasonOther: '',
-        trocarNumber: ''
-      },
-      mobilizationAndResection: {
-        extentOfMobilization: [],
-        extentOfMobilizationOther: '',
-        vesselLigation: [],
-        vesselLigationOther: '',
-        imvLigation: '',
-        hemostasisTechnique: [],
-        hemostasisTechniqueOther: '',
-        lymphNodeDissection: '',
-        lymphNodeDissectionOther: '',
-        proximalTransection: [],
-        proximalTransectionOther: '',
-        distalTransection: [],
-        distalTransectionOther: '',
-        analCanalTransection: [],
-        analCanalTransectionOther: '',
-        enBlocResection: [],
-        enBlocResectionOther: '',
-        mobilization: [],
-        mobilizationOther: '',
-        mesorectalExcision: [],
-        mesorectalExcisionOther: '',
-        distanceFromAnalVerge: ''
-      },
-      reconstruction: {
-        reconstructionType: [],
-        anastomosisDetails: {},
-        stomaDetails: {},
-        reconstructionOther: ''
-      },
-      operativeEvents: {
-        intraoperativeComplications: [],
-        intraoperativeComplicationsOther: '',
-        drainInsertion: '',
-        drainDetails: '',
-        specimenExtraction: '',
-        extractionSite: '',
-        additionalProcedures: []
-      },
-      closure: {
-        fascialClosure: [],
-        fascialClosureOther: '',
-        fascialClosureMaterial: [],
-        fascialClosureMaterialOther: '',
-        skinClosure: [],
-        skinClosureOther: '',
-        skinClosureMaterial: [],
-        skinClosureMaterialOther: ''
-      },
-      procedureDetails: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        additionalNotes: '',
-        postOperativeManagement: ''
-      },
-      additionalInfo: {
-        additionalInformation: '',
-        postOperativeManagement: '',
-        surgeonSignature: '',
-        surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
-        dateTime: ''
-      },
-      section1: {
-        surgeons: createDefaultClinicianList()
-      },
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
+    const initialRectalCancer = createInitialRectalCancerState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -3614,6 +3695,7 @@ const Index = () => {
       additionalInfo: 0,
       procedureFindings: 0
     });
+    bumpTemplateDiagramResetCounter("periAnal");
 
     clearCurrentExtractedPatient();
     if (showToast) {
@@ -3622,60 +3704,7 @@ const Index = () => {
   };
 
   const clearAllAppendectomyData = (showToast = true) => {
-    const initialAppendectomy = {
-      patientInfo: createInitialPatientInfoState(),
-      preoperative: {
-        surgeons: createDefaultClinicianList(),
-        assistants: [''],
-        anaesthetists: [''],
-        duration: '',
-        startTime: '',
-        endTime: '',
-        indication: [],
-        indicationOther: '',
-        imaging: [],
-        imagingOther: ''
-      },
-      intraoperative: {
-        appendixAppearance: [],
-        abscess: '',
-        peritonitis: [],
-        otherFindings: ''
-      },
-      procedure: {
-        approach: [],
-        reasonForConversion: '',
-        operationDescription: '',
-        incisionType: [],
-        incisionOther: '',
-        trocarPlacement: '',
-        divisionMethod: [],
-        divisionOther: '',
-        mesenteryControl: [],
-        mesenteryOther: '',
-        lavage: '',
-        drainPlacement: '',
-        drainLocation: ''
-      },
-      closure: {
-        fascialClosure: '',
-        skinClosure: [],
-        skinOther: '',
-        complications: '',
-        complicationDetails: '',
-        pathology: '',
-        otherSpecimens: '',
-        specimenDetails: '',
-        surgeonSignature: '',
-        surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
-        dateTime: ''
-      }
-      ,
-      procedureFindings: {
-        findings: '',
-        additionalNotes: ''
-      }
-    };
+    const initialAppendectomy = createInitialAppendectomyState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -3743,11 +3772,25 @@ const Index = () => {
       ...prev,
       gastroscopy: createInitialGastroscopyState(),
       colonoscopy: createInitialColonoscopyState(),
+      gastroscopyCanvasData: "",
+      colonoscopyCanvasData: "",
+      gastroscopyFindings: {
+        findings: [],
+        canvasImageData: "",
+      },
+      colonoscopyFindings: {
+        findings: [],
+        canvasImageData: "",
+      },
       inguinalHernia: createInitialInguinalHerniaState(),
       transanalMinimallyInvasiveSurgery: createInitialTransanalMinimallyInvasiveSurgeryState(),
       openGeneralSurgery: createInitialNarrativeSurgeryState("general"),
       openAbdominalSurgery: createInitialNarrativeSurgeryState("abdominal"),
     }));
+    bumpTemplateDiagramResetCounter("gastroscopy");
+    bumpTemplateDiagramResetCounter("colonoscopy");
+    bumpTemplateDiagramResetCounter("inguinalHernia");
+    bumpTemplateDiagramResetCounter("openAbdominalSurgery");
 
     if (showToast) {
       toast.success("All new template data cleared successfully!");
@@ -3830,6 +3873,19 @@ const Index = () => {
       const nextPatientInfo = createInitialPatientInfoState(
         getTemplatePatientInfo(restoredReport, record.templateType) || record.patientInfo,
       );
+      const selectRectalPreoperativeProcedureDetails = (source: any, fallback: any) => ({
+        procedureUrgency:
+          source?.procedureUrgency ?? fallback?.procedureUrgency ?? "",
+        startTime: source?.startTime ?? fallback?.startTime ?? "",
+        endTime: source?.endTime ?? fallback?.endTime ?? "",
+        duration: source?.duration ?? fallback?.duration ?? "",
+        imaging: Array.isArray(source?.imaging)
+          ? source.imaging
+          : Array.isArray(fallback?.imaging)
+            ? fallback.imaging
+            : [],
+        imagingOther: source?.imagingOther ?? fallback?.imagingOther ?? "",
+      });
 
       switch (record.templateType) {
         case "procedure": {
@@ -3880,18 +3936,20 @@ const Index = () => {
             },
           };
         }
-        case "appendectomy":
+        case "appendectomy": {
+          const initial = createInitialAppendectomyState(previousReport?.appendectomy);
           return {
             ...previousReport,
             appendectomy: {
-              ...previousReport.appendectomy,
+              ...initial,
               patientInfo: nextPatientInfo,
               preoperative: cloneValue(
                 restoredReport?.appendectomy?.preoperative ||
-                  previousReport?.appendectomy?.preoperative,
+                  initial.preoperative,
               ),
             },
           };
+        }
         case "ventralHernia":
           return {
             ...previousReport,
@@ -3915,8 +3973,10 @@ const Index = () => {
                   previousReport?.rectalCancer?.surgicalTeam,
               ),
               procedureDetails: cloneValue(
-                restoredReport?.rectalCancer?.procedureDetails ||
+                selectRectalPreoperativeProcedureDetails(
+                  restoredReport?.rectalCancer?.procedureDetails,
                   previousReport?.rectalCancer?.procedureDetails,
+                ),
               ),
             },
           };
@@ -4231,7 +4291,12 @@ const Index = () => {
             }
           : undefined);
 
-    saveCurrentTemplateToPatients(isEditingSavedPatientRecord ? "update" : "create", {
+    const templateTypeForSave = inferredOverrides?.templateTypeOverride || activeTemplateType;
+    const canUpdateExistingRecord = Boolean(
+      editingSavedRecord && editingSavedRecord.templateType === templateTypeForSave,
+    );
+
+    saveCurrentTemplateToPatients(canUpdateExistingRecord ? "update" : "create", {
       templateTypeOverride: inferredOverrides?.templateTypeOverride,
       currentTabOverride: inferredOverrides?.currentTabOverride,
     });
@@ -4260,24 +4325,69 @@ const Index = () => {
 
   const handleDeleteSavedRecord = async (record: PatientRecord) => {
     const recordLabel = record.templateLabel || "saved record";
+    const normalizeRecordDeletePart = (value: string) =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+    const getRecordDeleteSignature = (candidate: PatientRecord) => {
+      const normalizedRecordDate = (candidate.recordDate || candidate.updatedAt || "").slice(0, 10);
+      const displayProcedure =
+        String(candidate.primaryProcedureName || "").trim() ||
+        String(candidate.templateLabel || "").trim();
+      return [
+        normalizeRecordDeletePart(candidate.patientDocId),
+        normalizeRecordDeletePart(displayProcedure),
+        normalizeRecordDeletePart(candidate.templateLabel),
+        normalizeRecordDeletePart(normalizedRecordDate),
+      ].join("|");
+    };
+    const targetSignature = getRecordDeleteSignature(record);
+    const groupedDuplicateRecords = patientDatabaseCache.records.filter(
+      (candidate) =>
+        !candidate.deletedAt &&
+        getRecordDeleteSignature(candidate) === targetSignature,
+    );
+    const recordIdsToDelete = Array.from(
+      new Set(
+        (groupedDuplicateRecords.length > 0 ? groupedDuplicateRecords : [record])
+          .map((candidate) => String(candidate.id || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const duplicateCount = Math.max(0, recordIdsToDelete.length - 1);
+
     if (
       typeof window !== "undefined" &&
-      !window.confirm(`Delete this ${recordLabel} entry from Saved Records?`)
+      !window.confirm(
+        duplicateCount > 0
+          ? `Delete this ${recordLabel} entry and ${duplicateCount} duplicate copy/copies from Saved Records?`
+          : `Delete this ${recordLabel} entry from Saved Records?`,
+      )
     ) {
       return;
     }
 
-    const nextCache = removePatientRecordFromCache(patientDatabaseCache, record.id);
+    const previousPatient =
+      patientDatabaseCache.patients.find((patient) => patient.id === record.patientDocId) || null;
+    let nextCache = patientDatabaseCache;
+    recordIdsToDelete.forEach((recordId) => {
+      nextCache = removePatientRecordFromCache(nextCache, recordId);
+    });
     const nextPatient =
       nextCache.patients.find((patient) => patient.id === record.patientDocId) || null;
 
     persistPatientCache(nextCache);
+    let nextPendingCount = loadPatientSyncQueue().length;
+    recordIdsToDelete.forEach((recordId) => {
+      nextPendingCount = queuePatientRecordDeleteSync(nextPatient || previousPatient, recordId);
+    });
+    setPendingPatientSyncCount(nextPendingCount);
 
-    if (nextPatient) {
-      setPendingPatientSyncCount(queuePatientRecordDeleteSync(nextPatient, record.id));
-    }
-
-    if (editingPatientContext?.recordId === record.id) {
+    if (
+      editingPatientContext?.recordId &&
+      recordIdsToDelete.includes(editingPatientContext.recordId)
+    ) {
       setEditingPatientContext(null);
     }
 
@@ -4285,7 +4395,20 @@ const Index = () => {
       await syncPatientDatabase(false);
     }
 
-    toast.success("Saved record deleted.");
+    const pendingQueueItems = loadPatientSyncQueue().length;
+    if (pendingQueueItems > 0) {
+      toast.success(
+        duplicateCount > 0
+          ? `Saved record and ${duplicateCount} duplicate copy/copies removed locally. Sync pending.`
+          : "Saved record removed locally. Sync pending.",
+      );
+    } else {
+      toast.success(
+        duplicateCount > 0
+          ? `Saved record and ${duplicateCount} duplicate copy/copies deleted.`
+          : "Saved record deleted.",
+      );
+    }
   };
 
   const handleSetPatientDeletedState = async (patientId: string, deletedAt: string | null) => {
@@ -5147,10 +5270,36 @@ const Index = () => {
       return;
     }
 
-    setCurrentReport((prev) => ({
-      ...prev,
-      [templateKey]: createInitialSimpleTemplateState(templateKey),
-    }));
+    setCurrentReport((prev) => {
+      const nextReport: any = {
+        ...prev,
+        [templateKey]: createInitialSimpleTemplateState(templateKey),
+      };
+
+      if (templateKey === "gastroscopy") {
+        nextReport.gastroscopyCanvasData = "";
+        nextReport.gastroscopyFindings = {
+          findings: [],
+          canvasImageData: "",
+        };
+      } else if (templateKey === "colonoscopy") {
+        nextReport.colonoscopyCanvasData = "";
+        nextReport.colonoscopyFindings = {
+          findings: [],
+          canvasImageData: "",
+        };
+      }
+
+      return nextReport;
+    });
+    if (
+      templateKey === "gastroscopy" ||
+      templateKey === "colonoscopy" ||
+      templateKey === "inguinalHernia" ||
+      templateKey === "openAbdominalSurgery"
+    ) {
+      bumpTemplateDiagramResetCounter(templateKey as TemplateDiagramResetKey);
+    }
     clearCurrentExtractedPatient();
     pendingPatientAutosaveContextRef.current = null;
     setEditingPatientContext(null);
@@ -11446,22 +11595,15 @@ const Index = () => {
                           onClearAll={clearAllPeriAnalData}
                           diagramElement={
                             <ConditionalDiagramDisplay
+                              key={`peri-anal-diagram-${templateDiagramResetCounter.periAnal}`}
                               selectedProcedures={["Peri-Anal"]}
                               onGastroscopyUpdate={() => {}}
                               onColonoscopyUpdate={() => {}}
                               currentProcedureFindings={currentReport.periAnal?.procedureFindings}
                               currentSurgicalDiagramState={{
-                                activeVariant: Object.prototype.hasOwnProperty.call(
-                                  periAnalDiagramImages,
-                                  currentReport.periAnal?.procedureFindings?.activeDiagramVariant,
-                                )
-                                  ? currentReport.periAnal?.procedureFindings?.activeDiagramVariant
-                                  : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
-                                markingsByVariant:
-                                  currentReport.periAnal?.procedureFindings?.diagramMarkingsByVariant ||
-                                  createInitialPeriAnalDiagramMarkings(),
-                                visibleVariants:
-                                  currentReport.periAnal?.procedureFindings?.visibleDiagramVariants || [],
+                                activeVariant: periAnalDiagramState.activeVariant,
+                                markingsByVariant: periAnalDiagramState.markingsByVariant,
+                                visibleVariants: periAnalDiagramState.visibleVariants,
                               }}
                               onSurgicalDiagramStateChange={(state) => {
                                 updatePeriAnal('procedureFindings', 'activeDiagramVariant', state.activeVariant);
@@ -11506,6 +11648,7 @@ const Index = () => {
                           updateTemplate={(section, field, value) =>
                             updateSimpleTemplateSection("gastroscopy", section, field, value)
                           }
+                          diagramResetCounter={templateDiagramResetCounter.gastroscopy}
                           onBulkPatientInfoUpdate={(updates) =>
                             updateSimpleTemplatePatientInfoBulk("gastroscopy", updates)
                           }
@@ -11550,6 +11693,7 @@ const Index = () => {
                           updateTemplate={(section, field, value) =>
                             updateSimpleTemplateSection("colonoscopy", section, field, value)
                           }
+                          diagramResetCounter={templateDiagramResetCounter.colonoscopy}
                           onBulkPatientInfoUpdate={(updates) =>
                             updateSimpleTemplatePatientInfoBulk("colonoscopy", updates)
                           }
@@ -11610,6 +11754,7 @@ const Index = () => {
                           isGeneratingPDF={isGeneratingPDF}
                           diagramElement={
                             <ConditionalDiagramDisplay
+                              key={`inguinal-hernia-diagram-${templateDiagramResetCounter.inguinalHernia}`}
                               selectedProcedures={["Inguinal Hernia Repair"]}
                               onGastroscopyUpdate={() => {}}
                               onColonoscopyUpdate={() => {}}
@@ -11745,6 +11890,7 @@ const Index = () => {
                           isGeneratingPDF={isGeneratingPDF}
                           diagramElement={
                             <ConditionalDiagramDisplay
+                              key={`open-abdominal-diagram-${templateDiagramResetCounter.openAbdominalSurgery}`}
                               selectedProcedures={["Open Abdominal Surgery"]}
                               onGastroscopyUpdate={() => {}}
                               onColonoscopyUpdate={() => {}}

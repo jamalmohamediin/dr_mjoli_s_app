@@ -165,3 +165,80 @@ export const filterFilledEntries = <T extends { value?: unknown }>(entries: T[])
 
     return hasText(entry.value) || typeof entry.value === "number";
   });
+
+const PDF_EMPTY_EQUIVALENTS = new Set([
+  "",
+  "n/a",
+  "na",
+  "n\\a",
+  "_",
+  "__",
+  "___",
+  "____",
+  "_____",
+]);
+
+const normalizePdfToken = (value: unknown) =>
+  String(value === undefined || value === null ? "" : value)
+    .trim()
+    .toLowerCase();
+
+export const hasPdfDisplayValue = (value: unknown): boolean => {
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasPdfDisplayValue(entry));
+  }
+
+  if (typeof value === "number") {
+    return true;
+  }
+
+  if (typeof value === "boolean") {
+    return true;
+  }
+
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  const normalized = normalizePdfToken(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return !PDF_EMPTY_EQUIVALENTS.has(normalized);
+};
+
+const normalizePdfFieldLabel = (label: unknown) =>
+  String(label === undefined || label === null ? "" : label)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+export const isPostPreoperativeAlwaysVisibleField = (label: unknown): boolean => {
+  const normalized = normalizePdfFieldLabel(label);
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    normalized.includes("additional notes") ||
+    normalized.includes("additional information") ||
+    normalized.includes("post operative management")
+  ) {
+    return true;
+  }
+
+  return normalized.includes("signature") || normalized.includes("date time");
+};
+
+export const shouldRenderPostPreoperativeField = (label: unknown, value: unknown): boolean =>
+  hasPdfDisplayValue(value) || isPostPreoperativeAlwaysVisibleField(label);
+
+export const isPreoperativeSectionTitle = (title: unknown): boolean => {
+  const normalized = normalizePdfFieldLabel(title);
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.includes("preoperative") || normalized.includes("perioperative");
+};

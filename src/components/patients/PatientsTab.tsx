@@ -101,22 +101,58 @@ const detailText = (value: string, fallback = "-") => {
   return trimmed || fallback;
 };
 
-const getUniqueProcedureFilters = (records: PatientRecord[]) =>
-  Array.from(
-    new Set(
-      records
-        .flatMap((record) => [
-          record.templateType,
-          ...(Array.isArray(record.procedureNames) ? record.procedureNames : []),
-        ])
-        .filter(Boolean),
-    ),
-  );
+const normalizeHumanLabel = (value: string) =>
+  detailText(value, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const getProcedureFilterLabel = (value: string) =>
   TEMPLATE_TYPES.includes(value as TemplateType)
     ? getTemplateLabel(value as TemplateType)
     : value;
+
+const normalizeProcedureFilterLabel = (value: string) =>
+  normalizeHumanLabel(getProcedureFilterLabel(value));
+
+const getRecordProcedureFilterLabels = (record: PatientRecord) => {
+  const rawValues = [
+    record.templateType,
+    record.templateLabel,
+    record.primaryProcedureName,
+    ...(Array.isArray(record.procedureNames) ? record.procedureNames : []),
+  ];
+  const labelsByNormalizedKey = new Map<string, string>();
+
+  rawValues.forEach((rawValue) => {
+    const normalizedLabel = normalizeProcedureFilterLabel(rawValue);
+    if (!normalizedLabel || labelsByNormalizedKey.has(normalizedLabel)) {
+      return;
+    }
+    labelsByNormalizedKey.set(normalizedLabel, detailText(getProcedureFilterLabel(rawValue), ""));
+  });
+
+  return Array.from(labelsByNormalizedKey.values());
+};
+
+const getUniqueProcedureFilters = (records: PatientRecord[]) => {
+  const labelsByNormalizedKey = new Map<string, string>();
+
+  records.forEach((record) => {
+    getRecordProcedureFilterLabels(record).forEach((label) => {
+      const normalizedLabel = normalizeProcedureFilterLabel(label);
+      if (!normalizedLabel || labelsByNormalizedKey.has(normalizedLabel)) {
+        return;
+      }
+      labelsByNormalizedKey.set(normalizedLabel, label);
+    });
+  });
+
+  return Array.from(labelsByNormalizedKey.values());
+};
 
 const getVisiblePatientRecords = (
   records: PatientRecord[],
@@ -161,8 +197,8 @@ const getPatientRecordDedupSignature = (record: PatientRecord) => {
   );
   const signature = [
     detailText(record.patientDocId, "").toLowerCase(),
-    detailText(record.templateType, "").toLowerCase(),
-    detailText(displayProcedure, "").toLowerCase(),
+    normalizeHumanLabel(displayProcedure),
+    normalizeHumanLabel(detailText(record.templateLabel, "")),
     detailText(normalizedRecordDate, "").toLowerCase(),
   ].join("|");
   const normalizedSignature = signature
@@ -331,7 +367,10 @@ export const PatientsTab = ({
 
   useEffect(() => {
     if (forcedProcedureFilter) {
-      setProcedureFilter(forcedProcedureFilter);
+      const nextFilter = detailText(getProcedureFilterLabel(forcedProcedureFilter), "");
+      setProcedureFilter((previousFilter) =>
+        previousFilter === nextFilter ? previousFilter : nextFilter,
+      );
     }
   }, [forcedProcedureFilter]);
 
@@ -404,12 +443,11 @@ export const PatientsTab = ({
           const patientRecords = getVisiblePatientRecords(records, patient.id, showRecycleBin);
 
           if (procedureFilter) {
+            const normalizedProcedureFilter = normalizeProcedureFilterLabel(procedureFilter);
             const matchesProcedure = patientRecords.some((record) => {
-              const procedureNames = Array.isArray(record.procedureNames) ? record.procedureNames : [];
-              return (
-                record.templateType === procedureFilter ||
-                record.templateLabel === procedureFilter ||
-                procedureNames.includes(procedureFilter)
+              const recordLabels = getRecordProcedureFilterLabels(record);
+              return recordLabels.some(
+                (label) => normalizeProcedureFilterLabel(label) === normalizedProcedureFilter,
               );
             });
 
@@ -695,8 +733,11 @@ export const PatientsTab = ({
             >
               <option value="">All Operations / Procedures</option>
               {procedureOptions.map((option, optionIndex) => (
-                <option key={`${option}-${optionIndex}`} value={option}>
-                  {getProcedureFilterLabel(option)}
+                <option
+                  key={`${normalizeProcedureFilterLabel(option) || option}-${optionIndex}`}
+                  value={option}
+                >
+                  {option}
                 </option>
               ))}
             </select>
@@ -807,16 +848,20 @@ export const PatientsTab = ({
                   ? patient.attachments
                   : [];
                 const operationsSummary = Array.from(
-                  new Set(
-                    patientRecords
-                      .map(
-                        (record) =>
-                          detailText(record.primaryProcedureName, "") ||
-                          detailText(record.templateLabel, ""),
-                      )
-                      .filter(Boolean),
-                  ),
-                ).join(", ");
+                  patientRecords.reduce((labelsByNormalizedKey, record) => {
+                    const label =
+                      detailText(record.primaryProcedureName, "") ||
+                      detailText(record.templateLabel, "");
+                    const normalizedLabel = normalizeHumanLabel(label);
+                    if (!normalizedLabel || labelsByNormalizedKey.has(normalizedLabel)) {
+                      return labelsByNormalizedKey;
+                    }
+                    labelsByNormalizedKey.set(normalizedLabel, label);
+                    return labelsByNormalizedKey;
+                  }, new Map<string, string>()),
+                )
+                  .map(([, label]) => label)
+                  .join(", ");
 
                 return (
                   <div

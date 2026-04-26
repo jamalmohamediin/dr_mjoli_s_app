@@ -8,6 +8,7 @@ import {
 import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
 import {
   hasText,
+  isPostPreoperativeAlwaysVisibleField,
   joinSelections,
   toArray,
   toUiTitleCase,
@@ -61,6 +62,11 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   const diagnosis = data?.diagnosis || {};
   const additionalInfo = data?.additionalInfo || {};
   const diagram = data?.diagram || {};
+  const diagramImageData =
+    String(diagram?.canvasImageData || "").trim() ||
+    String(data?.gastroscopyCanvasData || "").trim() ||
+    String(data?.gastroscopyFindings?.canvasImageData || "").trim() ||
+    "";
 
   const oesophagusDetails: string[] = [];
   if (hasSelection(oesophagus.findings, "Barrett’s Oesophagus")) {
@@ -221,7 +227,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
       ? `Yes - ${additionalInfo.otherSpecimensDetails}`
       : String(additionalInfo.otherSpecimensTaken || "");
 
-  const legendLines = hasText(diagram.canvasImageData)
+  const legendLines = hasText(diagramImageData)
     ? ["Diagram annotations are included directly in the image."]
     : ["No diagram captured."];
 
@@ -233,6 +239,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   const lineHeight = 4.4;
   const columnWidth = 84;
   let y = margin;
+  let postPreoperativeSectionActive = false;
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -392,7 +399,10 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     titleCaseValue = true,
   ) => {
     const normalized = formatValue(value, titleCaseValue);
-    if (!normalized && !drawWhenEmpty) return;
+    const keepWhenEmpty =
+      drawWhenEmpty ||
+      (postPreoperativeSectionActive && isPostPreoperativeAlwaysVisibleField(label));
+    if (!normalized && !keepWhenEmpty) return;
     const labelText = `${toUiTitleCase(label)}:`;
     const labelColumnWidth = 58;
     const valueColumnWidth = contentWidth - labelColumnWidth - 2;
@@ -501,23 +511,41 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     preopCell("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false),
   );
   drawThreeColRow(
-    preopCell("Procedure Urgency", preoperative.procedureUrgency),
+    preopCell("Urgency", preoperative.procedureUrgency),
     preopCell(
       "Preoperative Imaging",
       joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
     ),
-    preopCell("Extent Of Examination", toArray(preoperative.extentOfExamination).join(", ")),
+    "",
   );
-  drawTwoColRow(
+  drawThreeColRow(
+    preopCell("Start Time", preoperative.startTime, false),
+    preopCell("End Time", preoperative.endTime, false),
     preopCell(
-      "Indications",
-      joinSelections(preoperative.indications, preoperative.indicationOther),
-    ),
-    preopCell(
-      "Signs & Symptoms",
-      joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+      "Total Duration",
+      preoperative.duration ? `${preoperative.duration} minutes` : "",
+      false,
     ),
   );
+  drawEntryRow(
+    "Signs & Symptoms",
+    joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+    false,
+    false,
+  );
+  drawEntryRow(
+    "Indications",
+    joinSelections(preoperative.indications, preoperative.indicationOther),
+    false,
+    false,
+  );
+  drawEntryRow(
+    "Extent Of Examination",
+    toArray(preoperative.extentOfExamination).join(", "),
+    false,
+    false,
+  );
+  postPreoperativeSectionActive = true;
 
   const procedureFindingRows: Array<{ label: string; value: string }> = [];
   const appendFindingRow = (label: string, value: unknown, titleCaseValue = true) => {
@@ -566,7 +594,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     });
   }
 
-  const rightColumnWidth = 68;
+  const rightColumnWidth = 78;
   const columnGap = 6;
   const leftColumnWidth = contentWidth - rightColumnWidth - columnGap;
   const procedureFindingLabelWidth = 36;
@@ -580,7 +608,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     (count, line) => count + Math.max(1, pdf.splitTextToSize(line, rightColumnWidth).length),
     0,
   );
-  const diagramBoxHeight = 56;
+  const diagramBoxHeight = 82;
   const estimatedFindingsSectionHeight =
     Math.max(
       estimatedLeftLineCount * lineHeight + 8,
@@ -622,7 +650,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   pdf.text("Legend", rightColumnX, rightY);
   rightY += lineHeight;
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8.5);
+  pdf.setFontSize(9);
 
   legendLines.forEach((line) => {
     const wrapped = pdf.splitTextToSize(line, rightColumnWidth);
@@ -638,13 +666,13 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   pdf.setLineWidth(0.2);
   pdf.rect(rightColumnX, diagramTopY, rightColumnWidth, diagramBoxHeight);
 
-  if (hasText(diagram.canvasImageData)) {
+  if (hasText(diagramImageData)) {
     try {
-      const imageData = String(diagram.canvasImageData);
+      const imageData = diagramImageData;
       const imageType = detectImageFormat(imageData);
       const imageProperties = pdf.getImageProperties(imageData);
-      const maxImageWidth = rightColumnWidth - 4;
-      const maxImageHeight = diagramBoxHeight - 4;
+      const maxImageWidth = rightColumnWidth - 2;
+      const maxImageHeight = diagramBoxHeight - 2;
       const aspectRatio = imageProperties.width / imageProperties.height;
 
       let imageWidth = maxImageWidth;
@@ -686,19 +714,19 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   drawEntryRow("Other Diagnosis", diagnosis.diagnosisOther, false, false);
 
   drawSectionTitle("SPECIMEN");
-  drawEntryRow("Specimen Sent For Pathology", additionalInfo.specimenSentForPathology, true);
-  drawEntryRow("Other Specimens Taken", otherSpecimensTakenValue, true);
+  drawEntryRow("Specimen Sent For Pathology", additionalInfo.specimenSentForPathology);
+  drawEntryRow("Other Specimens Taken", otherSpecimensTakenValue);
   drawEntryRow(
     "Specify Laboratory Sent To",
     additionalInfo.specimenSentForPathology === "Yes"
       ? additionalInfo.laboratorySentTo
       : "",
-    true,
+    false,
     false,
   );
 
   drawSectionTitle("CONCLUSION");
-  drawEntryRow("Conclusion", additionalInfo.conclusion, true, false);
+  drawEntryRow("Conclusion", additionalInfo.conclusion, false, false);
 
   drawSectionTitle("ADDITIONAL NOTES");
   drawEntryRow("Additional Notes", additionalInfo.additionalNotes, true, false);

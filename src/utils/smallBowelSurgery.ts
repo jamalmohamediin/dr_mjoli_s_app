@@ -33,6 +33,7 @@ export const initialSmallBowelSurgeryState = {
     approach: [] as string[],
     reasonForConversion: [] as string[],
     reasonForConversionOther: "",
+    trocarNumber: "",
     operationDone: "",
     procedurePerformed: [] as string[],
     procedurePerformedOther: "",

@@ -143,9 +143,9 @@ export const generateSmallBowelSurgeryPDF = async (
     const twoCol2X = margin + 96;
 
     const txt = (value: any) => (value === undefined || value === null ? "" : String(value));
-    const cell = (label: string, value: string) => {
+    const cell = (label: string, value: string, drawWhenEmpty = false) => {
       const normalized = value.trim();
-      return normalized ? `${label}: ${normalized}` : "";
+      return normalized ? `${label}: ${normalized}` : drawWhenEmpty ? `${label}:` : "";
     };
 
     const ensureSpace = (height = 10, bottomPadding = 20) => {
@@ -351,6 +351,33 @@ export const generateSmallBowelSurgeryPDF = async (
       pdf.setFont("helvetica", "normal");
     };
 
+    const rowQuestionAnswer = (label: string, value: string, bottomPadding = 20) => {
+      const normalizedLabel = label.trim();
+      const normalizedValue = value.trim();
+      if (!normalizedLabel || !normalizedValue) return;
+
+      const labelWidth = 60;
+      const answerX = margin + 68;
+      const answerWidth = Math.max(20, pageWidth - margin - answerX);
+      const labelLines = pdf.splitTextToSize(`${normalizedLabel}:`, labelWidth);
+      const valueLines = normalizedValue ? pdf.splitTextToSize(normalizedValue, answerWidth) : [""];
+      const lines = Math.max(labelLines.length, valueLines.length, 1);
+
+      ensureSpace(lines * lineHeight + 1, bottomPadding);
+      for (let index = 0; index < lines; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelLines[index], margin, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], answerX, y);
+        }
+        y += lineHeight;
+      }
+      pdf.setFont("helvetica", "normal");
+    };
+
     const estimateRow1Height = (value: string) => {
       if (!value) return 0;
       const lines = pdf.splitTextToSize(value, contentWidth);
@@ -405,18 +432,22 @@ export const generateSmallBowelSurgeryPDF = async (
     );
     y += 1;
 
-    if (info.asaScore) {
-      row1(cell("ASA Physical Status Classification", getFullASAText(info.asaScore)));
-    }
-    if (txt(info.asaNotes)) {
-      row1(cell("ASA Notes", txt(info.asaNotes)));
-    }
     if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
       row3(
         cell("Weight", txt(info.weight)),
         cell("Height", txt(info.height)),
         cell("BMI", txt(info.bmi)),
       );
+    }
+    if (info.asaScore) {
+      row3(
+        "",
+        cell("ASA Physical Status Classification", getFullASAText(info.asaScore)),
+        "",
+      );
+    }
+    if (txt(info.asaNotes)) {
+      row3("", cell("ASA Notes", txt(info.asaNotes)), "");
     }
     if (txt(info.visitDate) || txt(info.visitTime)) {
       row3(
@@ -452,45 +483,38 @@ export const generateSmallBowelSurgeryPDF = async (
       cell("Preoperative Imaging", joinSelections(toArray(preop?.imaging), preop?.imagingOther)),
       "",
     );
-    row1(cell("Indication for Surgery", txt(preop?.indication)));
-    row1(cell("Operation Description", txt(preop?.operationDescription)));
+    row3("", cell("Indication for Surgery", txt(preop?.indication)), "");
+    row3("", cell("Operation Description", txt(preop?.operationDescription)), "");
 
     sec("OPERATIVE FINDINGS");
-    row2(
-      cell("Description of Operation Findings", txt(findings?.description)),
-      cell("Pathology Found", joinSelections(toArray(findings?.pathology), findings?.pathologyOther)),
+    rowQuestionAnswer("Description of Operation Findings", txt(findings?.description));
+    rowQuestionAnswer(
+      "Pathology Found",
+      joinSelections(toArray(findings?.pathology), findings?.pathologyOther),
     );
-    row2(
-      cell(
-        "Distance from DJ Flexure",
-        findings?.distanceFromDjFlexure ? `${findings.distanceFromDjFlexure} cm` : "",
-      ),
-      cell("Mesenteric Involvement", txt(findings?.mesentericInvolvement)),
+    rowQuestionAnswer(
+      "Distance from DJ Flexure",
+      findings?.distanceFromDjFlexure ? `${findings.distanceFromDjFlexure} cm` : "",
     );
-    row2(
-      cell(
-        "Distance from Ileocecal Valve",
-        findings?.distanceFromIleocecalValve ? `${findings.distanceFromIleocecalValve} cm` : "",
-      ),
-      cell("Lymph Nodes", txt(findings?.lymphNodes)),
+    rowQuestionAnswer("Mesenteric Involvement", txt(findings?.mesentericInvolvement));
+    rowQuestionAnswer(
+      "Distance from Ileocecal Valve",
+      findings?.distanceFromIleocecalValve ? `${findings.distanceFromIleocecalValve} cm` : "",
     );
-    row2(
-      cell(
-        "Length of Diseased Segment",
-        findings?.diseasedSegmentLength ? `${findings.diseasedSegmentLength} cm` : "",
-      ),
-      cell("Degree of Contamination", txt(findings?.contamination)),
+    rowQuestionAnswer("Lymph Nodes", txt(findings?.lymphNodes));
+    rowQuestionAnswer(
+      "Length of Diseased Segment",
+      findings?.diseasedSegmentLength ? `${findings.diseasedSegmentLength} cm` : "",
     );
-    row2(
-      cell("Bowel Viability", txt(findings?.bowelViability)),
-      cell("Adhesions", txt(findings?.adhesions)),
-    );
+    rowQuestionAnswer("Degree of Contamination", txt(findings?.contamination));
+    rowQuestionAnswer("Bowel Viability", txt(findings?.bowelViability));
+    rowQuestionAnswer("Adhesions", txt(findings?.adhesions));
 
     ensureSpace(112);
     sec("PROCEDURE DETAILS");
     const blockTop = y;
-    const leftWidth = 82;
-    const rightX = twoCol2X;
+    const leftWidth = 78;
+    const rightX = twoCol2X + 2;
     const rightWidth = twoColWidth;
     const procedureEntries = [
       cell("Operation Done", txt(proc?.operationDone)),
@@ -499,6 +523,7 @@ export const generateSmallBowelSurgeryPDF = async (
         "Reason for Conversion",
         joinSelections(toArray(proc?.reasonForConversion), proc?.reasonForConversionOther),
       ),
+      cell("Trocar Number", txt(proc?.trocarNumber)),
       cell(
         "Procedure Performed",
         joinSelections(toArray(proc?.procedurePerformed), proc?.procedurePerformedOther),
@@ -515,6 +540,17 @@ export const generateSmallBowelSurgeryPDF = async (
         proc?.peritonealLavage === "Yes" && proc?.peritonealLavageVolume
           ? `Yes (${proc.peritonealLavageVolume})`
           : txt(proc?.peritonealLavage),
+      ),
+      cell(
+        "Points of Difficulty",
+        joinSelections(toArray(events?.pointsOfDifficulty), events?.pointsOfDifficultyOther),
+      ),
+      cell(
+        "Intraoperative Events/Complications",
+        joinSelections(
+          toArray(events?.intraoperativeEvents),
+          events?.intraoperativeEventsOther,
+        ),
       ),
     ].filter(Boolean);
 
@@ -533,7 +569,7 @@ export const generateSmallBowelSurgeryPDF = async (
 
       const label = `${entry.slice(0, separatorIndex).trim()}:`;
       const value = entry.slice(separatorIndex + 1).trim();
-      const labelWidth = Math.min(34, Math.max(20, leftWidth * 0.44));
+      const labelWidth = Math.min(40, Math.max(24, leftWidth * 0.5));
       const valueWidth = Math.max(18, leftWidth - labelWidth - 2);
       const labelLines = pdf.splitTextToSize(label, labelWidth);
       const valueLines = pdf.splitTextToSize(value, valueWidth);
@@ -572,78 +608,69 @@ export const generateSmallBowelSurgeryPDF = async (
     y = Math.max(leftY, diagramBottomY + 10) + 4;
 
     sec("RECONSTRUCTION");
-    row3(
-      cell(
-        "Reconstruction Type",
-        joinSelections(toArray(recon?.reconstructionType), recon?.reconstructionOther),
+    rowQuestionAnswer(
+      "Reconstruction Type",
+      joinSelections(toArray(recon?.reconstructionType), recon?.reconstructionOther),
+    );
+    if (showStomaFields) {
+      rowQuestionAnswer(
+        "Ileostomy Type",
+        recon?.stomaDetails?.ileostomyType === "Other"
+          ? txt(recon?.stomaDetails?.ileostomyTypeOther)
+          : txt(recon?.stomaDetails?.ileostomyType),
+      );
+    }
+    rowQuestionAnswer("Site of Anastomosis", txt(recon?.anastomosisDetails?.site));
+    if (showStomaFields) {
+      rowQuestionAnswer(
+        "Stoma Location",
+        recon?.stomaDetails?.location === "Other"
+          ? txt(recon?.stomaDetails?.locationOther)
+          : txt(recon?.stomaDetails?.location),
+      );
+    }
+    rowQuestionAnswer(
+      "Configuration",
+      recon?.anastomosisDetails?.configuration === "Other"
+        ? txt(recon?.anastomosisDetails?.configurationOther)
+        : txt(recon?.anastomosisDetails?.configuration),
+    );
+    if (showStomaFields) {
+      rowQuestionAnswer("Stoma Eversion", txt(recon?.stomaDetails?.eversion));
+    }
+    rowQuestionAnswer("Anastomotic Technique", txt(recon?.anastomosisDetails?.technique));
+    if (showStomaFields) {
+      rowQuestionAnswer("Site of Maturation", txt(recon?.stomaDetails?.maturationSite));
+    }
+    rowQuestionAnswer(
+      "Suture Material",
+      joinSelections(
+        toArray(recon?.anastomosisDetails?.sutureMaterial),
+        recon?.anastomosisDetails?.sutureMaterialOther,
       ),
-      showStomaFields
-        ? cell(
-            "Ileostomy Type",
-            recon?.stomaDetails?.ileostomyType === "Other"
-              ? txt(recon?.stomaDetails?.ileostomyTypeOther)
-              : txt(recon?.stomaDetails?.ileostomyType),
-          )
-        : "",
-      cell(
-        "Linear Stapler Sizes",
+    );
+    if (showStomaFields) {
+      rowQuestionAnswer(
+        "Material Used",
         joinSelections(
-          toArray(recon?.anastomosisDetails?.linearStaplerSize),
-          recon?.anastomosisDetails?.linearStaplerSizeOther,
+          toArray(recon?.stomaDetails?.materialUsed),
+          recon?.stomaDetails?.materialUsedOther,
         ),
+      );
+    }
+    rowQuestionAnswer(
+      "Linear Stapler Sizes",
+      joinSelections(
+        toArray(recon?.anastomosisDetails?.linearStaplerSize),
+        recon?.anastomosisDetails?.linearStaplerSizeOther,
       ),
     );
-    row3(
-      cell("Site of Anastomosis", txt(recon?.anastomosisDetails?.site)),
-      showStomaFields
-        ? cell(
-            "Stoma Location",
-            recon?.stomaDetails?.location === "Other"
-              ? txt(recon?.stomaDetails?.locationOther)
-              : txt(recon?.stomaDetails?.location),
-          )
-        : "",
-      cell(
-        "Circular Stapler Sizes",
-        joinSelections(
-          toArray(recon?.anastomosisDetails?.circularStaplerSize),
-          recon?.anastomosisDetails?.circularStaplerSizeOther,
-        ),
+    rowQuestionAnswer(
+      "Circular Stapler Sizes",
+      joinSelections(
+        toArray(recon?.anastomosisDetails?.circularStaplerSize),
+        recon?.anastomosisDetails?.circularStaplerSizeOther,
       ),
-    );
-    row3(
-      cell(
-        "Configuration",
-        recon?.anastomosisDetails?.configuration === "Other"
-          ? txt(recon?.anastomosisDetails?.configurationOther)
-          : txt(recon?.anastomosisDetails?.configuration),
-      ),
-      showStomaFields ? cell("Stoma Eversion", txt(recon?.stomaDetails?.eversion)) : "",
-      "",
-    );
-    row3(
-      cell("Anastomotic Technique", txt(recon?.anastomosisDetails?.technique)),
-      showStomaFields ? cell("Site of Maturation", txt(recon?.stomaDetails?.maturationSite)) : "",
-      "",
-    );
-    row3(
-      cell(
-        "Suture Material",
-        joinSelections(
-          toArray(recon?.anastomosisDetails?.sutureMaterial),
-          recon?.anastomosisDetails?.sutureMaterialOther,
-        ),
-      ),
-      showStomaFields
-        ? cell(
-            "Material Used",
-            joinSelections(
-              toArray(recon?.stomaDetails?.materialUsed),
-              recon?.stomaDetails?.materialUsedOther,
-            ),
-          )
-        : "",
-      "",
     );
 
     sec("CLOSURE");
@@ -698,23 +725,6 @@ export const generateSmallBowelSurgeryPDF = async (
       ),
     );
 
-    sec("COMPLICATIONS");
-    row1(
-      cell(
-        "Points of Difficulty",
-        joinSelections(toArray(events?.pointsOfDifficulty), events?.pointsOfDifficultyOther),
-      ),
-    );
-    row1(
-      cell(
-        "Intraoperative Events/Complications",
-        joinSelections(
-          toArray(events?.intraoperativeEvents),
-          events?.intraoperativeEventsOther,
-        ),
-      ),
-    );
-
     const specimenBottomPadding = 10;
     const specimenRows = [
       cell("Specimen", joinSelections(toArray(events?.specimen), events?.specimenOther)),
@@ -728,10 +738,10 @@ export const generateSmallBowelSurgeryPDF = async (
     specimenRows.forEach((row) => row1(row, specimenBottomPadding));
 
     sec("ADDITIONAL NOTES");
-    row1(cell("Additional Notes", txt(addInfo?.additionalInformation)));
+    row1(cell("Additional Notes", txt(addInfo?.additionalInformation), true));
 
     sec("POST OPERATIVE MANAGEMENT");
-    row1(cell("Post Operative Management", txt(addInfo?.postOperativeManagement)));
+    row1(cell("Post Operative Management", txt(addInfo?.postOperativeManagement), true));
 
     ensureSpace(42);
     sec("SURGEON'S SIGNATURE");
@@ -749,10 +759,12 @@ export const generateSmallBowelSurgeryPDF = async (
       y += signatureDimensions.height + 3;
     }
     row2(
-      cell("Typed Signature", txt(addInfo?.surgeonSignatureText)),
+      cell("Typed Signature", txt(addInfo?.surgeonSignatureText), true),
       cell(
         "Date/Time",
-        addInfo?.dateTime ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime) : "",
+        addInfo?.dateTime
+          ? formatDateTimeDDMMYYYYWithDashes(addInfo.dateTime)
+          : formatDateTimeDDMMYYYYWithDashes(new Date()),
       ),
     );
 

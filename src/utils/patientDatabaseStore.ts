@@ -2,17 +2,23 @@ import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore
 import { firestoreDb } from "@/lib/firebase";
 import { isLocalPatientAttachment, stripLocalPatientAttachments } from "@/utils/localPatientAttachmentStore";
 import {
+  applyPatientDeletedState,
   createEmptyPatientDatabaseCache,
   normalizePatientDatabaseCache,
   PatientAttachment,
   PatientDatabaseCache,
   PatientRecord,
   PatientSummary,
+  removePatientRecordFromCache,
+  removePatientsFromCache,
+  upsertPatientRecordInCache,
 } from "@/utils/patientRecords";
 
 const PATIENTS_CACHE_KEY = "patients_cache_v1";
 const PATIENT_RECORDS_CACHE_KEY = "patient_records_cache_v1";
 const PATIENT_SYNC_QUEUE_KEY = "patient_sync_queue_v1";
+const PENDING_RECORD_DELETE_IDS_KEY = "patient_pending_record_delete_ids_v1";
+const PATIENT_RECORDS_LOCAL_CACHE_DISABLED_KEY = "patient_records_local_cache_disabled_v1";
 
 type SyncQueueItem =
   | {
@@ -48,9 +54,44 @@ type SyncQueueItem =
       id: string;
       type: "deletePatientRecord";
       createdAt: string;
-      patient: PatientSummary;
+      patient: PatientSummary | null;
       recordId: string;
     };
+
+let inMemoryPatientCache: PatientDatabaseCache = createEmptyPatientDatabaseCache();
+let inMemoryPatientSyncQueue: SyncQueueItem[] = [];
+let inMemoryPendingRecordDeleteIds: string[] = [];
+type PatientDbRuntimeState = {
+  localStorageWriteBlockedKeys: Set<string>;
+  localStorageWriteErrorShownKeys: Set<string>;
+  localStorageParseErrorShownKeys: Set<string>;
+  hasShownPatientCacheQuotaWarning: boolean;
+  hasShownPatientSyncQueueQuotaWarning: boolean;
+  disablePatientRecordsLocalCacheWrite: boolean;
+};
+
+const globalScope = globalThis as {
+  __patientDbRuntimeState?: PatientDbRuntimeState;
+};
+
+const runtimeState =
+  globalScope.__patientDbRuntimeState ||
+  (globalScope.__patientDbRuntimeState = {
+    localStorageWriteBlockedKeys: new Set<string>(),
+    localStorageWriteErrorShownKeys: new Set<string>(),
+    localStorageParseErrorShownKeys: new Set<string>(),
+    hasShownPatientCacheQuotaWarning: false,
+    hasShownPatientSyncQueueQuotaWarning: false,
+    disablePatientRecordsLocalCacheWrite: false,
+  });
+
+const localStorageWriteBlockedKeys = runtimeState.localStorageWriteBlockedKeys;
+const localStorageWriteErrorShownKeys = runtimeState.localStorageWriteErrorShownKeys;
+const localStorageParseErrorShownKeys = runtimeState.localStorageParseErrorShownKeys;
+let hasShownPatientCacheQuotaWarning = runtimeState.hasShownPatientCacheQuotaWarning;
+let hasShownPatientSyncQueueQuotaWarning = runtimeState.hasShownPatientSyncQueueQuotaWarning;
+let nextPatientSyncAttemptAt = 0;
+const PATIENT_SYNC_RETRY_MS = 15000;
 
 const parseStoredJson = <T,>(key: string, fallback: T): T => {
   if (typeof window === "undefined") {
@@ -65,17 +106,51 @@ const parseStoredJson = <T,>(key: string, fallback: T): T => {
   try {
     return JSON.parse(raw) as T;
   } catch (error) {
-    console.error(`Failed to parse local cache for ${key}`, error);
+    if (!localStorageParseErrorShownKeys.has(key)) {
+      localStorageParseErrorShownKeys.add(key);
+      console.error(`Failed to parse local cache for ${key}`, error);
+    }
     return fallback;
   }
 };
 
 const writeStoredJson = (key: string, value: any) => {
   if (typeof window === "undefined") {
-    return;
+    return false;
   }
 
-  localStorage.setItem(key, JSON.stringify(value));
+  if (
+    key === PATIENT_RECORDS_CACHE_KEY &&
+    (runtimeState.disablePatientRecordsLocalCacheWrite ||
+      sessionStorage.getItem(PATIENT_RECORDS_LOCAL_CACHE_DISABLED_KEY) === "1")
+  ) {
+    return false;
+  }
+
+  if (localStorageWriteBlockedKeys.has(key)) {
+    return false;
+  }
+
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    localStorageWriteBlockedKeys.add(key);
+    if (key === PATIENT_RECORDS_CACHE_KEY) {
+      runtimeState.disablePatientRecordsLocalCacheWrite = true;
+      sessionStorage.setItem(PATIENT_RECORDS_LOCAL_CACHE_DISABLED_KEY, "1");
+    }
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore remove errors
+    }
+    if (!localStorageWriteErrorShownKeys.has(key)) {
+      localStorageWriteErrorShownKeys.add(key);
+      console.error(`Failed to write local cache for ${key}`, error);
+    }
+    return false;
+  }
 };
 
 const toSerializable = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -107,23 +182,230 @@ const sanitizeIdList = (values: unknown) => {
   return Array.from(dedupedIds);
 };
 
-export const loadPatientDatabaseCache = (): PatientDatabaseCache =>
-  normalizePatientDatabaseCache({
-    patients: parseStoredJson(PATIENTS_CACHE_KEY, [] as PatientSummary[]),
-    records: parseStoredJson(PATIENT_RECORDS_CACHE_KEY, [] as PatientRecord[]),
+const loadPendingRecordDeleteIds = () => {
+  const storedIds = parseStoredJson(
+    PENDING_RECORD_DELETE_IDS_KEY,
+    null as string[] | null,
+  );
+  if (Array.isArray(storedIds)) {
+    inMemoryPendingRecordDeleteIds = sanitizeIdList(storedIds);
+    return inMemoryPendingRecordDeleteIds;
+  }
+
+  inMemoryPendingRecordDeleteIds = sanitizeIdList(inMemoryPendingRecordDeleteIds);
+  return inMemoryPendingRecordDeleteIds;
+};
+
+const savePendingRecordDeleteIds = (recordIds: string[]) => {
+  inMemoryPendingRecordDeleteIds = sanitizeIdList(recordIds);
+  writeStoredJson(PENDING_RECORD_DELETE_IDS_KEY, inMemoryPendingRecordDeleteIds);
+};
+
+const addPendingRecordDeleteId = (recordId: string) => {
+  const safeRecordId = sanitizeId(recordId);
+  if (!isValidFirestoreDocId(safeRecordId)) {
+    return;
+  }
+
+  const ids = loadPendingRecordDeleteIds();
+  if (ids.includes(safeRecordId)) {
+    return;
+  }
+
+  savePendingRecordDeleteIds([...ids, safeRecordId]);
+};
+
+const removePendingRecordDeleteId = (recordId: string) => {
+  const safeRecordId = sanitizeId(recordId);
+  if (!safeRecordId) {
+    return;
+  }
+
+  const ids = loadPendingRecordDeleteIds();
+  if (!ids.includes(safeRecordId)) {
+    return;
+  }
+
+  savePendingRecordDeleteIds(ids.filter((id) => id !== safeRecordId));
+};
+
+const applyPendingRecordDeleteOverlay = (
+  cache: PatientDatabaseCache,
+  pendingRecordDeleteIds: string[],
+) => {
+  const safePendingRecordIds = sanitizeIdList(pendingRecordDeleteIds);
+  if (safePendingRecordIds.length === 0) {
+    return normalizePatientDatabaseCache(cache);
+  }
+
+  let nextCache = normalizePatientDatabaseCache(cache);
+  safePendingRecordIds.forEach((recordId) => {
+    nextCache = removePatientRecordFromCache(nextCache, recordId);
   });
+
+  return normalizePatientDatabaseCache(nextCache);
+};
+
+export const loadPatientDatabaseCache = (): PatientDatabaseCache => {
+  const queue = loadPatientSyncQueue();
+  const pendingRecordDeleteIds = loadPendingRecordDeleteIds();
+  const storedPatients = parseStoredJson(
+    PATIENTS_CACHE_KEY,
+    null as PatientSummary[] | null,
+  );
+  const storedRecords = parseStoredJson(
+    PATIENT_RECORDS_CACHE_KEY,
+    null as PatientRecord[] | null,
+  );
+
+  const hasStoredData = Array.isArray(storedPatients) || Array.isArray(storedRecords);
+  if (hasStoredData) {
+    inMemoryPatientCache = applyPendingRecordDeleteOverlay(
+      applySyncQueueOverlayToCache(
+        normalizePatientDatabaseCache({
+          patients: Array.isArray(storedPatients) ? storedPatients : [],
+          records: Array.isArray(storedRecords) ? storedRecords : [],
+        }),
+        queue,
+      ),
+      pendingRecordDeleteIds,
+    );
+    return inMemoryPatientCache;
+  }
+
+  inMemoryPatientCache = applyPendingRecordDeleteOverlay(
+    applySyncQueueOverlayToCache(
+      normalizePatientDatabaseCache(inMemoryPatientCache),
+      queue,
+    ),
+    pendingRecordDeleteIds,
+  );
+  return inMemoryPatientCache;
+};
+
+const applySyncQueueOverlayToCache = (
+  cache: PatientDatabaseCache,
+  queue: SyncQueueItem[],
+): PatientDatabaseCache => {
+  const normalizedCache = normalizePatientDatabaseCache(cache);
+  if (!Array.isArray(queue) || queue.length === 0) {
+    return normalizedCache;
+  }
+
+  let nextCache = normalizedCache;
+
+  queue.forEach((item) => {
+    if (item.type === "upsertPatientRecord") {
+      nextCache = upsertPatientRecordInCache(nextCache, item.record);
+      return;
+    }
+
+    if (item.type === "setPatientDeletedState") {
+      nextCache = applyPatientDeletedState(nextCache, item.patientId, item.deletedAt);
+      return;
+    }
+
+    if (item.type === "permanentlyDeletePatients") {
+      nextCache = removePatientsFromCache(nextCache, item.patientIds);
+      return;
+    }
+
+    if (item.type === "setPatientAttachments") {
+      const existingPatient = nextCache.patients.find((patient) => patient.id === item.patientId) || null;
+      if (!existingPatient) {
+        return;
+      }
+
+      const attachmentMap = new Map<string, PatientAttachment>();
+      (item.attachments || []).forEach((attachment) => {
+        attachmentMap.set(attachment.id, attachment);
+      });
+      (existingPatient.attachments || [])
+        .filter((attachment) => isLocalPatientAttachment(attachment))
+        .forEach((attachment) => {
+          attachmentMap.set(attachment.id, attachment);
+        });
+
+      nextCache = normalizePatientDatabaseCache({
+        patients: nextCache.patients.map((patient) =>
+          patient.id === item.patientId
+            ? {
+                ...patient,
+                attachments: Array.from(attachmentMap.values()).sort((left, right) =>
+                  (right.uploadedAt || "").localeCompare(left.uploadedAt || ""),
+                ),
+                updatedAt: new Date().toISOString(),
+              }
+            : patient,
+        ),
+        records: nextCache.records,
+      });
+      return;
+    }
+
+    if (item.type === "deletePatientRecord") {
+      nextCache = removePatientRecordFromCache(nextCache, item.recordId);
+    }
+  });
+
+  return normalizePatientDatabaseCache(nextCache);
+};
 
 export const savePatientDatabaseCache = (cache: PatientDatabaseCache) => {
   const normalizedCache = normalizePatientDatabaseCache(cache);
-  writeStoredJson(PATIENTS_CACHE_KEY, normalizedCache.patients);
-  writeStoredJson(PATIENT_RECORDS_CACHE_KEY, normalizedCache.records);
+  inMemoryPatientCache = normalizedCache;
+  const wasRecordsKeyBlockedBeforeWrite = localStorageWriteBlockedKeys.has(PATIENT_RECORDS_CACHE_KEY);
+  const wrotePatients = writeStoredJson(PATIENTS_CACHE_KEY, normalizedCache.patients);
+  let wroteRecords = writeStoredJson(PATIENT_RECORDS_CACHE_KEY, normalizedCache.records);
+
+  if (!wroteRecords && !wasRecordsKeyBlockedBeforeWrite) {
+    const compactRecords = normalizedCache.records.map((record) => ({
+      ...record,
+      reportSnapshot: null,
+    }));
+    localStorageWriteBlockedKeys.delete(PATIENT_RECORDS_CACHE_KEY);
+    wroteRecords = writeStoredJson(PATIENT_RECORDS_CACHE_KEY, compactRecords);
+  }
+
+  if (!wrotePatients || !wroteRecords) {
+    if (!hasShownPatientCacheQuotaWarning) {
+      hasShownPatientCacheQuotaWarning = true;
+      runtimeState.hasShownPatientCacheQuotaWarning = true;
+      console.warn("Patient cache persisted in memory only due localStorage write limits.");
+    }
+  } else {
+    hasShownPatientCacheQuotaWarning = false;
+    runtimeState.hasShownPatientCacheQuotaWarning = false;
+  }
 };
 
-export const loadPatientSyncQueue = () =>
-  parseStoredJson(PATIENT_SYNC_QUEUE_KEY, [] as SyncQueueItem[]);
+export const loadPatientSyncQueue = () => {
+  const storedQueue = parseStoredJson(
+    PATIENT_SYNC_QUEUE_KEY,
+    null as SyncQueueItem[] | null,
+  );
+
+  if (Array.isArray(storedQueue)) {
+    inMemoryPatientSyncQueue = storedQueue;
+    return storedQueue;
+  }
+
+  return inMemoryPatientSyncQueue;
+};
 
 const savePatientSyncQueue = (queue: SyncQueueItem[]) => {
-  writeStoredJson(PATIENT_SYNC_QUEUE_KEY, queue);
+  inMemoryPatientSyncQueue = queue;
+  const wroteQueue = writeStoredJson(PATIENT_SYNC_QUEUE_KEY, queue);
+  if (!wroteQueue) {
+    if (!hasShownPatientSyncQueueQuotaWarning) {
+      hasShownPatientSyncQueueQuotaWarning = true;
+      runtimeState.hasShownPatientSyncQueueQuotaWarning = true;
+      console.warn("Patient sync queue persisted in memory only due localStorage write limits.");
+    }
+  } else {
+    hasShownPatientSyncQueueQuotaWarning = false;
+    runtimeState.hasShownPatientSyncQueueQuotaWarning = false;
+  }
 };
 
 export const enqueuePatientSyncItem = (item: Omit<SyncQueueItem, "id" | "createdAt">) => {
@@ -204,8 +486,25 @@ export const fetchPatientDatabaseSnapshot = async () => {
     })) as PatientRecord[],
   });
 
-  savePatientDatabaseCache(normalizedCache);
-  return normalizedCache;
+  const remoteRecordIds = new Set(
+    normalizedCache.records
+      .map((record) => sanitizeId(record.id))
+      .filter((recordId) => isValidFirestoreDocId(recordId)),
+  );
+  const persistedPendingRecordDeleteIds = loadPendingRecordDeleteIds();
+  const unresolvedPendingRecordDeleteIds = persistedPendingRecordDeleteIds.filter((recordId) =>
+    remoteRecordIds.has(recordId),
+  );
+  if (unresolvedPendingRecordDeleteIds.length !== persistedPendingRecordDeleteIds.length) {
+    savePendingRecordDeleteIds(unresolvedPendingRecordDeleteIds);
+  }
+
+  const cacheWithPendingChanges = applyPendingRecordDeleteOverlay(
+    applySyncQueueOverlayToCache(normalizedCache, loadPatientSyncQueue()),
+    unresolvedPendingRecordDeleteIds,
+  );
+  savePatientDatabaseCache(cacheWithPendingChanges);
+  return cacheWithPendingChanges;
 };
 
 const syncUpsertPatientRecord = async (patient: PatientSummary, record: PatientRecord) => {
@@ -328,27 +627,29 @@ const syncPatientAttachments = async (
 };
 
 const syncDeletePatientRecord = async (
-  patient: PatientSummary,
+  patient: PatientSummary | null,
   recordId: string,
 ) => {
   if (!firestoreDb) {
     throw new Error("Firestore is not configured");
   }
 
-  const safePatientId = String(patient?.id || "").trim();
-  const safeRecordId = String(recordId || "").trim();
-  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+  const safePatientId = sanitizeId(patient?.id);
+  const safeRecordId = sanitizeId(recordId);
+  if (!isValidFirestoreDocId(safeRecordId)) {
     return;
   }
-  const normalizedPatient = {
-    ...patient,
-    id: safePatientId,
-  };
 
   const batch = writeBatch(firestoreDb);
-  batch.set(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
-    merge: true,
-  });
+  if (patient && isValidFirestoreDocId(safePatientId)) {
+    const normalizedPatient = {
+      ...patient,
+      id: safePatientId,
+    };
+    batch.set(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
+      merge: true,
+    });
+  }
   batch.delete(doc(firestoreDb, "patient_records", safeRecordId));
   await batch.commit();
 };
@@ -358,11 +659,17 @@ export const processPatientSyncQueue = async () => {
     return { processed: 0, failed: loadPatientSyncQueue().length };
   }
 
+  if (Date.now() < nextPatientSyncAttemptAt) {
+    return { processed: 0, failed: loadPatientSyncQueue().length };
+  }
+
   const queue = loadPatientSyncQueue();
   const remainingQueue: SyncQueueItem[] = [];
   let processed = 0;
+  let shouldPauseFurtherSync = false;
 
-  for (const item of queue) {
+  for (let index = 0; index < queue.length; index += 1) {
+    const item = queue[index];
     try {
       if (item.type === "upsertPatientRecord") {
         await syncUpsertPatientRecord(item.patient, item.record);
@@ -379,10 +686,36 @@ export const processPatientSyncQueue = async () => {
     } catch (error) {
       console.error("Failed to process patient sync queue item", item, error);
       remainingQueue.push(item);
+
+      const errorCode =
+        typeof error === "object" && error && "code" in error
+          ? String((error as { code?: string }).code || "")
+          : "";
+      const message = String(
+        (typeof error === "object" && error && "message" in error
+          ? (error as { message?: string }).message
+          : "") || "",
+      ).toLowerCase();
+      const shouldBackoff =
+        errorCode.includes("resource-exhausted") ||
+        errorCode.includes("unavailable") ||
+        message.includes("resource-exhausted") ||
+        message.includes("maximum allowed queued writes") ||
+        message.includes("network") ||
+        message.includes("blocked_by_client");
+
+      if (shouldBackoff) {
+        shouldPauseFurtherSync = true;
+        for (let restIndex = index + 1; restIndex < queue.length; restIndex += 1) {
+          remainingQueue.push(queue[restIndex]);
+        }
+        break;
+      }
     }
   }
 
   savePatientSyncQueue(remainingQueue);
+  nextPatientSyncAttemptAt = shouldPauseFurtherSync ? Date.now() + PATIENT_SYNC_RETRY_MS : 0;
   return { processed, failed: remainingQueue.length };
 };
 
@@ -393,6 +726,8 @@ export const queuePatientRecordSync = (patient: PatientSummary, record: PatientR
   if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
     return loadPatientSyncQueue().length;
   }
+
+  removePendingRecordDeleteId(safeRecordId);
 
   return enqueuePatientSyncItem({
     type: "upsertPatientRecord",
@@ -437,6 +772,10 @@ export const queuePermanentPatientDeleteSync = (
     return loadPatientSyncQueue().length;
   }
 
+  safeRecordIds.forEach((recordId) => {
+    addPendingRecordDeleteId(recordId);
+  });
+
   return enqueuePatientSyncItem({
     type: "permanentlyDeletePatients",
     patientIds: safePatientIds,
@@ -461,21 +800,26 @@ export const queuePatientAttachmentsSync = (
 };
 
 export const queuePatientRecordDeleteSync = (
-  patient: PatientSummary,
+  patient: PatientSummary | null,
   recordId: string,
 ) => {
   const safePatientId = sanitizeId(patient?.id);
   const safeRecordId = sanitizeId(recordId);
-  if (!isValidFirestoreDocId(safePatientId) || !isValidFirestoreDocId(safeRecordId)) {
+  if (!isValidFirestoreDocId(safeRecordId)) {
     return loadPatientSyncQueue().length;
   }
 
+  addPendingRecordDeleteId(safeRecordId);
+
   return enqueuePatientSyncItem({
     type: "deletePatientRecord",
-    patient: toSerializable({
-      ...patient,
-      id: safePatientId,
-    }),
+    patient:
+      patient && isValidFirestoreDocId(safePatientId)
+        ? toSerializable({
+            ...patient,
+            id: safePatientId,
+          })
+        : null,
     recordId: safeRecordId,
   });
 };
@@ -483,4 +827,5 @@ export const queuePatientRecordDeleteSync = (
 export const resetPatientDatabaseCache = () => {
   savePatientDatabaseCache(createEmptyPatientDatabaseCache());
   savePatientSyncQueue([]);
+  savePendingRecordDeleteIds([]);
 };

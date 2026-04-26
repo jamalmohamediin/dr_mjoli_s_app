@@ -41,7 +41,7 @@ interface FreeDrawDiagramProps {
 
 const DEFAULT_CANVAS_WIDTH = 1200;
 const DEFAULT_CANVAS_HEIGHT = 800;
-const TEXT_SIZE_OPTIONS = [10, 12, 14, 16, 18, 20, 24, 28, 32];
+const TEXT_SIZE_OPTIONS = [32, 36, 40, 44, 48, 56, 64];
 
 export const FreeDrawDiagram = ({
   backgroundImage,
@@ -57,16 +57,18 @@ export const FreeDrawDiagram = ({
   const [mode, setMode] = useState<DiagramMode>("draw");
   const [strokeColor, setStrokeColor] = useState("#e11d48");
   const [strokeWidth, setStrokeWidth] = useState(3);
-  const [textSize, setTextSize] = useState(14);
+  const [textSize, setTextSize] = useState(40);
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [draggingTextId, setDraggingTextId] = useState<string | null>(null);
   const [paths, setPaths] = useState<DrawPath[]>([]);
   const [currentPath, setCurrentPath] = useState<DrawPath | null>(null);
   const [textAnnotations, setTextAnnotations] = useState<TextAnnotation[]>([]);
   const [draftTextAnnotation, setDraftTextAnnotation] = useState<DraftTextAnnotation | null>(null);
   const [imageReady, setImageReady] = useState(false);
+  const textDragOffsetRef = useRef({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({
     width: DEFAULT_CANVAS_WIDTH,
     height: DEFAULT_CANVAS_HEIGHT,
@@ -123,6 +125,55 @@ export const FreeDrawDiagram = ({
       y: (event.clientY - rect.top) * scaleY,
     };
   };
+
+  const getTextAnnotationBounds = useCallback((annotation: TextAnnotation) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    const lines = String(annotation.text || "").split(/\r?\n/);
+    const lineHeight = Math.max(annotation.size * 1.25, 14);
+
+    if (!ctx) {
+      return {
+        left: annotation.x - 4,
+        top: annotation.y - 4,
+        right: annotation.x + 220,
+        bottom: annotation.y + lines.length * lineHeight + 4,
+      };
+    }
+
+    ctx.save();
+    ctx.font = `${annotation.fontStyle} ${annotation.fontWeight} ${annotation.size}px Arial`;
+    const textWidth = lines.reduce((maxWidth, line) => Math.max(maxWidth, ctx.measureText(line).width), 0);
+    ctx.restore();
+
+    const padding = Math.max(4, annotation.size * 0.08);
+    return {
+      left: annotation.x - padding,
+      top: annotation.y - padding,
+      right: annotation.x + textWidth + padding,
+      bottom: annotation.y + lines.length * lineHeight + padding,
+    };
+  }, []);
+
+  const findTextAnnotationAtPoint = useCallback(
+    (point: { x: number; y: number }) => {
+      for (let index = textAnnotations.length - 1; index >= 0; index -= 1) {
+        const annotation = textAnnotations[index];
+        const bounds = getTextAnnotationBounds(annotation);
+        if (
+          point.x >= bounds.left &&
+          point.x <= bounds.right &&
+          point.y >= bounds.top &&
+          point.y <= bounds.bottom
+        ) {
+          return annotation;
+        }
+      }
+
+      return null;
+    },
+    [getTextAnnotationBounds, textAnnotations],
+  );
 
   const redrawOverlay = useCallback(() => {
     const canvas = canvasRef.current;
@@ -236,6 +287,21 @@ export const FreeDrawDiagram = ({
     const point = getCanvasCoordinates(event);
 
     if (mode === "textbox") {
+      const hitTextAnnotation = findTextAnnotationAtPoint(point);
+      if (hitTextAnnotation) {
+        if (draftTextAnnotation) {
+          commitDraftTextAnnotation();
+        }
+
+        canvas.setPointerCapture(event.pointerId);
+        textDragOffsetRef.current = {
+          x: point.x - hitTextAnnotation.x,
+          y: point.y - hitTextAnnotation.y,
+        };
+        setDraggingTextId(hitTextAnnotation.id);
+        return;
+      }
+
       commitDraftTextAnnotation();
       setDraftTextAnnotation({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -266,6 +332,27 @@ export const FreeDrawDiagram = ({
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (draggingTextId) {
+      event.preventDefault();
+      const point = getCanvasCoordinates(event);
+      const offset = textDragOffsetRef.current;
+      const nextX = Math.max(0, Math.min(canvasSize.width - 4, point.x - offset.x));
+      const nextY = Math.max(0, Math.min(canvasSize.height - 4, point.y - offset.y));
+
+      setTextAnnotations((previous) =>
+        previous.map((annotation) =>
+          annotation.id === draggingTextId
+            ? {
+                ...annotation,
+                x: nextX,
+                y: nextY,
+              }
+            : annotation,
+        ),
+      );
+      return;
+    }
+
     if (!isDrawing || !currentPath) {
       return;
     }
@@ -328,6 +415,12 @@ export const FreeDrawDiagram = ({
   }, [commitDraftTextAnnotation, draftTextAnnotation, mode]);
 
   useEffect(() => {
+    if (mode !== "textbox" && draggingTextId) {
+      setDraggingTextId(null);
+    }
+  }, [draggingTextId, mode]);
+
+  useEffect(() => {
     setDraftTextAnnotation((previousDraft) => {
       if (!previousDraft) {
         return previousDraft;
@@ -361,6 +454,26 @@ export const FreeDrawDiagram = ({
     if (canvas?.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
     }
+
+    if (draggingTextId) {
+      setDraggingTextId(null);
+      return;
+    }
+
+    finishPath();
+  };
+
+  const handlePointerLeaveOrCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (canvas?.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+
+    if (draggingTextId) {
+      setDraggingTextId(null);
+      return;
+    }
+
     finishPath();
   };
 
@@ -522,12 +635,13 @@ export const FreeDrawDiagram = ({
                 discardDraftTextAnnotation();
               }
             }}
-            className="absolute z-20 h-8 min-w-[140px] max-w-[220px] resize-none overflow-hidden rounded border border-gray-300 bg-white px-2 text-xs shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
+            className="absolute z-20 min-w-[140px] max-w-[220px] resize-none overflow-hidden rounded border border-gray-300 bg-white px-2 text-xs shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
             style={{
               left: `${draftLeftPercent}%`,
               top: `${draftTopPercent}%`,
               transform: "translate(-2px, -2px)",
               color: draftTextAnnotation.color,
+              height: `${Math.max(32, Math.round(draftTextAnnotation.size * 1.35))}px`,
               fontSize: `${draftTextAnnotation.size}px`,
               fontWeight: draftTextAnnotation.fontWeight,
               fontStyle: draftTextAnnotation.fontStyle,
@@ -548,13 +662,20 @@ export const FreeDrawDiagram = ({
           className="absolute inset-0 h-full w-full"
           style={{
             touchAction: "none",
-            cursor: mode === "textbox" ? "text" : mode === "erase" ? "crosshair" : "crosshair",
+            cursor:
+              draggingTextId
+                ? "grabbing"
+                : mode === "textbox"
+                  ? "text"
+                  : mode === "erase"
+                    ? "crosshair"
+                    : "crosshair",
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerLeave={finishPath}
-          onPointerCancel={finishPath}
+          onPointerLeave={handlePointerLeaveOrCancel}
+          onPointerCancel={handlePointerLeaveOrCancel}
         />
       </div>
     </div>

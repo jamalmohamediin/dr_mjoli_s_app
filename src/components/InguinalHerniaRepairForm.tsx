@@ -155,6 +155,70 @@ export const InguinalHerniaRepairForm = ({
     }));
   };
 
+  const [isDurationManuallyEdited, setIsDurationManuallyEdited] = React.useState(false);
+
+  const calculateDuration = (startTime: string, endTime: string): string => {
+    if (!startTime || !endTime) {
+      return "";
+    }
+
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const [endHour, endMinute] = endTime.split(":").map(Number);
+    let startTotalMinutes = startHour * 60 + startMinute;
+    let endTotalMinutes = endHour * 60 + endMinute;
+
+    if (endTotalMinutes < startTotalMinutes) {
+      endTotalMinutes += 24 * 60;
+    }
+
+    return String(endTotalMinutes - startTotalMinutes);
+  };
+
+  const handleTimeChange = (field: "startTime" | "endTime", value: string) => {
+    updateTemplate("preoperative", field, value);
+    const startTime = field === "startTime" ? value : preoperative.startTime || "";
+    const endTime = field === "endTime" ? value : preoperative.endTime || "";
+
+    if (!isDurationManuallyEdited && startTime && endTime) {
+      updateTemplate("preoperative", "duration", calculateDuration(startTime, endTime));
+    }
+  };
+
+  const handleDurationChange = (value: string) => {
+    const trimmedValue = value.trim();
+    updateTemplate("preoperative", "duration", value);
+
+    if (!trimmedValue) {
+      setIsDurationManuallyEdited(false);
+      if (preoperative.startTime && preoperative.endTime) {
+        updateTemplate(
+          "preoperative",
+          "duration",
+          calculateDuration(preoperative.startTime, preoperative.endTime),
+        );
+      }
+      return;
+    }
+
+    setIsDurationManuallyEdited(true);
+  };
+
+  React.useEffect(() => {
+    const startTime = preoperative.startTime || "";
+    const endTime = preoperative.endTime || "";
+    const duration = String(preoperative.duration || "").trim();
+
+    if (!startTime || !endTime || !duration) {
+      setIsDurationManuallyEdited(false);
+      return;
+    }
+
+    const calculatedDuration = calculateDuration(startTime, endTime);
+    if (calculatedDuration && duration === calculatedDuration) {
+      setIsDurationManuallyEdited(false);
+    }
+  }, [preoperative.startTime, preoperative.endTime, preoperative.duration]);
+
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
       onBulkPatientInfoUpdate(updates);
@@ -245,7 +309,7 @@ export const InguinalHerniaRepairForm = ({
               <label className="text-sm font-medium text-gray-700">Start Time (24-hour)</label>
               <Time24HourInput
                 value={preoperative.startTime || ""}
-                onChange={(value) => updateTemplate("preoperative", "startTime", value)}
+                onChange={(value) => handleTimeChange("startTime", value)}
                 hourAriaLabel="Start hour"
                 minuteAriaLabel="Start minute"
               />
@@ -254,7 +318,7 @@ export const InguinalHerniaRepairForm = ({
               <label className="text-sm font-medium text-gray-700">End Time (24-hour)</label>
               <Time24HourInput
                 value={preoperative.endTime || ""}
-                onChange={(value) => updateTemplate("preoperative", "endTime", value)}
+                onChange={(value) => handleTimeChange("endTime", value)}
                 hourAriaLabel="End hour"
                 minuteAriaLabel="End minute"
               />
@@ -262,8 +326,8 @@ export const InguinalHerniaRepairForm = ({
             <LabeledInput
               label="Duration Of Operation (In Minutes)"
               value={preoperative.duration || ""}
-              onChange={(value) => updateTemplate("preoperative", "duration", value)}
-              placeholder="Enter duration in minutes"
+              onChange={handleDurationChange}
+              placeholder="Auto-calculated or enter manually"
             />
           </div>
           <LabeledTextarea

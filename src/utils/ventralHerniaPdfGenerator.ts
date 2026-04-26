@@ -274,9 +274,10 @@ export const generateVentralHerniaPDF = async (
     const drawLabelValue = (
       label: string,
       value: string,
-      options: { x?: number; width?: number; indent?: number } = {},
+      options: { x?: number; width?: number; indent?: number; drawWhenEmpty?: boolean } = {},
     ) => {
-      if (!hasText(value)) {
+      const drawWhenEmpty = options.drawWhenEmpty ?? false;
+      if (!hasText(value) && !drawWhenEmpty) {
         return;
       }
 
@@ -370,18 +371,18 @@ export const generateVentralHerniaPDF = async (
       `Address: ${txt(patientInfo.address)}`,
     ]);
 
-    if (hasText(asaClassification)) {
-      drawAdaptiveRow([`ASA Physical Status Classification: ${asaClassification}`]);
-    }
-    if (hasText(patientInfo.asaNotes)) {
-      drawAdaptiveRow([`ASA Notes: ${txt(patientInfo.asaNotes)}`]);
-    }
     if (hasText(patientInfo.weight) || hasText(patientInfo.height) || hasText(patientInfo.bmi)) {
       drawAdaptiveRow([
         `Weight: ${txt(patientInfo.weight) ? `${txt(patientInfo.weight)} kg` : ""}`,
         `Height: ${txt(patientInfo.height) ? `${txt(patientInfo.height)} cm` : ""}`,
         `BMI: ${txt(patientInfo.bmi)}`,
       ]);
+    }
+    if (hasText(asaClassification)) {
+      drawLabelValue("ASA Physical Status Classification", asaClassification);
+    }
+    if (hasText(patientInfo.asaNotes)) {
+      drawAdaptiveRow([`ASA Notes: ${txt(patientInfo.asaNotes)}`]);
     }
     if (hasText(patientInfo.visitDate) || hasText(patientInfo.visitTime)) {
       drawAdaptiveRow([
@@ -421,7 +422,7 @@ export const generateVentralHerniaPDF = async (
       `Total Duration: ${txt(preoperative.duration) ? `${txt(preoperative.duration)} minutes` : ""}`,
     ]);
     drawAdaptiveRow([
-      `Procedure Urgency: ${procedureUrgencyText}`,
+      `Urgency: ${procedureUrgencyText}`,
       `Preoperative Imaging: ${imagingText}`,
       "",
     ]);
@@ -491,6 +492,14 @@ export const generateVentralHerniaPDF = async (
         ? `${txt(procedure.meshLength) || "___"} x ${txt(procedure.meshWidth) || "___"} cm`
         : "";
     let fixationText = joinSelectionValues(procedure.fixation || [], procedure.fixationOther || "");
+    const difficultyText = joinSelectionValues(
+      procedure.intraOperativeDifficulty || [],
+      procedure.intraOperativeDifficultyOther || "",
+    );
+    const complicationsText = joinSelectionValues(
+      procedure.complications || [],
+      procedure.complicationOther || "",
+    );
 
     if (procedure.repairType === "Primary Suture Closure (Non-Mesh)") {
       meshPlacementText = "N/A";
@@ -517,6 +526,8 @@ export const generateVentralHerniaPDF = async (
       ["Mesh Material", meshMaterialText],
       ["Mesh Size", meshSizeText],
       ["Fixation", fixationText],
+      ["Intra-Operative Difficulty", difficultyText],
+      ["Intraoperative Complications", complicationsText],
     ];
 
     const addColumnItem = (
@@ -589,21 +600,9 @@ export const generateVentralHerniaPDF = async (
     y = Math.max(leftY, rightY) + 8;
 
     drawSeparator();
-
-    const difficultyText = joinSelectionValues(
-      procedure.intraOperativeDifficulty || [],
-      procedure.intraOperativeDifficultyOther || "",
-    );
-    const complicationsText = joinSelectionValues(
-      procedure.complications || [],
-      procedure.complicationOther || "",
-    );
-
-    drawSectionTitle("COMPLICATIONS");
-    drawLabelValue("Intra-Operative Difficulty", difficultyText);
-    drawLabelValue("Intraoperative Complications", complicationsText);
-
-    drawSeparator();
+    if (currentPage === 1) {
+      startNewPage();
+    }
 
     const drainTypeText = joinSelectionValues(procedure.drainType || [], procedure.drainTypeOther || "");
     const drainPlacementText = joinSelectionValues(
@@ -666,7 +665,7 @@ export const generateVentralHerniaPDF = async (
       .join(" | ");
 
     drawSectionTitle("NOTES");
-    drawLabelValue("Additional Notes", additionalNotes);
+    drawLabelValue("Additional Notes", additionalNotes, { drawWhenEmpty: true });
 
     drawSeparator();
 
@@ -674,6 +673,7 @@ export const generateVentralHerniaPDF = async (
     drawLabelValue(
       "Post Operative Management",
       txt(procedure.postOperativeManagement) || txt(ventralHerniaData?.postOperativeManagement),
+      { drawWhenEmpty: true },
     );
 
     drawSeparator();
