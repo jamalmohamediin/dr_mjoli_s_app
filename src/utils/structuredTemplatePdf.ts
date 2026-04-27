@@ -1,11 +1,7 @@
 import jsPDF from "jspdf";
-import { getFullASAText } from "@/utils/asaDescriptions";
-import {
-  formatDateDDMMYYYYWithDashes,
-  formatDateTimeDDMMYYYYWithDashes,
-} from "@/utils/dateFormatter";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
-import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import {
   hasPdfDisplayValue,
   hasText,
@@ -40,6 +36,7 @@ export interface StructuredTemplatePdfSection {
 interface StructuredTemplatePdfOptions {
   title: string;
   patientInfo?: any;
+  patientInfoAsaLabel?: string;
   sections: StructuredTemplatePdfSection[];
   diagram?: {
     title: string;
@@ -52,6 +49,10 @@ interface StructuredTemplatePdfOptions {
     legendPosition?: "top" | "bottom";
     boxHeight?: number;
     inlineValueOffset?: number;
+    inlineReserveHeight?: number;
+    inlineLayout?: "default" | "questionAnswerDiagram";
+    inlineFontSize?: number;
+    inlineLineHeight?: number;
   };
   signature?: {
     text?: string;
@@ -59,7 +60,6 @@ interface StructuredTemplatePdfOptions {
     dateTime?: string;
     alwaysShow?: boolean;
   };
-  patientInfoLayout?: "default" | "appendectomy";
   signatureLayout?: "default" | "appendectomy";
   prioritizeSignsBeforeIndication?: boolean;
 }
@@ -102,10 +102,10 @@ const detectImageFormat = (value: string): "PNG" | "JPEG" => {
 export const generateStructuredTemplatePdf = async ({
   title,
   patientInfo,
+  patientInfoAsaLabel,
   sections,
   diagram,
   signature,
-  patientInfoLayout = "default",
   signatureLayout = "default",
   prioritizeSignsBeforeIndication = false,
 }: StructuredTemplatePdfOptions) => {
@@ -118,7 +118,6 @@ export const generateStructuredTemplatePdf = async ({
   const columnWidth = 84;
   let y = margin;
 
-  const info = getPdfSafePatientInfo(patientInfo || {});
   const firstPreoperativeSectionIndex = sections.findIndex((section) =>
     isPreoperativeSectionTitle(section.title),
   );
@@ -143,13 +142,22 @@ export const generateStructuredTemplatePdf = async ({
       return {
         ...section,
         entries,
+        hideWhenOnlySubheadings: isAfterPreoperativeSection,
       };
     })
-    .filter(
-      (section) =>
-        section.entries.some((entry) => !entry.subheading) ||
-        (section.layout !== "label-value-three-column" && section.entries.length > 0),
-    );
+    .filter((section) => {
+      const hasFilledField = section.entries.some((entry) => !entry.subheading);
+      if (hasFilledField) {
+        return true;
+      }
+
+      if (section.hideWhenOnlySubheadings) {
+        return false;
+      }
+
+      return section.layout !== "label-value-three-column" && section.entries.length > 0;
+    })
+    .map(({ hideWhenOnlySubheadings, ...section }) => section);
   const normalizedDiagramLegendItems = toArray(diagram?.legendItems)
     .map((item) => String(item || "").trim())
     .filter((item) => item.length > 0);
@@ -503,6 +511,8 @@ export const generateStructuredTemplatePdf = async ({
       pick(["End Time", "End Time (24-hour)"]),
       pick([
         "Total Duration (Min)",
+        "Total Duration",
+        "Duration",
         "Duration Of Procedure",
         "Duration Of Operation (In Minutes)",
         "Duration of Procedure",
@@ -512,12 +522,12 @@ export const generateStructuredTemplatePdf = async ({
     drawThreeColLabelValueRow(
       pick(["Caecal Intubation Time"]),
       pick(["Start of Withdrawal Time"]),
-      pick(["Duration of Withdrawal (Min)"]),
+      pick(["Withdrawal Duration", "Duration of Withdrawal (Min)"]),
       1,
     );
     drawThreeColLabelValueRow(
       pick(["Procedure Urgency", "Urgency"]),
-      pick(["Preoperative Imaging", "Pre-Operative Imaging"]),
+      pick(["Imaging", "Preoperative Imaging", "Pre-Operative Imaging"]),
       pick(["Tumour Staging"]),
       1,
     );
@@ -525,22 +535,51 @@ export const generateStructuredTemplatePdf = async ({
     const indicationEntry = pick([
       "Indication for Colonoscopy",
       "Indication for Surgery",
+      "Indication For Surgery",
       "Indications",
       "Indication",
     ]);
+    const threeColumnGap = 4;
+    const preoperativeThreeColumnWidth = (contentWidth - threeColumnGap * 2) / 3;
+    const middleColumnX = margin + preoperativeThreeColumnWidth + threeColumnGap;
+    const middleAlignedLabelWidth = Math.max(middleColumnX - margin - 2, 30);
     if (prioritizeSignsBeforeIndication) {
       if (signsAndSymptomsEntry) {
-        drawLabelValueRow(signsAndSymptomsEntry.label, signsAndSymptomsEntry.value, margin, contentWidth);
+        drawLabelValueRow(
+          signsAndSymptomsEntry.label,
+          signsAndSymptomsEntry.value,
+          margin,
+          contentWidth,
+          middleAlignedLabelWidth,
+        );
       }
       if (indicationEntry) {
-        drawLabelValueRow(indicationEntry.label, indicationEntry.value, margin, contentWidth, 46);
+        drawLabelValueRow(
+          indicationEntry.label,
+          indicationEntry.value,
+          margin,
+          contentWidth,
+          middleAlignedLabelWidth,
+        );
       }
     } else {
       if (indicationEntry) {
-        drawLabelValueRow(indicationEntry.label, indicationEntry.value, margin, contentWidth, 46);
+        drawLabelValueRow(
+          indicationEntry.label,
+          indicationEntry.value,
+          margin,
+          contentWidth,
+          middleAlignedLabelWidth,
+        );
       }
       if (signsAndSymptomsEntry) {
-        drawLabelValueRow(signsAndSymptomsEntry.label, signsAndSymptomsEntry.value, margin, contentWidth);
+        drawLabelValueRow(
+          signsAndSymptomsEntry.label,
+          signsAndSymptomsEntry.value,
+          margin,
+          contentWidth,
+          middleAlignedLabelWidth,
+        );
       }
     }
     const operationDescriptionEntry = pick(["Operation Description"]);
@@ -550,10 +589,10 @@ export const generateStructuredTemplatePdf = async ({
         operationDescriptionEntry.value,
         margin,
         contentWidth,
-        46,
+        60,
       );
     }
-    const preOperativeDiagnosisEntry = pick(["Pre-Operative Diagnosis"]);
+    const preOperativeDiagnosisEntry = pick(["Pre-Operative Diagnosis", "Diagnosis"]);
     if (preOperativeDiagnosisEntry) {
       drawLabelValueRow(
         preOperativeDiagnosisEntry.label,
@@ -614,68 +653,25 @@ export const generateStructuredTemplatePdf = async ({
   y += 8;
   drawRule();
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(11);
-  pdf.text("Patient Information", margin, y);
-  y += 7;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-
-  const gender = formatPatientGender(info);
-  const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
-  const formattedDob = formatDateDDMMYYYYWithDashes(info.dateOfBirth);
-  const weightValue = info.weight ? `${info.weight} kg` : "";
-  const heightValue = info.height ? `${info.height} cm` : "";
-
-  if (patientInfoLayout === "appendectomy") {
-    drawThreeColLabelValueRow(
-      { label: "Patient Name", value: info.name || "" },
-      { label: "Gender", value: gender || "" },
-      { label: "Age", value: info.age || "" },
-      1,
-    );
-    drawThreeColLabelValueRow(
-      { label: "Patient ID", value: info.patientId || "" },
-      { label: "Date Of Birth", value: formattedDob },
-      { label: "Address", value: info.address || "" },
-      1,
-    );
-    drawThreeColLabelValueRow(
-      { label: "Weight", value: weightValue },
-      { label: "Height", value: heightValue },
-      { label: "BMI", value: info.bmi || "" },
-      1,
-    );
-    drawLabelValueRow("ASA Physical Status Classification", asaText);
-    if (hasText(info.asaNotes)) {
-      drawLabelValueRow("ASA Notes", info.asaNotes);
-    }
-  } else {
-    drawTwoColLabelValueRow(
-      { label: "Patient Name", value: info.name || "" },
-      { label: "Patient ID", value: info.patientId || "" },
-    );
-    drawTwoColLabelValueRow(
-      { label: "Date Of Birth", value: formattedDob },
-      { label: "Age / Sex", value: [info.age, gender].filter(Boolean).join(" / ") },
-    );
-    drawTwoColLabelValueRow(
-      {
-        label: "Weight / Height",
-        value: [weightValue, heightValue].filter(Boolean).join(" / "),
-      },
-      { label: "BMI", value: info.bmi || "" },
-    );
-    drawLabelValueRow("ASA Physical Status Classification", asaText);
-    if (hasText(info.asaNotes)) {
-      drawLabelValueRow("ASA Notes", info.asaNotes);
-    }
-  }
+  y = drawStandardPatientInformation({
+    pdf,
+    patientInfo,
+    asaLabel: patientInfoAsaLabel,
+    y,
+    margin,
+    pageWidth,
+    pageHeight,
+    lineHeight,
+  });
 
   let inlineDiagramRendered = false;
 
   filteredSections.forEach((section) => {
-    if (section.startOnNewPage && y > margin + 2) {
+    if (
+      section.startOnNewPage &&
+      y > margin + 2 &&
+      pdf.internal.getNumberOfPages() === 1
+    ) {
       pdf.addPage();
       y = margin;
     }
@@ -689,7 +685,7 @@ export const generateStructuredTemplatePdf = async ({
     y += 2;
     const sectionOpeningHeight =
       shouldRenderInlineDiagram
-        ? 94
+        ? Math.max(16, Number(diagram?.inlineReserveHeight) || 94)
         : section.layout === "label-value-three-column"
           ? 26
           : 16;
@@ -703,13 +699,24 @@ export const generateStructuredTemplatePdf = async ({
     pdf.setFontSize(9);
 
     if (shouldRenderInlineDiagram) {
-      const gap = 6;
-      const rightWidth = 70;
+      const useQuestionAnswerDiagramLayout = diagram?.inlineLayout === "questionAnswerDiagram";
+      const gap = useQuestionAnswerDiagramLayout ? 4 : 6;
+      const rightWidth = useQuestionAnswerDiagramLayout ? 66 : 70;
       const leftWidth = contentWidth - rightWidth - gap;
       const leftX = margin;
       const rightX = margin + leftWidth + gap;
       const labelGap = 2;
       const inlineValueOffset = Math.max(0, Number(diagram?.inlineValueOffset) || 0);
+      const parsedInlineFontSize = Number(diagram?.inlineFontSize);
+      const inlineBodyFontSize =
+        Number.isFinite(parsedInlineFontSize) && parsedInlineFontSize > 0
+          ? parsedInlineFontSize
+          : 9;
+      const parsedInlineLineHeight = Number(diagram?.inlineLineHeight);
+      const inlineTextLineHeight =
+        Number.isFinite(parsedInlineLineHeight) && parsedInlineLineHeight > 0
+          ? parsedInlineLineHeight
+          : lineHeight;
       const legendLineHeight = Math.max(lineHeight - 0.5, 3.8);
       const renderedEntries = section.entries
         .map((entry) => ({
@@ -718,18 +725,21 @@ export const generateStructuredTemplatePdf = async ({
           keepWhenEmpty: entry.keepWhenEmpty,
         }))
         .filter((entry) => hasText(entry.value) || entry.keepWhenEmpty);
-      const inlineLabelWidth = Math.min(
-        Math.max(
-          renderedEntries.reduce(
-            (maxWidth, entry) =>
-              Math.max(maxWidth, pdf.getTextWidth(`${entry.label}:`) + 2),
-            0,
-          ),
-          leftWidth * 0.34,
-          30,
-        ),
-        leftWidth * 0.46,
-      );
+      pdf.setFontSize(inlineBodyFontSize);
+      const inlineLabelWidth = useQuestionAnswerDiagramLayout
+        ? Math.min(Math.max(leftWidth * 0.42, 42), 52)
+        : Math.min(
+            Math.max(
+              renderedEntries.reduce(
+                (maxWidth, entry) =>
+                  Math.max(maxWidth, pdf.getTextWidth(`${entry.label}:`) + 2),
+                0,
+              ),
+              leftWidth * 0.34,
+              30,
+            ),
+            leftWidth * 0.46,
+          );
       const countEntryLines = (entry: { label: string; value: string }) => {
         const labelText = `${entry.label}:`;
         const valueWidth = Math.max(
@@ -742,9 +752,10 @@ export const generateStructuredTemplatePdf = async ({
       };
       const leftHeight =
         renderedEntries.reduce(
-          (total, entry) => total + countEntryLines(entry) * lineHeight,
+          (total, entry) => total + countEntryLines(entry) * inlineTextLineHeight,
           0,
-        ) || lineHeight;
+        ) || inlineTextLineHeight;
+      pdf.setFontSize(9);
       const legendPosition = diagram?.legendPosition === "top" ? "top" : "bottom";
       const legendLinesCount = normalizedDiagramLegendItems.reduce(
         (count, item) => count + pdf.splitTextToSize(`- ${item}`, rightWidth - 1).length,
@@ -761,39 +772,11 @@ export const generateStructuredTemplatePdf = async ({
             (normalizedDiagramLegendItems.length > 0 ? 3 + legendBlockHeight : 0)
           : 66;
       const sectionHeight = Math.max(leftHeight, estimatedRightHeight) + 2;
+      const inlineReserveHeight = Number(diagram?.inlineReserveHeight) || 0;
 
-      ensureSpace(sectionHeight + 2, 24);
-
-      let leftY = y;
-      renderedEntries.forEach((entry) => {
-        const labelText = `${entry.label}:`;
-        const valueWidth = Math.max(
-          leftWidth - inlineLabelWidth - labelGap - inlineValueOffset,
-          20,
-        );
-        const labelLines = pdf.splitTextToSize(labelText, inlineLabelWidth);
-        const valueLines = pdf.splitTextToSize(entry.value, valueWidth);
-        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
-
-        for (let index = 0; index < lineCount; index += 1) {
-          if (labelLines[index]) {
-            pdf.setFont("helvetica", "bold");
-            pdf.text(labelLines[index], leftX, leftY);
-          }
-
-          if (valueLines[index]) {
-            pdf.setFont("helvetica", "normal");
-            pdf.text(
-              valueLines[index],
-              leftX + inlineLabelWidth + labelGap + inlineValueOffset,
-              leftY,
-            );
-          }
-
-          leftY += lineHeight;
-        }
-      });
-      pdf.setFont("helvetica", "normal");
+      if (inlineReserveHeight <= 0) {
+        ensureSpace(sectionHeight + 2, 24);
+      }
 
       let rightBottomY = y;
       if (diagram?.style === "plain") {
@@ -880,10 +863,69 @@ export const generateStructuredTemplatePdf = async ({
         rightBottomY = portsAndIncisionsLayout.diagramBottomY;
       }
 
+      let leftY = y;
+      let leftSpilledToNewPage = false;
+      pdf.setFontSize(inlineBodyFontSize);
+      renderedEntries.forEach((entry) => {
+        const prepareInlineEntryLines = (useFullWidth: boolean) => {
+          const labelText = `${entry.label}:`;
+          const labelWidth = useFullWidth ? 76 : inlineLabelWidth;
+          const valueWidth = useFullWidth
+            ? Math.max(contentWidth - labelWidth - labelGap, 20)
+            : Math.max(leftWidth - labelWidth - labelGap - inlineValueOffset, 20);
+
+          return {
+            labelLines: pdf.splitTextToSize(labelText, labelWidth),
+            labelWidth,
+            valueLines: pdf.splitTextToSize(entry.value, valueWidth),
+            x: useFullWidth ? margin : leftX,
+            valueOffset: useFullWidth ? labelWidth + labelGap : labelWidth + labelGap + inlineValueOffset,
+          };
+        };
+
+        let preparedEntry = prepareInlineEntryLines(leftSpilledToNewPage);
+        let lineCount = Math.max(
+          preparedEntry.labelLines.length,
+          preparedEntry.valueLines.length,
+          1,
+        );
+
+        if (leftY + lineCount * inlineTextLineHeight > pageHeight - 24) {
+          pdf.addPage();
+          leftY = margin;
+          leftSpilledToNewPage = true;
+          preparedEntry = prepareInlineEntryLines(true);
+          lineCount = Math.max(
+            preparedEntry.labelLines.length,
+            preparedEntry.valueLines.length,
+            1,
+          );
+        }
+
+        for (let index = 0; index < lineCount; index += 1) {
+          if (preparedEntry.labelLines[index]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(preparedEntry.labelLines[index], preparedEntry.x, leftY);
+          }
+
+          if (preparedEntry.valueLines[index]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(
+              preparedEntry.valueLines[index],
+              preparedEntry.x + preparedEntry.valueOffset,
+              leftY,
+            );
+          }
+
+          leftY += inlineTextLineHeight;
+        }
+      });
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
 
-      y = Math.max(leftY, rightBottomY + 2, y + sectionHeight);
+      y = leftSpilledToNewPage
+        ? leftY + 2
+        : Math.max(leftY, rightBottomY + 2, y + sectionHeight);
       inlineDiagramRendered = true;
       return;
     }
@@ -1069,9 +1111,12 @@ export const generateStructuredTemplatePdf = async ({
       hasText(signature?.dateTime));
 
   if (shouldRenderSignatureSection) {
-    y += 2;
+    y += signatureLayout === "appendectomy" ? 10 : 2;
     ensureSpace(signatureLayout === "appendectomy" ? 36 : 30, 20);
     drawRule();
+    if (signatureLayout === "appendectomy") {
+      y += 5;
+    }
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 

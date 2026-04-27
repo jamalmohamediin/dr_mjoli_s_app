@@ -205,6 +205,10 @@ export const hasPdfDisplayValue = (value: unknown): boolean => {
     return false;
   }
 
+  if (/^_+$/.test(normalized)) {
+    return false;
+  }
+
   return !PDF_EMPTY_EQUIVALENTS.has(normalized);
 };
 
@@ -215,20 +219,7 @@ const normalizePdfFieldLabel = (label: unknown) =>
     .trim();
 
 export const isPostPreoperativeAlwaysVisibleField = (label: unknown): boolean => {
-  const normalized = normalizePdfFieldLabel(label);
-  if (!normalized) {
-    return false;
-  }
-
-  if (
-    normalized.includes("additional notes") ||
-    normalized.includes("additional information") ||
-    normalized.includes("post operative management")
-  ) {
-    return true;
-  }
-
-  return normalized.includes("signature") || normalized.includes("date time");
+  return false;
 };
 
 export const shouldRenderPostPreoperativeField = (label: unknown, value: unknown): boolean =>

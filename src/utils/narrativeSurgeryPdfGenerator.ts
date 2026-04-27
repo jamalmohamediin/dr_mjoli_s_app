@@ -1,13 +1,9 @@
 import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
-import { getFullASAText } from "@/utils/asaDescriptions";
 import { createSurgicalDiagramCanvas } from "@/utils/createSurgicalDiagramCanvas";
-import {
-  formatDateDDMMYYYYWithDashes,
-  formatDateTimeDDMMYYYYWithDashes,
-} from "@/utils/dateFormatter";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
-import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { hasText, joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
 
 const parseMarkings = (value: unknown) => {
@@ -75,10 +71,17 @@ const generateOpenGeneralSurgeryPdf = async (
   const lineHeight = 4.5;
   let y = margin;
 
-  const info = getPdfSafePatientInfo(patientInfo || narrativeData?.patientInfo || {});
   const preoperative = narrativeData?.preoperative || {};
   const narrative = narrativeData?.narrative || {};
   const additionalInfo = narrativeData?.additionalInfo || {};
+  const diagnosisText = joinSelections(
+    preoperative.diagnosis ||
+      preoperative.preOperativeDiagnosis ||
+      preoperative.preoperativeDiagnosis,
+    preoperative.diagnosisOther ||
+      preoperative.preOperativeDiagnosisOther ||
+      preoperative.preoperativeDiagnosisOther,
+  );
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -277,37 +280,15 @@ const generateOpenGeneralSurgeryPdf = async (
   y += 8;
   drawRule();
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(11);
-  pdf.text("Patient Information", margin, y);
-  y += 7;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-
-  const gender = formatPatientGender(info);
-  const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
-
-  drawTwoColRow(
-    { label: "Patient Name", value: formatAnswerValue(info.name || "") },
-    { label: "Patient ID", value: stringifyValue(info.patientId || "") },
-  );
-  drawTwoColRow(
-    { label: "Date of Birth", value: formatDateDDMMYYYYWithDashes(info.dateOfBirth) },
-    { label: "Age / Sex", value: formatAnswerValue([info.age, gender].filter(Boolean).join(" / ")) },
-  );
-  drawTwoColRow(
-    {
-      label: "Weight / Height",
-      value: [info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
-        .filter(Boolean)
-        .join(" / "),
-    },
-    { label: "BMI", value: info.bmi || "" },
-  );
-  drawTwoColRow(
-    { label: "ASA Score", value: formatAnswerValue(asaText) },
-    hasText(info.asaNotes) ? { label: "ASA Notes", value: formatAnswerValue(info.asaNotes) } : undefined,
-  );
+  y = drawStandardPatientInformation({
+    pdf,
+    patientInfo: patientInfo || narrativeData?.patientInfo,
+    y,
+    margin,
+    pageWidth,
+    pageHeight,
+    lineHeight,
+  });
 
   y += 2;
   ensureSpace(20);
@@ -332,7 +313,7 @@ const generateOpenGeneralSurgeryPdf = async (
       { label: "Start Time", value: preoperative.startTime },
       { label: "End Time", value: preoperative.endTime },
       {
-        label: "Duration of Procedure",
+        label: "Duration",
         value: preoperative.duration ? `${preoperative.duration} min` : "",
       },
     ],
@@ -342,10 +323,10 @@ const generateOpenGeneralSurgeryPdf = async (
     [
       { label: "Urgency", value: preoperative.urgency },
       {
-        label: "Preoperative Imaging",
+        label: "Imaging",
         value: joinSelections(preoperative.imaging, preoperative.imagingOther),
       },
-      { label: "", value: "" },
+      { label: hasText(diagnosisText) ? "Diagnosis" : "", value: diagnosisText },
     ],
     3,
   );
@@ -499,12 +480,19 @@ const generateOpenAbdominalSurgeryPdf = async (
   const leftColumnWidth = rightColumnX - margin - 4;
   let y = margin;
 
-  const info = getPdfSafePatientInfo(patientInfo || narrativeData?.patientInfo || {});
   const preoperative = narrativeData?.preoperative || {};
   const access = narrativeData?.access || {};
   const narrative = narrativeData?.narrative || {};
   const additionalInfo = narrativeData?.additionalInfo || {};
   const additionalNotes = stringifyValue(narrativeData?.procedureFindings?.additionalNotes);
+  const diagnosisText = joinSelections(
+    preoperative.diagnosis ||
+      preoperative.preOperativeDiagnosis ||
+      preoperative.preoperativeDiagnosis,
+    preoperative.diagnosisOther ||
+      preoperative.preOperativeDiagnosisOther ||
+      preoperative.preoperativeDiagnosisOther,
+  );
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -706,37 +694,15 @@ const generateOpenAbdominalSurgeryPdf = async (
   y += 8;
   drawRule();
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(11);
-  pdf.text("Patient Information", margin, y);
-  y += 7;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-
-  const gender = formatPatientGender(info);
-  const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
-
-  drawTwoColRow(
-    { label: "Patient Name", value: formatAnswerValue(info.name || "") },
-    { label: "Patient ID", value: stringifyValue(info.patientId || "") },
-  );
-  drawTwoColRow(
-    { label: "Date of Birth", value: formatDateDDMMYYYYWithDashes(info.dateOfBirth) },
-    { label: "Age / Sex", value: formatAnswerValue([info.age, gender].filter(Boolean).join(" / ")) },
-  );
-  drawTwoColRow(
-    {
-      label: "Weight / Height",
-      value: [info.weight ? `${info.weight} kg` : "", info.height ? `${info.height} cm` : ""]
-        .filter(Boolean)
-        .join(" / "),
-    },
-    { label: "BMI", value: info.bmi || "" },
-  );
-  drawTwoColRow(
-    { label: "ASA Score", value: formatAnswerValue(asaText) },
-    hasText(info.asaNotes) ? { label: "ASA Notes", value: formatAnswerValue(info.asaNotes) } : undefined,
-  );
+  y = drawStandardPatientInformation({
+    pdf,
+    patientInfo: patientInfo || narrativeData?.patientInfo,
+    y,
+    margin,
+    pageWidth,
+    pageHeight,
+    lineHeight,
+  });
 
   y += 2;
   ensureSpace(20);
@@ -761,7 +727,7 @@ const generateOpenAbdominalSurgeryPdf = async (
       { label: "Start Time", value: preoperative.startTime },
       { label: "End Time", value: preoperative.endTime },
       {
-        label: "Duration of Procedure",
+        label: "Duration",
         value: preoperative.duration ? `${preoperative.duration} min` : "",
       },
     ],
@@ -771,10 +737,10 @@ const generateOpenAbdominalSurgeryPdf = async (
     [
       { label: "Urgency", value: preoperative.urgency },
       {
-        label: "Preoperative Imaging",
+        label: "Imaging",
         value: joinSelections(preoperative.imaging, preoperative.imagingOther),
       },
-      { label: "", value: "" },
+      { label: hasText(diagnosisText) ? "Diagnosis" : "", value: diagnosisText },
     ],
     3,
   );

@@ -1,9 +1,8 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
-import { getFullASAText } from './asaDescriptions';
-import { formatPatientGender, formatPatientStickerDate, getPdfSafePatientInfo } from './patientSticker';
 import { drawRectalStylePortsAndIncisions } from './pdfPortsAndIncisionsLayout';
+import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
 import {
   hasPdfDisplayValue,
@@ -365,6 +364,47 @@ export const generateAppendectomyPDF = async (
       pdf.setFont('helvetica', 'normal');
       y += bottomGap;
     };
+
+    const drawCompactFirstColumnLabelValue = (
+      label: string,
+      value: string,
+      x: number,
+      width: number,
+      lineHeight: number = 4,
+      rowGap: number = 1.5,
+    ) => {
+      const normalizedValue = getTextValue(value).trim();
+      if (!hasPrintableValue(normalizedValue)) return;
+
+      const labelText = `${label}:`;
+      pdf.setFont('helvetica', 'bold');
+      const measuredLabelWidth = pdf.getTextWidth(labelText);
+      pdf.setFont('helvetica', 'normal');
+      const labelWidth = Math.min(
+        Math.max(measuredLabelWidth + 1.5, 12),
+        Math.max(12, width - 10),
+      );
+      const valueWidth = Math.max(10, width - labelWidth - 2);
+      const valueLines = pdf.splitTextToSize(normalizedValue, valueWidth) as string[];
+      const lineCount = Math.max(valueLines.length, 1);
+
+      checkPageBreak(lineCount * lineHeight + rowGap + 1);
+
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+        if (lineIndex === 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(labelText, x, y);
+        }
+        if (valueLines[lineIndex]) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(valueLines[lineIndex], x + labelWidth + 2, y);
+        }
+        y += lineHeight;
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      y += rowGap;
+    };
     
     // HEADER - Three column layout
     const headerStartY = y;
@@ -420,15 +460,22 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     pdf.text('APPENDICECTOMY REPORT', pageWidth / 2, y, { align: 'center' });
-    y += 12;
-    
-    // PATIENT INFORMATION section
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('PATIENT INFORMATION', margin, y);
-    y += 6;
-    
-    const patientInfo = getPdfSafePatientInfo(appendectomyData?.patientInfo || {});
+    y += 8;
+
+    drawSectionDivider(5);
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: appendectomyData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      asaLabel: 'ASA Score',
+    });
+
     const bodyFontSize = 8.5;
     const col1X = margin;
     const col2X = margin + 62;
@@ -436,63 +483,8 @@ export const generateAppendectomyPDF = async (
     const threeColumnWidth = 56;
     const fullWidth = pageWidth - margin * 2;
 
-    const patientNameValue = getTextValue(patientInfo?.name || patientName);
-    const patientIdValue = getTextValue(patientInfo?.patientId || patientId);
-    const patientGender = formatPatientGender(patientInfo);
-    const patientAge = getTextValue(patientInfo?.age);
-    const patientDob = formatPatientStickerDate(patientInfo?.dateOfBirth);
-    const patientAddress = getTextValue(patientInfo?.address);
-    const patientWeight = getTextValue(patientInfo?.weight);
-    const patientHeight = getTextValue(patientInfo?.height);
-    const patientBmi = getTextValue(patientInfo?.bmi);
-    const asaClassification = Array.isArray(patientInfo?.asaScore)
-      ? patientInfo.asaScore.filter(Boolean).map((item: string) => getFullASAText(item)).join(', ')
-      : hasPrintableValue(patientInfo?.asaScore)
-        ? getFullASAText(patientInfo.asaScore)
-        : '';
-    const asaNotes = getTextValue(patientInfo?.asaNotes);
-
-    const drawPatientSubsectionTitle = (title: string) => {
-      checkPageBreak(6);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.text(title, margin, y);
-      y += 4.5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(bodyFontSize);
-    };
-
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(bodyFontSize);
-
-    if (
-      hasPrintableValue(patientNameValue) ||
-      hasPrintableValue(patientGender) ||
-      hasPrintableValue(patientAge) ||
-      hasPrintableValue(patientIdValue) ||
-      hasPrintableValue(patientDob) ||
-      hasPrintableValue(patientAddress)
-    ) {
-      drawPatientSubsectionTitle('Patient Details');
-      drawWrappedColumns([
-        { text: `Patient Name: ${patientNameValue}`, x: col1X, width: threeColumnWidth },
-        { text: `Gender: ${patientGender}`, x: col2X, width: threeColumnWidth },
-        { text: `Age: ${patientAge}`, x: col3X, width: threeColumnWidth },
-      ]);
-      drawWrappedColumns([
-        { text: `Patient ID: ${patientIdValue}`, x: col1X, width: threeColumnWidth },
-        { text: `Date Of Birth: ${patientDob}`, x: col2X, width: threeColumnWidth },
-        { text: `Address: ${patientAddress}`, x: col3X, width: threeColumnWidth },
-      ]);
-    }
-
-    drawWrappedColumns([
-      { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
-      { text: `Height: ${patientHeight}`, x: col2X, width: threeColumnWidth },
-      { text: `BMI: ${patientBmi}`, x: col3X, width: threeColumnWidth },
-    ]);
-    drawWrappedTextBlock(`ASA Physical Status Classification: ${asaClassification}`, margin, fullWidth);
-    drawWrappedTextBlock(`ASA Notes: ${asaNotes}`, margin, fullWidth);
 
     drawSectionDivider();
     
@@ -527,9 +519,9 @@ export const generateAppendectomyPDF = async (
     ]);
     drawWrappedColumns([
       { text: `Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
-      { text: `Preoperative Imaging: ${imaging}`, x: col2X, width: pageWidth - margin - col2X },
+      { text: `Imaging: ${imaging}`, x: col2X, width: pageWidth - margin - col2X },
     ]);
-    drawWrappedTextBlock(`Indication for Surgery: ${indication}`, margin, fullWidth);
+    drawCompactFirstColumnLabelValue('Indication', indication, col1X, fullWidth);
 
     drawSectionDivider();
     

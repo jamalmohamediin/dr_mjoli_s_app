@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 
 export interface NewDiagramCapture {
   canvasImageData?: string;
@@ -76,83 +77,58 @@ export const generateSinglePagePDF = async (
     pdf.line(margin, y, pageWidth - margin, y);
     y += 8;
     
-    // PATIENT INFORMATION SECTION - Matching live report style
-    if (reportData?.patientInfo) {
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('PATIENT INFORMATION', margin, y);
-      y += 6;
-      
-      const leftCol = margin;
-      const midCol = margin + (pageWidth - 2 * margin) / 3;
-      const rightCol = margin + 2 * (pageWidth - 2 * margin) / 3;
-      
-      pdf.setFontSize(9);
-      pdf.setFont('helvetica', 'normal');
-      
-      // First row - Patient ID, Name, Age
-      const name = reportData.patientInfo.name || 'Not specified';
-      const patientId = reportData.patientInfo.patientId || 'N/A';
-      const age = reportData.patientInfo.age || 'N/A';
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Patient ID:', leftCol, y);
-      pdf.text('Patient Name:', midCol, y);
-      pdf.text('Age:', rightCol, y);
-      y += 4;
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(patientId, leftCol, y);
-      pdf.text(name, midCol, y);
-      pdf.text(age.toString(), rightCol, y);
-      y += 6;
-      
-      // Second row - Gender, Date, Contact
-      const gender = reportData.patientInfo.gender || 'N/A';
-      const date = reportData.patientInfo.date 
-        ? new Date(reportData.patientInfo.date).toLocaleDateString('en-ZA') 
-        : 'N/A';
-      const contact = reportData.patientInfo.contactNumber || 'N/A';
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Gender:', leftCol, y);
-      pdf.text('Date:', midCol, y);
-      pdf.text('Contact:', rightCol, y);
-      y += 4;
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(gender, leftCol, y);
-      pdf.text(date, midCol, y);
-      pdf.text(contact, rightCol, y);
-      y += 8;
-    }
-    
-    // PROCEDURE INFORMATION SECTION - Matching live report style (removed consent, performed by, assisted by)
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('PROCEDURE INFORMATION', margin, y);
-    y += 6;
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: reportData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      bottomPadding: footerHeight + 10,
+    });
+    y += 8;
     
     if (reportData?.patientInfo) {
+      const indication = String(reportData.patientInfo.indication || '').trim();
+      const sedation = String(reportData.patientInfo.sedation || '').trim();
+
+      if (indication || sedation) {
+        // PROCEDURE INFORMATION SECTION - Matching live report style (removed consent, performed by, assisted by)
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PROCEDURE INFORMATION', margin, y);
+        y += 6;
+
       const leftCol = margin;
       const rightCol = margin + (pageWidth - 2 * margin) / 2;
+        const fieldWidth = (pageWidth - 2 * margin) / 2 - 5;
       
       pdf.setFontSize(9);
-      
-      // Indication and Sedation only
-      const indication = reportData.patientInfo.indication || 'N/A';
-      const sedation = reportData.patientInfo.sedation || 'N/A';
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Indication:', leftCol, y);
-      pdf.text('Sedation:', rightCol, y);
-      y += 4;
-      
-      pdf.setFont('helvetica', 'normal');
-      const indicationLines = pdf.splitTextToSize(indication, (pageWidth - 2 * margin) / 2 - 5);
-      pdf.text(indicationLines, leftCol, y);
-      pdf.text(sedation, rightCol, y);
-      y += Math.max(indicationLines.length * 4, 6) + 2;
+
+        if (indication) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Indication:', leftCol, y);
+        }
+        if (sedation) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Sedation:', indication ? rightCol : leftCol, y);
+        }
+        y += 4;
+
+        pdf.setFont('helvetica', 'normal');
+        const indicationLines = indication ? pdf.splitTextToSize(indication, fieldWidth) : [];
+        const sedationLines = sedation ? pdf.splitTextToSize(sedation, fieldWidth) : [];
+        if (indicationLines.length > 0) {
+          pdf.text(indicationLines, leftCol, y);
+        }
+        if (sedationLines.length > 0) {
+          pdf.text(sedationLines, indication ? rightCol : leftCol, y);
+        }
+        y += Math.max(indicationLines.length, sedationLines.length, 1) * 4 + 4;
+      }
     }
     
     // PROCEDURE TYPE SELECTION - Matching live report style
@@ -230,26 +206,12 @@ export const generateSinglePagePDF = async (
         console.log('Adding gastroscopy image');
         // Keep original diagram size without padding
         pdf.addImage(gastro.canvasImageData, 'PNG', leftX, y, columnWidth, imageHeight);
-      } else {
-        // Empty diagram placeholder
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'italic');
-        pdf.setTextColor(128, 128, 128);
-        pdf.text('No gastroscopy diagram', leftX + columnWidth/2, y + imageHeight/2, { align: 'center' });
-        pdf.setTextColor(0, 0, 0);
       }
       
       if (colono?.canvasImageData) {
         console.log('Adding colonoscopy image');
         // Keep original diagram size without padding
         pdf.addImage(colono.canvasImageData, 'PNG', rightX, y, columnWidth, imageHeight);
-      } else {
-        // Empty diagram placeholder
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'italic');
-        pdf.setTextColor(128, 128, 128);
-        pdf.text('No colonoscopy diagram', rightX + columnWidth/2, y + imageHeight/2, { align: 'center' });
-        pdf.setTextColor(0, 0, 0);
       }
       
       y += imageHeight;
@@ -288,11 +250,6 @@ export const generateSinglePagePDF = async (
           }
           leftY += 2;
         });
-      } else {
-        pdf.setFont('helvetica', 'italic');
-        pdf.setTextColor(128, 128, 128);
-        pdf.text('No gastroscopy findings recorded', leftX, leftY);
-        pdf.setTextColor(0, 0, 0);
       }
       
       // Colonoscopy findings
@@ -317,11 +274,6 @@ export const generateSinglePagePDF = async (
           }
           rightY += 2;
         });
-      } else {
-        pdf.setFont('helvetica', 'italic');
-        pdf.setTextColor(128, 128, 128);
-        pdf.text('No colonoscopy findings recorded', rightX, rightY);
-        pdf.setTextColor(0, 0, 0);
       }
       
       y += findingsBoxHeight + 5;

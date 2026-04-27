@@ -1,15 +1,8 @@
 import jsPDF from "jspdf";
-import { getFullASAText } from "@/utils/asaDescriptions";
-import {
-  formatDateDDMMYYYYWithDashes,
-  formatDateTimeDDMMYYYYWithDashes,
-} from "@/utils/dateFormatter";
-import {
-  formatPatientGender,
-  getPdfSafePatientInfo,
-} from "@/utils/patientSticker";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
 const SMALL_BOWEL_DIAGRAM_MARKING_SCALE = 1.8;
@@ -126,7 +119,6 @@ export const generateSmallBowelSurgeryPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = getPdfSafePatientInfo(patientInfo || smallBowelData?.patientInfo || {});
     const preop = smallBowelData?.preoperative || {};
     const findings = smallBowelData?.operativeFindings || {};
     const proc = smallBowelData?.procedure || {};
@@ -171,16 +163,6 @@ export const generateSmallBowelSurgeryPDF = async (
       pdf.text(title, margin, y);
       y += 7;
       y += 1;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-    };
-
-    const patientSubsection = (title: string) => {
-      ensureSpace(7);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(9);
-      pdf.text(title, margin, y);
-      y += 5;
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
     };
@@ -351,6 +333,44 @@ export const generateSmallBowelSurgeryPDF = async (
       pdf.setFont("helvetica", "normal");
     };
 
+    const rowCompactFirstColumnLabelValue = (
+      label: string,
+      value: string,
+      bottomPadding = 20,
+      widthOverride = colWidth
+    ) => {
+      const normalizedValue = txt(value).trim();
+      if (!normalizedValue) return;
+
+      const x = margin;
+      const width = widthOverride;
+      const labelText = `${label}:`;
+      pdf.setFont("helvetica", "bold");
+      const measuredLabelWidth = pdf.getTextWidth(labelText);
+      pdf.setFont("helvetica", "normal");
+      const labelWidth = Math.min(
+        Math.max(measuredLabelWidth + 1.5, 12),
+        Math.max(12, width - 10)
+      );
+      const valueWidth = Math.max(10, width - labelWidth - 2);
+      const valueLines = pdf.splitTextToSize(normalizedValue, valueWidth);
+      const lines = Math.max(valueLines.length, 1);
+
+      ensureSpace(lines * lineHeight + 1, bottomPadding);
+      for (let index = 0; index < lines; index += 1) {
+        if (index === 0) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelText, x, y);
+        }
+        if (valueLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[index], x + labelWidth + 2, y);
+        }
+        y += lineHeight;
+      }
+      pdf.setFont("helvetica", "normal");
+    };
+
     const rowQuestionAnswer = (label: string, value: string, bottomPadding = 20) => {
       const normalizedLabel = label.trim();
       const normalizedValue = value.trim();
@@ -384,7 +404,6 @@ export const generateSmallBowelSurgeryPDF = async (
       return lines.length * lineHeight + 1;
     };
 
-    const gender = formatPatientGender(info);
     const showStomaFields = toArray(recon?.reconstructionType).includes("Stoma");
 
     pdf.setFontSize(10);
@@ -417,45 +436,19 @@ export const generateSmallBowelSurgeryPDF = async (
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    sec("PATIENT INFORMATION");
-
-    patientSubsection("Patient Details");
-    row3(
-      cell("Patient Name", txt(info.name || patientName)),
-      cell("Gender", gender),
-      cell("Age", txt(info.age)),
-    );
-    row3(
-      cell("Patient ID", txt(info.patientId || patientId)),
-      cell("Date Of Birth", formatDateDDMMYYYYWithDashes(info.dateOfBirth)),
-      cell("Address", txt(info.address)),
-    );
-    y += 1;
-
-    if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
-      row3(
-        cell("Weight", txt(info.weight)),
-        cell("Height", txt(info.height)),
-        cell("BMI", txt(info.bmi)),
-      );
-    }
-    if (info.asaScore) {
-      row3(
-        "",
-        cell("ASA Physical Status Classification", getFullASAText(info.asaScore)),
-        "",
-      );
-    }
-    if (txt(info.asaNotes)) {
-      row3("", cell("ASA Notes", txt(info.asaNotes)), "");
-    }
-    if (txt(info.visitDate) || txt(info.visitTime)) {
-      row3(
-        cell("Date", formatDateDDMMYYYYWithDashes(info.visitDate)),
-        cell("Time", txt(info.visitTime)),
-        "",
-      );
-    }
+    y += 3;
+    drawRule();
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: patientInfo || smallBowelData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+    });
     y += 1;
 
     sec("PREOPERATIVE INFORMATION");
@@ -479,12 +472,12 @@ export const generateSmallBowelSurgeryPDF = async (
       cell("Total Duration", preop?.duration ? `${preop.duration} minutes` : ""),
     );
     row3(
-      cell("Procedure Urgency", txt(preop?.procedureUrgency)),
-      cell("Preoperative Imaging", joinSelections(toArray(preop?.imaging), preop?.imagingOther)),
+      cell("Urgency", txt(preop?.procedureUrgency)),
+      cell("Imaging", joinSelections(toArray(preop?.imaging), preop?.imagingOther)),
       "",
     );
-    row3("", cell("Indication for Surgery", txt(preop?.indication)), "");
-    row3("", cell("Operation Description", txt(preop?.operationDescription)), "");
+    rowCompactFirstColumnLabelValue("Indication", txt(preop?.indication), 20, contentWidth);
+    row3(cell("Operation Description", txt(preop?.operationDescription)), "", "");
 
     sec("OPERATIVE FINDINGS");
     rowQuestionAnswer("Description of Operation Findings", txt(findings?.description));

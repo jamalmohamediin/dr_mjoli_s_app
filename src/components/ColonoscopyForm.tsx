@@ -160,6 +160,12 @@ export const ColonoscopyForm = ({
   const diagnosis = template.diagnosis;
   const additionalInfo = template.additionalInfo;
 
+  React.useEffect(() => {
+    if (!String(additionalInfo.dateTime || "").trim()) {
+      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
+    }
+  }, [additionalInfo.dateTime, updateTemplate]);
+
   const selectedDepth = toArray(procedureDetails.depthOfExamination);
   const selectedCaecalLandmarks = toArray(procedureDetails.caecalLandmarks);
   const reachedTerminalOrCaecum =
@@ -691,7 +697,7 @@ export const ColonoscopyForm = ({
             initialCanvasImageData={template.diagram?.canvasImageData || ""}
             maxWidth={300}
             onUpdate={(data) => {
-              updateTemplate("diagram", "findings", []);
+              updateTemplate("diagram", "findings", data.findings || []);
               updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
             }}
           />

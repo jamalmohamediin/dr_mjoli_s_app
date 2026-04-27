@@ -4,6 +4,7 @@ import {
   formatDateTimeDDMMYYYYWithDashes,
 } from './dateFormatter';
 import { getPatientInfoPdfSections } from './patientSticker';
+import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 
 export interface FinalDiagramCapture {
   canvasImageData?: string;
@@ -290,24 +291,28 @@ export const generateFinalPDF = async (
     pdf.text('ENDOSCOPY REPORT', pageWidth / 2, y, { align: 'center' });
     y += 8;
     
-    // PATIENT INFORMATION section
-    const patientSections = getPatientInfoPdfSections(reportData?.patientInfo, patientName, patientId);
-    if (patientSections.length > 0) {
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('PATIENT INFORMATION', margin, y);
-      y += 6;
-      
-      writePatientSections(patientSections);
-      
-      y += 4; // Extra spacing before separator
-      
-      // Separator line
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.2);
-      pdf.line(margin, y, pageWidth - margin, y);
-      y += 8;
-    }
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 5;
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: reportData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      bottomPadding: footerHeight + 15,
+    });
+
+    y += 4;
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 8;
     
     // PREOPERATIVE INFORMATION section  
     pdf.setFontSize(10);
@@ -589,14 +594,9 @@ export const generateFinalPDF = async (
           leftY += 2;
         }
       });
-    } else {
-      if (!useLegacyGastroscopyFindings && gastro?.canvasImageData) {
-        pdf.text('See diagram annotations', diagramLeftX, leftY);
-        leftY += 4;
-      } else if (gastro || reportData?.gastroscopyFindings) {
-        pdf.text('No significant findings', diagramLeftX, leftY);
-        leftY += 4;
-      }
+    } else if (!useLegacyGastroscopyFindings && gastro?.canvasImageData) {
+      pdf.text('See diagram annotations', diagramLeftX, leftY);
+      leftY += 4;
     }
     
     // Colonoscopy findings - display actual findings only if they exist
@@ -616,14 +616,9 @@ export const generateFinalPDF = async (
           rightY += 2;
         }
       });
-    } else {
-      if (!useLegacyColonoscopyFindings && colono?.canvasImageData) {
-        pdf.text('See diagram annotations', diagramRightX, rightY);
-        rightY += 4;
-      } else if (colono || reportData?.colonoscopyFindings) {
-        pdf.text('No significant findings', diagramRightX, rightY);
-        rightY += 4;
-      }
+    } else if (!useLegacyColonoscopyFindings && colono?.canvasImageData) {
+      pdf.text('See diagram annotations', diagramRightX, rightY);
+      rightY += 4;
     }
     
     y = Math.max(leftY, rightY) + 6;

@@ -11,6 +11,7 @@ import {
   PatientSummary,
   removePatientRecordFromCache,
   removePatientsFromCache,
+  sanitizePatientRecordForStorage,
   upsertPatientRecordInCache,
 } from "@/utils/patientRecords";
 
@@ -19,6 +20,9 @@ const PATIENT_RECORDS_CACHE_KEY = "patient_records_cache_v1";
 const PATIENT_SYNC_QUEUE_KEY = "patient_sync_queue_v1";
 const PENDING_RECORD_DELETE_IDS_KEY = "patient_pending_record_delete_ids_v1";
 const PATIENT_RECORDS_LOCAL_CACHE_DISABLED_KEY = "patient_records_local_cache_disabled_v1";
+const PATIENT_CACHE_DB_NAME = "dr_mjoli_patient_database_cache";
+const PATIENT_CACHE_DB_VERSION = 1;
+const PATIENT_CACHE_STORE_NAME = "json_cache";
 
 type SyncQueueItem =
   | {
@@ -65,6 +69,7 @@ type PatientDbRuntimeState = {
   localStorageWriteBlockedKeys: Set<string>;
   localStorageWriteErrorShownKeys: Set<string>;
   localStorageParseErrorShownKeys: Set<string>;
+  indexedDbWriteErrorShownKeys?: Set<string>;
   hasShownPatientCacheQuotaWarning: boolean;
   hasShownPatientSyncQueueQuotaWarning: boolean;
   disablePatientRecordsLocalCacheWrite: boolean;
@@ -80,6 +85,7 @@ const runtimeState =
     localStorageWriteBlockedKeys: new Set<string>(),
     localStorageWriteErrorShownKeys: new Set<string>(),
     localStorageParseErrorShownKeys: new Set<string>(),
+    indexedDbWriteErrorShownKeys: new Set<string>(),
     hasShownPatientCacheQuotaWarning: false,
     hasShownPatientSyncQueueQuotaWarning: false,
     disablePatientRecordsLocalCacheWrite: false,
@@ -88,10 +94,161 @@ const runtimeState =
 const localStorageWriteBlockedKeys = runtimeState.localStorageWriteBlockedKeys;
 const localStorageWriteErrorShownKeys = runtimeState.localStorageWriteErrorShownKeys;
 const localStorageParseErrorShownKeys = runtimeState.localStorageParseErrorShownKeys;
+const indexedDbWriteErrorShownKeys =
+  runtimeState.indexedDbWriteErrorShownKeys ||
+  (runtimeState.indexedDbWriteErrorShownKeys = new Set<string>());
 let hasShownPatientCacheQuotaWarning = runtimeState.hasShownPatientCacheQuotaWarning;
 let hasShownPatientSyncQueueQuotaWarning = runtimeState.hasShownPatientSyncQueueQuotaWarning;
 let nextPatientSyncAttemptAt = 0;
 const PATIENT_SYNC_RETRY_MS = 15000;
+
+interface IndexedDbJsonCacheEntry {
+  key: string;
+  value: unknown;
+  updatedAt: string;
+}
+
+let patientCacheDatabasePromise: Promise<IDBDatabase> | null = null;
+
+const isPatientDatabaseCacheKey = (key: string) =>
+  key === PATIENTS_CACHE_KEY || key === PATIENT_RECORDS_CACHE_KEY;
+
+const isStorageQuotaError = (error: unknown) => {
+  const name =
+    typeof error === "object" && error && "name" in error
+      ? String((error as { name?: string }).name || "").toLowerCase()
+      : "";
+  const message =
+    typeof error === "object" && error && "message" in error
+      ? String((error as { message?: string }).message || "").toLowerCase()
+      : "";
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? Number((error as { code?: number }).code || 0)
+      : 0;
+
+  return (
+    name.includes("quota") ||
+    name.includes("constraint") ||
+    message.includes("quota") ||
+    message.includes("exceeded") ||
+    code === 22 ||
+    code === 1014
+  );
+};
+
+const openPatientCacheDatabase = (): Promise<IDBDatabase> => {
+  if (typeof indexedDB === "undefined") {
+    return Promise.reject(new Error("IndexedDB is not available in this browser."));
+  }
+
+  if (patientCacheDatabasePromise) {
+    return patientCacheDatabasePromise;
+  }
+
+  patientCacheDatabasePromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(PATIENT_CACHE_DB_NAME, PATIENT_CACHE_DB_VERSION);
+
+    request.onerror = () => {
+      patientCacheDatabasePromise = null;
+      reject(request.error || new Error("Failed to open patient database cache."));
+    };
+
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(PATIENT_CACHE_STORE_NAME)) {
+        database.createObjectStore(PATIENT_CACHE_STORE_NAME, { keyPath: "key" });
+      }
+    };
+
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        patientCacheDatabasePromise = null;
+      };
+      resolve(database);
+    };
+  });
+
+  return patientCacheDatabasePromise;
+};
+
+const runIndexedDbRequest = <T,>(request: IDBRequest<T>): Promise<T> =>
+  new Promise((resolve, reject) => {
+    request.onerror = () => {
+      reject(request.error || new Error("IndexedDB request failed."));
+    };
+
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+  });
+
+const readIndexedDbJson = async <T,>(key: string): Promise<T | null> => {
+  try {
+    const database = await openPatientCacheDatabase();
+    const transaction = database.transaction(PATIENT_CACHE_STORE_NAME, "readonly");
+    const store = transaction.objectStore(PATIENT_CACHE_STORE_NAME);
+    const storedEntry = (await runIndexedDbRequest(
+      store.get(key),
+    )) as IndexedDbJsonCacheEntry | undefined;
+
+    if (!storedEntry || !("value" in storedEntry)) {
+      return null;
+    }
+
+    return storedEntry.value as T;
+  } catch (error) {
+    if (!localStorageParseErrorShownKeys.has(`indexeddb:${key}`)) {
+      localStorageParseErrorShownKeys.add(`indexeddb:${key}`);
+      console.error(`Failed to read patient cache from IndexedDB for ${key}`, error);
+    }
+    return null;
+  }
+};
+
+const writeIndexedDbJson = async (key: string, value: unknown): Promise<boolean> => {
+  try {
+    const database = await openPatientCacheDatabase();
+    const transaction = database.transaction(PATIENT_CACHE_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(PATIENT_CACHE_STORE_NAME);
+    await runIndexedDbRequest(
+      store.put({
+        key,
+        value: JSON.parse(JSON.stringify(value)),
+        updatedAt: new Date().toISOString(),
+      } satisfies IndexedDbJsonCacheEntry),
+    );
+    return true;
+  } catch (error) {
+    if (!indexedDbWriteErrorShownKeys.has(key)) {
+      indexedDbWriteErrorShownKeys.add(key);
+      console.error(`Failed to write patient cache to IndexedDB for ${key}`, error);
+    }
+    return false;
+  }
+};
+
+const isFirestoreDocumentTooLargeError = (error: unknown) => {
+  const errorCode =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: string }).code || "").toLowerCase()
+      : "";
+  const message = String(
+    (typeof error === "object" && error && "message" in error
+      ? (error as { message?: string }).message
+      : "") || "",
+  ).toLowerCase();
+
+  return (
+    errorCode.includes("invalid-argument") &&
+      (message.includes("maximum allowed size") ||
+        message.includes("exceeds the maximum allowed size") ||
+        message.includes("1,048,576")) ||
+    message.includes("document") && message.includes("exceeds the maximum allowed size")
+  );
+};
 
 const parseStoredJson = <T,>(key: string, fallback: T): T => {
   if (typeof window === "undefined") {
@@ -145,7 +302,8 @@ const writeStoredJson = (key: string, value: any) => {
     } catch {
       // ignore remove errors
     }
-    if (!localStorageWriteErrorShownKeys.has(key)) {
+    const canUseIndexedDbFallback = isPatientDatabaseCacheKey(key) && isStorageQuotaError(error);
+    if (!canUseIndexedDbFallback && !localStorageWriteErrorShownKeys.has(key)) {
       localStorageWriteErrorShownKeys.add(key);
       console.error(`Failed to write local cache for ${key}`, error);
     }
@@ -283,6 +441,33 @@ export const loadPatientDatabaseCache = (): PatientDatabaseCache => {
   return inMemoryPatientCache;
 };
 
+export const loadPatientDatabaseCacheFromIndexedDb = async (): Promise<PatientDatabaseCache | null> => {
+  const [storedPatients, storedRecords] = await Promise.all([
+    readIndexedDbJson<PatientSummary[]>(PATIENTS_CACHE_KEY),
+    readIndexedDbJson<PatientRecord[]>(PATIENT_RECORDS_CACHE_KEY),
+  ]);
+
+  const hasStoredData = Array.isArray(storedPatients) || Array.isArray(storedRecords);
+  if (!hasStoredData) {
+    return null;
+  }
+
+  const queue = loadPatientSyncQueue();
+  const pendingRecordDeleteIds = loadPendingRecordDeleteIds();
+  inMemoryPatientCache = applyPendingRecordDeleteOverlay(
+    applySyncQueueOverlayToCache(
+      normalizePatientDatabaseCache({
+        patients: Array.isArray(storedPatients) ? storedPatients : [],
+        records: Array.isArray(storedRecords) ? storedRecords : [],
+      }),
+      queue,
+    ),
+    pendingRecordDeleteIds,
+  );
+
+  return inMemoryPatientCache;
+};
+
 const applySyncQueueOverlayToCache = (
   cache: PatientDatabaseCache,
   queue: SyncQueueItem[],
@@ -368,14 +553,30 @@ export const savePatientDatabaseCache = (cache: PatientDatabaseCache) => {
   }
 
   if (!wrotePatients || !wroteRecords) {
-    if (!hasShownPatientCacheQuotaWarning) {
-      hasShownPatientCacheQuotaWarning = true;
-      runtimeState.hasShownPatientCacheQuotaWarning = true;
-      console.warn("Patient cache persisted in memory only due localStorage write limits.");
-    }
+    void Promise.all([
+      writeIndexedDbJson(PATIENTS_CACHE_KEY, normalizedCache.patients),
+      writeIndexedDbJson(PATIENT_RECORDS_CACHE_KEY, normalizedCache.records),
+    ]).then(([wroteIndexedDbPatients, wroteIndexedDbRecords]) => {
+      const wroteIndexedDbCache = wroteIndexedDbPatients && wroteIndexedDbRecords;
+      if (wroteIndexedDbCache) {
+        hasShownPatientCacheQuotaWarning = false;
+        runtimeState.hasShownPatientCacheQuotaWarning = false;
+        return;
+      }
+
+      if (!hasShownPatientCacheQuotaWarning) {
+        hasShownPatientCacheQuotaWarning = true;
+        runtimeState.hasShownPatientCacheQuotaWarning = true;
+        console.warn("Patient cache could not be persisted locally because browser storage is full.");
+      }
+    });
   } else {
     hasShownPatientCacheQuotaWarning = false;
     runtimeState.hasShownPatientCacheQuotaWarning = false;
+    void Promise.all([
+      writeIndexedDbJson(PATIENTS_CACHE_KEY, normalizedCache.patients),
+      writeIndexedDbJson(PATIENT_RECORDS_CACHE_KEY, normalizedCache.records),
+    ]);
   }
 };
 
@@ -386,8 +587,36 @@ export const loadPatientSyncQueue = () => {
   );
 
   if (Array.isArray(storedQueue)) {
-    inMemoryPatientSyncQueue = storedQueue;
-    return storedQueue;
+    let didSanitizeQueue = false;
+    const sanitizedQueue = storedQueue.map((item) => {
+      if (item.type !== "upsertPatientRecord") {
+        return item;
+      }
+
+      const safeRecord =
+        item.record && typeof item.record === "object"
+          ? sanitizePatientRecordForStorage(item.record)
+          : item.record;
+
+      const originalSnapshot = JSON.stringify(item.record?.reportSnapshot ?? null);
+      const sanitizedSnapshot = JSON.stringify((safeRecord as PatientRecord)?.reportSnapshot ?? null);
+      if (originalSnapshot !== sanitizedSnapshot) {
+        didSanitizeQueue = true;
+      }
+
+      return {
+        ...item,
+        record: safeRecord,
+      };
+    });
+
+    inMemoryPatientSyncQueue = sanitizedQueue;
+
+    if (didSanitizeQueue) {
+      savePatientSyncQueue(sanitizedQueue);
+    }
+
+    return sanitizedQueue;
   }
 
   return inMemoryPatientSyncQueue;
@@ -522,20 +751,34 @@ const syncUpsertPatientRecord = async (patient: PatientSummary, record: PatientR
     ...patient,
     id: safePatientId,
   };
-  const normalizedRecord = {
+  const normalizedRecord = sanitizePatientRecordForStorage({
     ...record,
     id: safeRecordId,
     patientDocId: sanitizeId(record?.patientDocId) || safePatientId,
-  };
+  });
 
-  await Promise.all([
-    setDoc(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
+  await setDoc(doc(firestoreDb, "patients", safePatientId), toSerializable(normalizedPatient), {
+    merge: true,
+  });
+
+  try {
+    await setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(normalizedRecord), {
       merge: true,
-    }),
-    setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(normalizedRecord), {
+    });
+  } catch (error) {
+    if (!isFirestoreDocumentTooLargeError(error)) {
+      throw error;
+    }
+
+    const compactRecord = {
+      ...normalizedRecord,
+      reportSnapshot: null,
+    };
+
+    await setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(compactRecord), {
       merge: true,
-    }),
-  ]);
+    });
+  }
 };
 
 const syncPatientDeletedState = async (
@@ -697,6 +940,7 @@ export const processPatientSyncQueue = async () => {
           : "") || "",
       ).toLowerCase();
       const shouldBackoff =
+        isFirestoreDocumentTooLargeError(error) ||
         errorCode.includes("resource-exhausted") ||
         errorCode.includes("unavailable") ||
         message.includes("resource-exhausted") ||
@@ -729,17 +973,19 @@ export const queuePatientRecordSync = (patient: PatientSummary, record: PatientR
 
   removePendingRecordDeleteId(safeRecordId);
 
+  const normalizedRecord = sanitizePatientRecordForStorage({
+    ...record,
+    id: safeRecordId,
+    patientDocId: sanitizeId(record?.patientDocId) || safePatientId,
+  });
+
   return enqueuePatientSyncItem({
     type: "upsertPatientRecord",
     patient: toSerializable({
       ...patient,
       id: safePatientId,
     }),
-    record: toSerializable({
-      ...record,
-      id: safeRecordId,
-      patientDocId: sanitizeId(record?.patientDocId) || safePatientId,
-    }),
+    record: toSerializable(normalizedRecord),
   });
 };
 

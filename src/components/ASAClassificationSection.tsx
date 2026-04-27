@@ -31,7 +31,7 @@ export const ASAClassificationSection: React.FC<ASAClassificationSectionProps> =
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">ASA Physical Status Classification</h3>
+        <h3 className="text-sm font-semibold text-gray-800 mb-3">ASA Score</h3>
         
         {/* Display selected ASA classification prominently */}
         {selectedASA && (

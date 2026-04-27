@@ -1,6 +1,5 @@
 import jsPDF from "jspdf";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
-import { getFullASAText } from "@/utils/asaDescriptions";
 import {
   getPeriAnalAdditionalFindingSection,
   getPeriAnalFindingSections,
@@ -8,14 +7,10 @@ import {
   parsePeriAnalDiagramState,
 } from "@/utils/periAnalHelpers";
 import {
-  formatPatientGender,
-  formatPatientStickerDate,
-  getPdfSafePatientInfo,
-} from "@/utils/patientSticker";
-import {
   PERI_ANAL_DIAGRAM_VARIANTS,
   periAnalDiagramImages,
 } from "@/utils/periAnalDiagramConfig";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 import {
   hasPdfDisplayValue,
@@ -246,7 +241,6 @@ export const generatePeriAnalPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = getPdfSafePatientInfo(patientInfo || periAnalData?.patientInfo || {});
     const preop = periAnalData?.preoperative || {};
     const woundManagement = periAnalData?.woundManagement || {};
     const complications = periAnalData?.complications || {};
@@ -510,43 +504,19 @@ export const generatePeriAnalPDF = async (
       pdf.setFontSize(9);
     };
 
-    const patientNameValue = txt(info.name || patientName);
-    const patientIdValue = txt(info.patientId || patientId);
-    const patientGender = formatPatientGender(info);
-    const asaClassification = info.asaScore ? getFullASAText(info.asaScore) : "";
-
-    startSection("Patient Details", { withDivider: false });
-    row3(
-      `Patient Name: ${patientNameValue}`,
-      `Gender: ${patientGender}`,
-      `Age: ${txt(info.age)}`
-    );
-    row3(
-      `Patient ID: ${patientIdValue}`,
-      `Date Of Birth: ${formatPatientStickerDate(info.dateOfBirth)}`,
-      `Address: ${txt(info.address)}`
-    );
-
-    if (txt(info.weight) || txt(info.height) || txt(info.bmi)) {
-      row3(
-        `Weight: ${txt(info.weight)}`,
-        `Height: ${txt(info.height)}`,
-        `BMI: ${txt(info.bmi)}`
-      );
-    }
-    if (txt(asaClassification)) {
-      row1(`ASA Physical Status Classification: ${asaClassification}`);
-    }
-    if (txt(info.asaNotes)) {
-      row1(`ASA Notes: ${txt(info.asaNotes)}`);
-    }
-    if (txt(info.visitDate) || txt(info.visitTime)) {
-      row3(
-        `Date: ${formatPatientStickerDate(info.visitDate)}`,
-        `Time: ${txt(info.visitTime)}`,
-        ""
-      );
-    }
+    drawRule();
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: patientInfo || periAnalData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      asaLabel: "ASA Score",
+    });
     startSection("Preoperative Information");
     row3(
       `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
@@ -559,8 +529,8 @@ export const generatePeriAnalPDF = async (
       `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`
     );
     row3(
-      `Procedure Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Preoperative Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
+      `Urgency: ${txt(preop?.procedureUrgency)}`,
+      `Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
       ""
     );
     row1(`Indication For Surgery: ${txt(preop?.indication)}`);
@@ -574,13 +544,6 @@ export const generatePeriAnalPDF = async (
     }
     postPreoperativeSectionActive = true;
 
-    startSection("Findings Summary");
-    writeEntries(
-      findingsSummary?.entries?.length
-        ? findingsSummary.entries
-        : [{ label: "Summary", value: "No findings summary recorded" }],
-    );
-
     if (diagramCanvasEntries.length > 0) {
       const cellGap = 8;
       const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
@@ -588,21 +551,32 @@ export const generatePeriAnalPDF = async (
       const titleOffset = isFourDiagramLayout ? 4 : 5;
       const rowGap = isFourDiagramLayout ? 6 : 12;
       const rowCount = Math.ceil(diagramCanvasEntries.length / 2);
-      let cellHeight = isFourDiagramLayout ? 46 : 58;
-      if (isFourDiagramLayout) {
-        const availableHeight = pageHeight - 20 - y;
-        const availableCellHeight = Math.floor((availableHeight - 26) / rowCount - rowGap - titleOffset);
-        if (availableCellHeight > 0) {
-          cellHeight = Math.max(34, Math.min(cellHeight, availableCellHeight));
-        }
+      const sectionChromeHeight = 25;
+      const remainingPageOneHeight = Math.max(36, pageHeight - 20 - y - sectionChromeHeight);
+      const maxCellHeightForPageOne = Math.floor(remainingPageOneHeight / rowCount - rowGap - titleOffset);
+      let cellHeight = Math.max(
+        isFourDiagramLayout ? 34 : 40,
+        Math.min(isFourDiagramLayout ? 46 : 58, maxCellHeightForPageOne),
+      );
+      if (!Number.isFinite(cellHeight) || cellHeight <= 0) {
+        cellHeight = isFourDiagramLayout ? 34 : 40;
       }
       const diagramGridHeight = rowCount * (cellHeight + rowGap + titleOffset);
-      const diagramSectionRequiredHeight = Math.max(60, diagramGridHeight + 24);
-      ensureSpace(diagramSectionRequiredHeight);
 
-      startSection("Peri-Anal Diagrams");
-      row1("Legend: Freehand Drawings And Textbox Notes Are Rendered Exactly As Marked On The Diagram.");
-      ensureSpace(diagramGridHeight + 8);
+      y += 2;
+      drawRule();
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text("Peri-Anal Diagrams", margin, y);
+      y += 6;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text(
+        "Legend: Freehand Drawings And Textbox Notes Are Rendered Exactly As Marked On The Diagram.",
+        margin,
+        y,
+      );
+      y += lineHeight;
       const gridStartY = y;
 
       diagramCanvasEntries.forEach((entry, index) => {
@@ -637,6 +611,11 @@ export const generatePeriAnalPDF = async (
       if (diagramCanvasEntries.length <= 2) {
         startNewPage();
       }
+    }
+
+    if (findingsSummary?.entries?.length) {
+      startSection("Findings Summary");
+      writeEntries(findingsSummary.entries);
     }
 
     findingSections.forEach((section) => {

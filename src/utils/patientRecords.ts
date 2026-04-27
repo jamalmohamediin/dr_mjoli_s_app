@@ -163,6 +163,157 @@ const PATIENT_IDENTITY_FIELDS = [
 
 const text = (value: any) => String(value || "").trim();
 
+const SNAPSHOT_HEAVY_STRING_KEYS = new Set([
+  "canvasimagedata",
+  "drawingimagedata",
+  "gastroscopycanvasdata",
+  "colonoscopycanvasdata",
+  "surgeonsignature",
+  "doctorsignature",
+]);
+
+const SNAPSHOT_HEAVY_OBJECT_KEYS = new Set(["media"]);
+const SNAPSHOT_MAX_STRING_LENGTH = 250000;
+
+const isBinaryDataUrl = (value: string) => /^data:[^,]+,/.test(value.trim());
+
+const shouldStripSnapshotString = (key: string, value: string) => {
+  const normalizedKey = key.toLowerCase();
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return false;
+  }
+
+  if (SNAPSHOT_HEAVY_STRING_KEYS.has(normalizedKey)) {
+    return true;
+  }
+
+  if (isBinaryDataUrl(trimmedValue)) {
+    return true;
+  }
+
+  if (trimmedValue.length > SNAPSHOT_MAX_STRING_LENGTH) {
+    return true;
+  }
+
+  if (
+    (normalizedKey.includes("image") ||
+      normalizedKey.includes("canvas") ||
+      (normalizedKey.includes("signature") &&
+        !normalizedKey.endsWith("signaturetext"))) &&
+    trimmedValue.length > 4096
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+const sanitizeReportSnapshotValue = (value: unknown, key = ""): unknown => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return shouldStripSnapshotString(key, value) ? "" : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeReportSnapshotValue(entry, key));
+  }
+
+  if (typeof value === "object") {
+    const normalizedKey = key.toLowerCase();
+    if (SNAPSHOT_HEAVY_OBJECT_KEYS.has(normalizedKey)) {
+      return [];
+    }
+
+    const sanitizedObject: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([entryKey, entryValue]) => {
+      sanitizedObject[entryKey] = sanitizeReportSnapshotValue(entryValue, entryKey);
+    });
+    return sanitizedObject;
+  }
+
+  return value;
+};
+
+const restoreEndoscopyDiagramSnapshot = (
+  sanitizedSnapshot: any,
+  sourceSnapshot: any,
+  templateKey: "gastroscopy" | "colonoscopy",
+  legacyCanvasKey: "gastroscopyCanvasData" | "colonoscopyCanvasData",
+  legacyFindingsKey: "gastroscopyFindings" | "colonoscopyFindings",
+) => {
+  const canvasImageData =
+    text(sourceSnapshot?.[templateKey]?.diagram?.canvasImageData) ||
+    text(sourceSnapshot?.[legacyCanvasKey]) ||
+    text(sourceSnapshot?.[legacyFindingsKey]?.canvasImageData);
+
+  if (!canvasImageData) {
+    return sanitizedSnapshot;
+  }
+
+  const nextSnapshot = {
+    ...(sanitizedSnapshot || {}),
+  };
+
+  nextSnapshot[templateKey] = {
+    ...(nextSnapshot[templateKey] || {}),
+    diagram: {
+      ...(nextSnapshot[templateKey]?.diagram || {}),
+      canvasImageData,
+    },
+  };
+  nextSnapshot[legacyCanvasKey] = canvasImageData;
+  nextSnapshot[legacyFindingsKey] = {
+    ...(nextSnapshot[legacyFindingsKey] || {}),
+    findings: Array.isArray(nextSnapshot[legacyFindingsKey]?.findings)
+      ? nextSnapshot[legacyFindingsKey].findings
+      : [],
+    canvasImageData,
+  };
+
+  return nextSnapshot;
+};
+
+const restoreEndoscopyDiagramSnapshots = (sanitizedSnapshot: any, sourceSnapshot: any) =>
+  restoreEndoscopyDiagramSnapshot(
+    restoreEndoscopyDiagramSnapshot(
+      sanitizedSnapshot,
+      sourceSnapshot,
+      "gastroscopy",
+      "gastroscopyCanvasData",
+      "gastroscopyFindings",
+    ),
+    sourceSnapshot,
+    "colonoscopy",
+    "colonoscopyCanvasData",
+    "colonoscopyFindings",
+  );
+
+export const sanitizeReportSnapshotForStorage = (reportSnapshot: any) => {
+  const sourceSnapshot = reportSnapshot || {};
+  try {
+    const clonedSnapshot = JSON.parse(JSON.stringify(sourceSnapshot));
+    return restoreEndoscopyDiagramSnapshots(
+      sanitizeReportSnapshotValue(clonedSnapshot),
+      sourceSnapshot,
+    );
+  } catch {
+    return restoreEndoscopyDiagramSnapshots(
+      sanitizeReportSnapshotValue(sourceSnapshot),
+      sourceSnapshot,
+    );
+  }
+};
+
+export const sanitizePatientRecordForStorage = (record: PatientRecord): PatientRecord => ({
+  ...record,
+  reportSnapshot: sanitizeReportSnapshotForStorage(record?.reportSnapshot),
+});
+
 const normalizeIdentityDate = (value: string) => {
   const raw = text(value);
   if (!raw) {
@@ -610,11 +761,15 @@ export const buildPatientRecord = ({
   templateType: TemplateType;
 }): PatientRecord => {
   const nowIso = new Date().toISOString();
+  const sanitizedSnapshot = sanitizeReportSnapshotForStorage(reportSnapshot);
   const patientInfo = createPatientStickerSyncSnapshot(
-    getTemplatePatientInfo(reportSnapshot, templateType),
+    getTemplatePatientInfo(sanitizedSnapshot, templateType),
   );
-  const procedureNames = getTemplateProcedureNames(reportSnapshot, templateType);
-  const operationDescription = getTemplateOperationDescription(reportSnapshot, templateType);
+  const procedureNames = getTemplateProcedureNames(sanitizedSnapshot, templateType);
+  const operationDescription = getTemplateOperationDescription(
+    sanitizedSnapshot,
+    templateType,
+  );
 
   return {
     id: existingRecord?.id || createId("record"),
@@ -626,7 +781,7 @@ export const buildPatientRecord = ({
     procedureNames,
     primaryProcedureName: procedureNames[0] || getTemplateLabel(templateType),
     operationDescription,
-    recordDate: getTemplateRecordDate(reportSnapshot, templateType, nowIso),
+    recordDate: getTemplateRecordDate(sanitizedSnapshot, templateType, nowIso),
     createdAt: existingRecord?.createdAt || nowIso,
     updatedAt: nowIso,
     deletedAt: existingRecord?.deletedAt || null,
@@ -636,7 +791,7 @@ export const buildPatientRecord = ({
       procedureNames,
       operationDescription,
     ]),
-    reportSnapshot: JSON.parse(JSON.stringify(reportSnapshot)),
+    reportSnapshot: sanitizedSnapshot,
   };
 };
 
@@ -728,11 +883,11 @@ export const normalizePatientDatabaseCache = (
     ? cacheRecords.map((record, index) => {
         const safeRecord =
           record && typeof record === "object" ? (record as PatientRecord) : ({} as PatientRecord);
-        return {
+        return sanitizePatientRecordForStorage({
           ...safeRecord,
           id: sanitizeId(safeRecord?.id) || `record_recovered_${index + 1}`,
           patientDocId: sanitizeId(safeRecord?.patientDocId),
-        };
+        } as PatientRecord);
       })
     : [];
 
@@ -844,18 +999,20 @@ export const upsertPatientRecordInCache = (
   cache: PatientDatabaseCache,
   record: PatientRecord,
 ) => {
+  const sanitizedRecord = sanitizePatientRecordForStorage(record);
   const nextRecords = sortRecords([
-    ...cache.records.filter((existingRecord) => existingRecord.id !== record.id),
-    record,
+    ...cache.records.filter((existingRecord) => existingRecord.id !== sanitizedRecord.id),
+    sanitizedRecord,
   ]);
-  const existingPatient = cache.patients.find((patient) => patient.id === record.patientDocId) || null;
+  const existingPatient =
+    cache.patients.find((patient) => patient.id === sanitizedRecord.patientDocId) || null;
   const nextPatient = buildPatientSummary({
     existingPatient,
-    patientDocId: record.patientDocId,
+    patientDocId: sanitizedRecord.patientDocId,
     records: nextRecords,
   });
   const nextPatients = sortPatients([
-    ...cache.patients.filter((patient) => patient.id !== record.patientDocId),
+    ...cache.patients.filter((patient) => patient.id !== sanitizedRecord.patientDocId),
     nextPatient,
   ]);
 

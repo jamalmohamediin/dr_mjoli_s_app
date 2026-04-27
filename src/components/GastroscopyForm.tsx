@@ -652,9 +652,17 @@ export const GastroscopyForm = ({
           <GastroscopyDiagramCanvas
             key={`gastroscopy-diagram-${diagramResetCounter}`}
             imageSrc={gastroscopyTemplateImage}
-            initialCanvasImageData={template.diagram?.canvasImageData || ""}
-            initialDrawingImageData={template.diagram?.drawingImageData || ""}
-            initialTextAnnotations={template.diagram?.textAnnotations || []}
+            initialCanvasImageData={
+              template.diagram?.canvasImageData ||
+              currentReport.gastroscopyCanvasData ||
+              currentReport.gastroscopyFindings?.canvasImageData ||
+              ""
+            }
+            initialDrawingImageData={
+              template.diagram?.drawingImageData ||
+              currentReport.gastroscopyFindings?.drawingImageData ||
+              ""
+            }
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
               updateTemplate("diagram", "drawingImageData", data.drawingImageData || "");

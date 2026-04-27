@@ -579,7 +579,7 @@ export const getPatientInfoPdfSections = (
             `Address: ${txt(info.address)}`,
           ],
           [
-            `ASA Physical Status Classification: ${info.asaScore ? getFullASAText(info.asaScore) : ""}`,
+            `ASA Score: ${info.asaScore ? getFullASAText(info.asaScore) : ""}`,
             `ASA Notes: ${txt(info.asaNotes)}`,
             "",
           ],

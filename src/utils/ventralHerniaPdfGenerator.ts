@@ -4,13 +4,8 @@ import {
   formatDateDDMMYYYYWithDashes,
   formatDateTimeDDMMYYYYWithDashes,
 } from "./dateFormatter";
-import {
-  formatPatientGender,
-  formatPatientStickerDate,
-  getPdfSafePatientInfo,
-} from "./patientSticker";
-import { getFullASAText } from "./asaDescriptions";
 import { drawRectalStylePortsAndIncisions } from "./pdfPortsAndIncisionsLayout";
+import { drawStandardPatientInformation } from "./pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "./surgicalDiagramMarkings";
 
 const VENTRAL_HERNIA_DIAGRAM_MARKING_SCALE = 1.5;
@@ -271,6 +266,48 @@ export const generateVentralHerniaPDF = async (
       y += rowHeight;
     };
 
+    const drawCompactFirstColumnLabelValue = (
+      label: string,
+      value: string,
+      widthOverride = contentWidth,
+    ) => {
+      const normalizedValue = txt(value).trim();
+      if (!hasText(normalizedValue)) {
+        return;
+      }
+
+      const x = margin;
+      const width = widthOverride;
+      const lineHeight = 4.2;
+      const labelText = `${label}:`;
+      pdf.setFont("helvetica", "bold");
+      const measuredLabelWidth = pdf.getTextWidth(labelText);
+      pdf.setFont("helvetica", "normal");
+      const labelWidth = Math.min(
+        Math.max(measuredLabelWidth + 1.5, 12),
+        Math.max(12, width - 10),
+      );
+      const valueWidth = Math.max(10, width - labelWidth - 2);
+      const valueLines = pdf.splitTextToSize(normalizedValue, valueWidth) as string[];
+      const lineCount = Math.max(valueLines.length, 1);
+      const rowHeight = lineCount * lineHeight + 1;
+
+      ensureSpace(rowHeight);
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+        const lineY = y + lineIndex * lineHeight;
+        if (lineIndex === 0) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(labelText, x, lineY);
+        }
+        if (valueLines[lineIndex]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(valueLines[lineIndex], x + labelWidth + 2, lineY);
+        }
+      }
+      pdf.setFont("helvetica", "normal");
+      y += rowHeight;
+    };
+
     const drawLabelValue = (
       label: string,
       value: string,
@@ -314,12 +351,6 @@ export const generateVentralHerniaPDF = async (
       pdf.setFont("helvetica", "normal");
     };
 
-    const patientInfo = getPdfSafePatientInfo(ventralHerniaData?.patientInfo || {});
-    const gender = formatPatientGender(patientInfo);
-    const asaClassification = patientInfo.asaScore
-      ? getFullASAText(patientInfo.asaScore)
-      : "";
-
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.text("Dr. Monde Mjoli", margin, y);
@@ -355,42 +386,20 @@ export const generateVentralHerniaPDF = async (
     pdf.text("VENTRAL HERNIA REPAIR REPORT", pageWidth / 2, y, { align: "center" });
     y += 8;
 
-    drawSectionTitle("PATIENT INFORMATION");
-    pdf.setFont("helvetica", "bold");
-    pdf.text("Patient Details", margin, y);
-    y += 5;
-    pdf.setFont("helvetica", "normal");
-    drawAdaptiveRow([
-      `Patient Name: ${txt(patientInfo.name || patientName)}`,
-      `Gender: ${gender}`,
-      `Age: ${txt(patientInfo.age)}`,
-    ]);
-    drawAdaptiveRow([
-      `Patient ID: ${txt(patientInfo.patientId || patientId)}`,
-      `Date Of Birth: ${formatPatientStickerDate(patientInfo.dateOfBirth)}`,
-      `Address: ${txt(patientInfo.address)}`,
-    ]);
-
-    if (hasText(patientInfo.weight) || hasText(patientInfo.height) || hasText(patientInfo.bmi)) {
-      drawAdaptiveRow([
-        `Weight: ${txt(patientInfo.weight) ? `${txt(patientInfo.weight)} kg` : ""}`,
-        `Height: ${txt(patientInfo.height) ? `${txt(patientInfo.height)} cm` : ""}`,
-        `BMI: ${txt(patientInfo.bmi)}`,
-      ]);
-    }
-    if (hasText(asaClassification)) {
-      drawLabelValue("ASA Physical Status Classification", asaClassification);
-    }
-    if (hasText(patientInfo.asaNotes)) {
-      drawAdaptiveRow([`ASA Notes: ${txt(patientInfo.asaNotes)}`]);
-    }
-    if (hasText(patientInfo.visitDate) || hasText(patientInfo.visitTime)) {
-      drawAdaptiveRow([
-        `Date: ${formatPatientStickerDate(patientInfo.visitDate)}`,
-        `Time: ${txt(patientInfo.visitTime)}`,
-        "",
-      ]);
-    }
+    drawSeparator();
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: ventralHerniaData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      bottomPadding: footerReserve,
+      asaLabel: "ASA Score",
+    });
 
     drawSeparator();
 
@@ -423,10 +432,10 @@ export const generateVentralHerniaPDF = async (
     ]);
     drawAdaptiveRow([
       `Urgency: ${procedureUrgencyText}`,
-      `Preoperative Imaging: ${imagingText}`,
+      `Imaging: ${imagingText}`,
       "",
     ]);
-    drawAdaptiveRow([`Indication for Surgery: ${indicationText}`]);
+    drawCompactFirstColumnLabelValue("Indication", indicationText, contentWidth);
 
     drawSeparator();
 
@@ -502,12 +511,12 @@ export const generateVentralHerniaPDF = async (
     );
 
     if (procedure.repairType === "Primary Suture Closure (Non-Mesh)") {
-      meshPlacementText = "N/A";
-      meshMaterialText = "N/A";
-      meshSizeText = "N/A";
-      fixationText = "N/A";
+      meshPlacementText = "";
+      meshMaterialText = "";
+      meshSizeText = "";
+      fixationText = "";
     } else if (procedure.repairType === "Mesh Repair") {
-      primaryRepairText = "N/A";
+      primaryRepairText = "";
     }
 
     const leftColumnItems: Array<[string, string]> = [

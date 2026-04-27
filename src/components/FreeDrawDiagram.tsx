@@ -260,7 +260,7 @@ export const FreeDrawDiagram = ({
 
     const canvasImageData = exportCanvas.toDataURL("image/png");
     onUpdate({
-      findings: [],
+      findings: [{ type: "diagramMarkup" }],
       canvasImageData,
     });
     lastEmittedImageRef.current = canvasImageData;
@@ -274,8 +274,23 @@ export const FreeDrawDiagram = ({
     if (!imageReady) {
       return;
     }
+
+    const incoming = String(initialCanvasImageData || "").trim();
+    if (incoming && incoming !== lastEmittedImageRef.current) {
+      onUpdate({
+        findings: [{ type: "diagramMarkup" }],
+        canvasImageData: incoming,
+      });
+      lastEmittedImageRef.current = incoming;
+      return;
+    }
+
+    if (paths.length === 0 && textAnnotations.length === 0) {
+      return;
+    }
+
     emitCanvasUpdate();
-  }, [emitCanvasUpdate, imageReady, paths, textAnnotations]);
+  }, [emitCanvasUpdate, imageReady, initialCanvasImageData, onUpdate, paths, textAnnotations]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

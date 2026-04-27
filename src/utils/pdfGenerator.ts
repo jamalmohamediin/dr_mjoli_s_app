@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 
 export interface DiagramCapture {
   canvas?: HTMLCanvasElement;
@@ -35,16 +36,22 @@ export const captureReportAsPDF = async (
     pdf.text('Dr. Monde Mjoli - Specialist Surgeon', pageWidth / 2, y, { align: 'center' });
     y += 6;
     
-    // Patient info
-    if (reportData) {
-      const name = reportData.patientInfo?.name || 'Not specified';
-      const id = reportData.patientInfo?.patientId || 'N/A';
-      const date = reportData.patientInfo?.date ? new Date(reportData.patientInfo.date).toLocaleDateString('en-ZA') : 'N/A';
-      
-      pdf.setFontSize(9);
-      pdf.text(`Patient: ${name} | ID: ${id} | Date: ${date}`, pageWidth / 2, y, { align: 'center' });
-      y += 15;
-    }
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 5;
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: reportData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+    });
+    y += 8;
     
     // === DIAGRAMS SIDE BY SIDE ===
     const gastro = diagrams?.find(d => d.type === 'gastroscopy');

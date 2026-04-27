@@ -124,10 +124,9 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
   const sections: StructuredTemplatePdfSection[] = normalizedSections.map((section) => ({
     title: section.title,
     layout:
-      section.layout ||
-      (section.title === "Preoperative Information"
+      section.title === "Preoperative Information"
         ? "aligned-preoperative-grid"
-        : "label-value-table"),
+        : section.layout || "label-value-table",
     fixedLabelWidth:
       section.title === "Bowel Preparation and Procedure Details"
         ? 44
@@ -136,7 +135,17 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
           : undefined,
     labelGap: FINDINGS_DETAIL_SECTION_TITLES.has(section.title) ? 3 : undefined,
     entries: section.entries.map((entry) => ({
-      label: entry.label,
+      label:
+        section.title === "Preoperative Information" &&
+        entry.label === "Preoperative Imaging"
+          ? "Imaging"
+          : section.title === "Preoperative Information" &&
+              entry.label === "Total Duration (Min)"
+            ? "Total Duration"
+          : section.title === "Preoperative Information" &&
+              entry.label === "Duration of Withdrawal (Min)"
+            ? "Withdrawal Duration"
+          : entry.label,
       value: formatExportValue(entry.value),
       fullWidth: entry.fullWidth,
     })),
@@ -146,7 +155,6 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     title: "COLONOSCOPY REPORT",
     patientInfo: patientInfo || data?.patientInfo,
     sections,
-    patientInfoLayout: "appendectomy",
     signatureLayout: "appendectomy",
     prioritizeSignsBeforeIndication: true,
     diagram: diagramImageData
@@ -162,7 +170,9 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
             diagramLegendItems.length > 0
               ? diagramLegendItems
               : ["Diagram annotations are included directly in the image."],
-          boxHeight: 78,
+          boxHeight: 82,
+          inlineReserveHeight: 64,
+          inlineLayout: "questionAnswerDiagram",
         }
       : undefined,
     signature: {

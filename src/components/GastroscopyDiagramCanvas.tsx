@@ -5,91 +5,44 @@ import { Button } from "@/components/ui/button";
 type DiagramTool = "draw" | "text" | "erase";
 type TextFontStyle = "regular" | "bold" | "italic";
 
-type TextAnnotation = {
-  id: string;
-  text: string;
+interface TextEditorState {
+  canvasX: number;
+  canvasY: number;
   xPercent: number;
   yPercent: number;
-  color: string;
-  fontSize: number;
-  fontStyle: TextFontStyle;
-  underline: boolean;
-};
+}
 
 interface GastroscopyDiagramCanvasProps {
   imageSrc: string;
   initialCanvasImageData?: string;
   initialDrawingImageData?: string;
-  initialTextAnnotations?: TextAnnotation[];
+  initialTextAnnotations?: any[];
   onUpdate: (data: {
     findings: any[];
     drawingImageData: string;
-    textAnnotations: TextAnnotation[];
+    textAnnotations: any[];
     canvasImageData: string;
   }) => void;
 }
 
-type TextEditorState = {
-  xPercent: number;
-  yPercent: number;
-};
-
-type DragState = {
-  id: string;
-  offsetXPercent: number;
-  offsetYPercent: number;
-};
-
 const TOOL_BUTTON_BASE = "h-8 px-3 text-xs";
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
-const normalizeTextAnnotations = (value: unknown): TextAnnotation[] =>
-  Array.isArray(value)
-    ? value
-        .map((entry, index) => {
-          const candidate = entry as Partial<TextAnnotation>;
-          const text = String(candidate?.text || "").trim();
-          if (!text) {
-            return null;
-          }
-
-          return {
-            id: String(candidate?.id || `text-${index}`),
-            text,
-            xPercent: Number(candidate?.xPercent ?? 0),
-            yPercent: Number(candidate?.yPercent ?? 0),
-            color: String(candidate?.color || "#dc2626"),
-            fontSize: Number(candidate?.fontSize || 32),
-            fontStyle:
-              candidate?.fontStyle === "bold" || candidate?.fontStyle === "italic"
-                ? candidate.fontStyle
-                : "regular",
-            underline: Boolean(candidate?.underline),
-          };
-        })
-        .filter((entry): entry is TextAnnotation => Boolean(entry))
-    : [];
 
 export const GastroscopyDiagramCanvas = ({
   imageSrc,
   initialCanvasImageData,
   initialDrawingImageData,
-  initialTextAnnotations,
   onUpdate,
 }: GastroscopyDiagramCanvasProps) => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const imageRef = React.useRef<HTMLImageElement>(null);
-  const wrapperRef = React.useRef<HTMLDivElement>(null);
   const textInputRef = React.useRef<HTMLInputElement>(null);
   const isDrawingRef = React.useRef(false);
   const lastPointRef = React.useRef<{ x: number; y: number } | null>(null);
-  const canvasSizedRef = React.useRef(false);
-  const loadedTextSignatureRef = React.useRef("");
+  const loadedDrawingSignatureRef = React.useRef("");
+  const loadedCompositeSignatureRef = React.useRef("");
   const lastEmittedDrawingSignatureRef = React.useRef("");
   const lastEmittedCompositeSignatureRef = React.useRef("");
-  const lastEmittedTextSignatureRef = React.useRef("");
+  const canvasSizedRef = React.useRef(false);
 
   const [activeTool, setActiveTool] = React.useState<DiagramTool>("draw");
   const [strokeColor, setStrokeColor] = React.useState("#dc2626");
@@ -101,142 +54,29 @@ export const GastroscopyDiagramCanvas = ({
   const [textFontSize, setTextFontSize] = React.useState(32);
   const [textFontStyle, setTextFontStyle] = React.useState<TextFontStyle>("regular");
   const [textUnderline, setTextUnderline] = React.useState(false);
-  const [textAnnotations, setTextAnnotations] = React.useState<TextAnnotation[]>(
-    normalizeTextAnnotations(initialTextAnnotations),
-  );
-  const [dragState, setDragState] = React.useState<DragState | null>(null);
-  const textAnnotationsRef = React.useRef<TextAnnotation[]>(
-    normalizeTextAnnotations(initialTextAnnotations),
-  );
 
   const getCanvasContext = () => canvasRef.current?.getContext("2d") || null;
 
-  const getWrapperPercentPoint = React.useCallback((clientX: number, clientY: number) => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) {
-      return { xPercent: 0, yPercent: 0 };
+  const getCanvasPoint = React.useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return { x: 0, y: 0 };
     }
 
-    const rect = wrapper.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     return {
-      xPercent: clamp(((clientX - rect.left) / rect.width) * 100, 0, 99),
-      yPercent: clamp(((clientY - rect.top) / rect.height) * 100, 0, 99),
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
     };
   }, []);
-
-  const getCanvasPoint = React.useCallback(
-    (event: React.PointerEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        return { x: 0, y: 0 };
-      }
-
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-
-      return {
-        x: (event.clientX - rect.left) * scaleX,
-        y: (event.clientY - rect.top) * scaleY,
-      };
-    },
-    [],
-  );
-
-  const drawAnnotationToContext = React.useCallback(
-    (context: CanvasRenderingContext2D, annotation: TextAnnotation, width: number, height: number) => {
-      const x = (annotation.xPercent / 100) * width;
-      const y = (annotation.yPercent / 100) * height;
-      const resolvedFontSize = Math.max(18, Number(annotation.fontSize) || 32);
-      const fontWeight = annotation.fontStyle === "bold" ? "700" : "400";
-      const fontStyle = annotation.fontStyle === "italic" ? "italic" : "normal";
-
-      context.save();
-      context.globalCompositeOperation = "source-over";
-      context.fillStyle = annotation.color;
-      context.font = `${fontStyle} ${fontWeight} ${resolvedFontSize}px Arial`;
-      context.textBaseline = "top";
-      context.fillText(annotation.text, x, y);
-
-      if (annotation.underline) {
-        const measuredWidth = context.measureText(annotation.text).width;
-        const underlineY = y + resolvedFontSize + 1;
-        context.strokeStyle = annotation.color;
-        context.lineWidth = Math.max(1, resolvedFontSize / 14);
-        context.beginPath();
-        context.moveTo(x, underlineY);
-        context.lineTo(x + measuredWidth, underlineY);
-        context.stroke();
-      }
-
-      context.restore();
-    },
-    [],
-  );
-
-  React.useEffect(() => {
-    textAnnotationsRef.current = textAnnotations;
-  }, [textAnnotations]);
-
-  const buildCompositeDataUrl = React.useCallback((annotationsOverride?: TextAnnotation[]) => {
-    const canvas = canvasRef.current;
-    const image = imageRef.current;
-    const annotations = annotationsOverride || textAnnotationsRef.current;
-    if (!canvas) {
-      return "";
-    }
-
-    const exportCanvas = document.createElement("canvas");
-    exportCanvas.width = canvas.width;
-    exportCanvas.height = canvas.height;
-    const exportContext = exportCanvas.getContext("2d");
-    if (!exportContext) {
-      return "";
-    }
-
-    if (useLegacyCompositeBase) {
-      exportContext.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
-    } else {
-      if (image && image.naturalWidth && image.naturalHeight) {
-        exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
-      }
-      exportContext.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
-    }
-
-    annotations.forEach((annotation) => {
-      drawAnnotationToContext(exportContext, annotation, exportCanvas.width, exportCanvas.height);
-    });
-
-    return exportCanvas.toDataURL("image/png");
-  }, [drawAnnotationToContext, useLegacyCompositeBase]);
-
-  const emitDiagramUpdate = React.useCallback((annotationsOverride?: TextAnnotation[]) => {
-    const canvas = canvasRef.current;
-    const drawingImageData =
-      canvas && !useLegacyCompositeBase ? canvas.toDataURL("image/png") : "";
-    const normalizedAnnotations = normalizeTextAnnotations(
-      annotationsOverride || textAnnotationsRef.current,
-    );
-    const canvasImageData = buildCompositeDataUrl(normalizedAnnotations);
-
-    lastEmittedDrawingSignatureRef.current = drawingImageData;
-    lastEmittedTextSignatureRef.current = JSON.stringify(normalizedAnnotations);
-    lastEmittedCompositeSignatureRef.current = canvasImageData;
-
-    onUpdate({
-      findings: [],
-      drawingImageData,
-      textAnnotations: normalizedAnnotations,
-      canvasImageData,
-    });
-  }, [buildCompositeDataUrl, onUpdate, useLegacyCompositeBase]);
 
   const drawSegment = React.useCallback(
     (from: { x: number; y: number }, to: { x: number; y: number }) => {
       const context = getCanvasContext();
-      if (!context) {
-        return;
-      }
+      if (!context) return;
 
       context.save();
       context.lineCap = "round";
@@ -269,167 +109,60 @@ export const GastroscopyDiagramCanvas = ({
     [activeTool, strokeColor, strokeWidth],
   );
 
-  const hydrateCanvas = React.useCallback(async () => {
-    const image = imageRef.current;
-    const canvas = canvasRef.current;
-    if (!image || !canvas || !image.naturalWidth || !image.naturalHeight) {
-      return;
-    }
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return;
-    }
-
-    const incomingDrawingSignature = String(initialDrawingImageData || "").trim();
-    const incomingCompositeSignature = String(initialCanvasImageData || "").trim();
-
-    const canvasNeedsResize =
-      !canvasSizedRef.current ||
-      canvas.width !== image.naturalWidth ||
-      canvas.height !== image.naturalHeight;
-
-    if (canvasNeedsResize) {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      canvasSizedRef.current = true;
-    }
-
-    const drawingWasJustEmitted =
-      incomingDrawingSignature &&
-      incomingDrawingSignature === lastEmittedDrawingSignatureRef.current;
-    const compositeWasJustEmitted =
-      incomingCompositeSignature &&
-      incomingCompositeSignature === lastEmittedCompositeSignatureRef.current;
-
-    if (drawingWasJustEmitted || compositeWasJustEmitted) {
-      return;
-    }
-
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (incomingDrawingSignature) {
-      setUseLegacyCompositeBase(false);
-
-      try {
-        const drawingImage = new Image();
-        await new Promise<void>((resolve, reject) => {
-          drawingImage.onload = () => resolve();
-          drawingImage.onerror = () => reject(new Error("Failed to load diagram drawing"));
-          drawingImage.src = incomingDrawingSignature;
-        });
-        context.drawImage(drawingImage, 0, 0, canvas.width, canvas.height);
-      } catch (error) {
-        context.clearRect(0, 0, canvas.width, canvas.height);
+  const buildCompositeDataUrl = React.useCallback(
+    (legacyOverride?: boolean) => {
+      const canvas = canvasRef.current;
+      const image = imageRef.current;
+      if (!canvas) {
+        return "";
       }
 
-      return;
-    }
-
-    if (incomingCompositeSignature) {
-      setUseLegacyCompositeBase(true);
-
-      try {
-        const compositeImage = new Image();
-        await new Promise<void>((resolve, reject) => {
-          compositeImage.onload = () => resolve();
-          compositeImage.onerror = () => reject(new Error("Failed to load composite diagram"));
-          compositeImage.src = incomingCompositeSignature;
-        });
-        context.drawImage(compositeImage, 0, 0, canvas.width, canvas.height);
-      } catch (error) {
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        setUseLegacyCompositeBase(false);
+      const useLegacy = legacyOverride ?? useLegacyCompositeBase;
+      if (useLegacy) {
+        return canvas.toDataURL("image/png");
       }
 
-      return;
-    }
+      if (!image || !image.naturalWidth || !image.naturalHeight) {
+        return canvas.toDataURL("image/png");
+      }
 
-    setUseLegacyCompositeBase(false);
-  }, [initialCanvasImageData, initialDrawingImageData]);
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = canvas.width;
+      exportCanvas.height = canvas.height;
+      const exportContext = exportCanvas.getContext("2d");
+      if (!exportContext) {
+        return canvas.toDataURL("image/png");
+      }
 
-  React.useEffect(() => {
-    if (!imageReady) {
-      return;
-    }
-
-    void hydrateCanvas();
-  }, [hydrateCanvas, imageReady]);
-
-  React.useEffect(() => {
-    const incomingAnnotations = normalizeTextAnnotations(initialTextAnnotations);
-    const incomingSignature = JSON.stringify(incomingAnnotations);
-
-    if (!incomingSignature) {
-      loadedTextSignatureRef.current = "";
-    }
-
-    if (
-      incomingSignature === loadedTextSignatureRef.current ||
-      incomingSignature === lastEmittedTextSignatureRef.current
-    ) {
-      return;
-    }
-
-    loadedTextSignatureRef.current = incomingSignature;
-    textAnnotationsRef.current = incomingAnnotations;
-    setTextAnnotations(incomingAnnotations);
-  }, [initialTextAnnotations]);
-
-  React.useEffect(() => {
-    if (!dragState) {
-      return;
-    }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const point = getWrapperPercentPoint(event.clientX, event.clientY);
-      setTextAnnotations((previous) => {
-        const nextAnnotations = previous.map((annotation) =>
-          annotation.id === dragState.id
-            ? {
-                ...annotation,
-                xPercent: clamp(point.xPercent - dragState.offsetXPercent, 0, 96),
-                yPercent: clamp(point.yPercent - dragState.offsetYPercent, 0, 96),
-              }
-            : annotation,
-        );
-        textAnnotationsRef.current = nextAnnotations;
-        return nextAnnotations;
-      });
-    };
-
-    const handlePointerUp = () => {
-      setDragState(null);
-      emitDiagramUpdate();
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, [dragState, emitDiagramUpdate, getWrapperPercentPoint]);
-
-  const openTextEditorAtPoint = React.useCallback(
-    (point: { xPercent: number; yPercent: number }) => {
-      setTextEditor(point);
-      setTextDraft("");
-
-      window.setTimeout(() => {
-        textInputRef.current?.focus();
-      }, 0);
+      exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
+      exportContext.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
+      return exportCanvas.toDataURL("image/png");
     },
-    [],
+    [useLegacyCompositeBase],
   );
 
-  const cancelTextEditor = React.useCallback(() => {
-    setTextEditor(null);
-    setTextDraft("");
-  }, []);
+  const emitDiagramUpdate = React.useCallback(
+    (legacyOverride?: boolean) => {
+      const canvas = canvasRef.current;
+      const drawingImageData =
+        canvas && !(legacyOverride ?? useLegacyCompositeBase)
+          ? canvas.toDataURL("image/png")
+          : "";
+      const canvasImageData = buildCompositeDataUrl(legacyOverride);
+      lastEmittedDrawingSignatureRef.current = drawingImageData;
+      lastEmittedCompositeSignatureRef.current = canvasImageData;
+      onUpdate({
+        findings:
+          drawingImageData || canvasImageData
+            ? [{ type: "diagramMarkup" }]
+            : [],
+        drawingImageData,
+        textAnnotations: [],
+        canvasImageData,
+      });
+    },
+    [buildCompositeDataUrl, onUpdate, useLegacyCompositeBase],
+  );
 
   const commitTextEditor = React.useCallback(() => {
     if (!textEditor) {
@@ -437,30 +170,44 @@ export const GastroscopyDiagramCanvas = ({
     }
 
     const trimmedText = String(textDraft || "").trim();
-    setTextEditor(null);
-    setTextDraft("");
-
     if (!trimmedText) {
+      setTextEditor(null);
+      setTextDraft("");
       return;
     }
 
-    const nextAnnotation: TextAnnotation = {
-      id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text: trimmedText,
-      xPercent: textEditor.xPercent,
-      yPercent: textEditor.yPercent,
-      color: strokeColor,
-      fontSize: Math.max(18, textFontSize),
-      fontStyle: textFontStyle,
-      underline: textUnderline,
-    };
+    const context = getCanvasContext();
+    if (!context) {
+      setTextEditor(null);
+      setTextDraft("");
+      return;
+    }
 
-    const nextAnnotations = [...textAnnotationsRef.current, nextAnnotation];
-    textAnnotationsRef.current = nextAnnotations;
-    setTextAnnotations(nextAnnotations);
-    window.setTimeout(() => {
-      emitDiagramUpdate(nextAnnotations);
-    }, 0);
+    context.save();
+    context.globalCompositeOperation = "source-over";
+    context.fillStyle = strokeColor;
+    const resolvedFontSize = Math.max(18, textFontSize);
+    const fontWeight = textFontStyle === "bold" ? "700" : "400";
+    const fontStyle = textFontStyle === "italic" ? "italic" : "normal";
+    context.font = `${fontStyle} ${fontWeight} ${resolvedFontSize}px Arial`;
+    context.textBaseline = "top";
+    context.fillText(trimmedText, textEditor.canvasX, textEditor.canvasY);
+
+    if (textUnderline) {
+      const measuredTextWidth = context.measureText(trimmedText).width;
+      const underlineY = textEditor.canvasY + resolvedFontSize + 1;
+      context.strokeStyle = strokeColor;
+      context.lineWidth = Math.max(1, resolvedFontSize / 14);
+      context.beginPath();
+      context.moveTo(textEditor.canvasX, underlineY);
+      context.lineTo(textEditor.canvasX + measuredTextWidth, underlineY);
+      context.stroke();
+    }
+
+    context.restore();
+    setTextEditor(null);
+    setTextDraft("");
+    emitDiagramUpdate();
   }, [
     emitDiagramUpdate,
     strokeColor,
@@ -470,6 +217,34 @@ export const GastroscopyDiagramCanvas = ({
     textFontStyle,
     textUnderline,
   ]);
+
+  const cancelTextEditor = React.useCallback(() => {
+    setTextEditor(null);
+    setTextDraft("");
+  }, []);
+
+  const openTextEditorAtPoint = React.useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>, point: { x: number; y: number }) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !canvas.width || !canvas.height) {
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      setTextEditor({
+        canvasX: point.x,
+        canvasY: point.y,
+        xPercent: ((event.clientX - rect.left) / rect.width) * 100,
+        yPercent: ((event.clientY - rect.top) / rect.height) * 100,
+      });
+      setTextDraft("");
+
+      window.setTimeout(() => {
+        textInputRef.current?.focus();
+      }, 0);
+    },
+    [],
+  );
 
   const handleTextEditorKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
@@ -487,18 +262,15 @@ export const GastroscopyDiagramCanvas = ({
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
     const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
+    if (!canvas) return;
 
-    const canvasPoint = getCanvasPoint(event);
-    const wrapperPoint = getWrapperPercentPoint(event.clientX, event.clientY);
+    const point = getCanvasPoint(event);
 
     if (activeTool === "text") {
       if (textEditor) {
         commitTextEditor();
       }
-      openTextEditorAtPoint(wrapperPoint);
+      openTextEditorAtPoint(event, point);
       return;
     }
 
@@ -508,8 +280,8 @@ export const GastroscopyDiagramCanvas = ({
 
     canvas.setPointerCapture(event.pointerId);
     isDrawingRef.current = true;
-    lastPointRef.current = canvasPoint;
-    drawSegment(canvasPoint, canvasPoint);
+    lastPointRef.current = point;
+    drawSegment(point, point);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -540,25 +312,108 @@ export const GastroscopyDiagramCanvas = ({
     emitDiagramUpdate();
   };
 
-  const handleAnnotationPointerDown = (event: React.PointerEvent<HTMLDivElement>, annotation: TextAnnotation) => {
-    if (activeTool !== "text") {
+  const initializeCanvas = React.useCallback(async () => {
+    const image = imageRef.current;
+    const canvas = canvasRef.current;
+    if (!image || !canvas || !image.naturalWidth || !image.naturalHeight) {
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (textEditor) {
-      commitTextEditor();
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
     }
 
-    const point = getWrapperPercentPoint(event.clientX, event.clientY);
-    setDragState({
-      id: annotation.id,
-      offsetXPercent: point.xPercent - annotation.xPercent,
-      offsetYPercent: point.yPercent - annotation.yPercent,
-    });
-  };
+    const incomingDrawingSignature = String(initialDrawingImageData || "").trim();
+    const incomingCompositeSignature = String(initialCanvasImageData || "").trim();
+    const canvasNeedsResize =
+      !canvasSizedRef.current ||
+      canvas.width !== image.naturalWidth ||
+      canvas.height !== image.naturalHeight;
+    if (canvasNeedsResize) {
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvasSizedRef.current = true;
+    }
+
+    const shouldSkipDrawingHydration =
+      Boolean(incomingDrawingSignature) &&
+      (incomingDrawingSignature === loadedDrawingSignatureRef.current ||
+        incomingDrawingSignature === lastEmittedDrawingSignatureRef.current);
+    const shouldSkipCompositeHydration =
+      Boolean(incomingCompositeSignature) &&
+      (incomingCompositeSignature === loadedCompositeSignatureRef.current ||
+        incomingCompositeSignature === lastEmittedCompositeSignatureRef.current);
+
+    if (shouldSkipDrawingHydration || shouldSkipCompositeHydration) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (incomingDrawingSignature) {
+      loadedDrawingSignatureRef.current = incomingDrawingSignature;
+      setUseLegacyCompositeBase(false);
+
+      try {
+        const drawingImage = new Image();
+        await new Promise<void>((resolve, reject) => {
+          drawingImage.onload = () => resolve();
+          drawingImage.onerror = () => reject(new Error("Failed to load diagram drawing"));
+          drawingImage.src = incomingDrawingSignature;
+        });
+        context.drawImage(drawingImage, 0, 0, canvas.width, canvas.height);
+        const canvasImageData = buildCompositeDataUrl(false);
+        lastEmittedDrawingSignatureRef.current = incomingDrawingSignature;
+        lastEmittedCompositeSignatureRef.current = canvasImageData;
+        onUpdate({
+          findings: [{ type: "diagramMarkup" }],
+          drawingImageData: incomingDrawingSignature,
+          textAnnotations: [],
+          canvasImageData,
+        });
+      } catch (error) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+
+    if (incomingCompositeSignature) {
+      loadedCompositeSignatureRef.current = incomingCompositeSignature;
+      setUseLegacyCompositeBase(true);
+
+      try {
+        const existingImage = new Image();
+        await new Promise<void>((resolve, reject) => {
+          existingImage.onload = () => resolve();
+          existingImage.onerror = () => reject(new Error("Failed to load diagram data"));
+          existingImage.src = incomingCompositeSignature;
+        });
+        context.drawImage(existingImage, 0, 0, canvas.width, canvas.height);
+        lastEmittedDrawingSignatureRef.current = "";
+        lastEmittedCompositeSignatureRef.current = incomingCompositeSignature;
+        onUpdate({
+          findings: [{ type: "diagramMarkup" }],
+          drawingImageData: "",
+          textAnnotations: [],
+          canvasImageData: incomingCompositeSignature,
+        });
+      } catch (error) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        setUseLegacyCompositeBase(false);
+      }
+      return;
+    }
+
+    loadedDrawingSignatureRef.current = "";
+    loadedCompositeSignatureRef.current = "";
+    setUseLegacyCompositeBase(false);
+  }, [buildCompositeDataUrl, initialCanvasImageData, initialDrawingImageData, onUpdate]);
+
+  React.useEffect(() => {
+    if (!imageReady) return;
+    void initializeCanvas();
+  }, [imageReady, initializeCanvas]);
 
   return (
     <div className="space-y-4">
@@ -625,7 +480,7 @@ export const GastroscopyDiagramCanvas = ({
                 onChange={(event) => setTextFontSize(Number(event.target.value))}
                 className="h-8 rounded border border-gray-300 bg-white px-2 text-xs"
               >
-                {[24, 28, 32, 36, 40, 48, 56, 64].map((size) => (
+                {[32, 36, 40, 44, 48, 56, 64].map((size) => (
                   <option key={size} value={size}>
                     {size}px
                   </option>
@@ -671,10 +526,7 @@ export const GastroscopyDiagramCanvas = ({
         ) : null}
       </div>
 
-      <div
-        ref={wrapperRef}
-        className="relative mx-auto w-full max-w-[520px] overflow-hidden rounded-md border border-gray-200 bg-white"
-      >
+      <div className="relative mx-auto w-full max-w-[480px] overflow-hidden rounded-md border border-gray-200 bg-white">
         <img
           ref={imageRef}
           src={imageSrc}
@@ -698,31 +550,6 @@ export const GastroscopyDiagramCanvas = ({
           aria-label="Gastroscopy diagram drawing surface"
           role="img"
         />
-
-        {textAnnotations.map((annotation) => (
-          <div
-            key={annotation.id}
-            className="absolute z-10 whitespace-nowrap select-none"
-            style={{
-              left: `${annotation.xPercent}%`,
-              top: `${annotation.yPercent}%`,
-              color: annotation.color,
-              fontSize: `${annotation.fontSize}px`,
-              fontWeight: annotation.fontStyle === "bold" ? 700 : 400,
-              fontStyle: annotation.fontStyle === "italic" ? "italic" : "normal",
-              textDecoration: annotation.underline ? "underline" : "none",
-              cursor: activeTool === "text" ? "move" : "default",
-              pointerEvents: activeTool === "text" ? "auto" : "none",
-              transform: "translate(0, 0)",
-              lineHeight: 1.1,
-              textShadow: "0 1px 2px rgba(255,255,255,0.95)",
-            }}
-            onPointerDown={(event) => handleAnnotationPointerDown(event, annotation)}
-          >
-            {annotation.text}
-          </div>
-        ))}
-
         {textEditor ? (
           <input
             ref={textInputRef}
@@ -731,10 +558,11 @@ export const GastroscopyDiagramCanvas = ({
             onChange={(event) => setTextDraft(event.target.value)}
             onBlur={commitTextEditor}
             onKeyDown={handleTextEditorKeyDown}
-            className="absolute z-20 h-10 min-w-[180px] max-w-[260px] rounded border border-gray-300 bg-white px-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="absolute z-10 h-8 min-w-[140px] max-w-[220px] rounded border border-gray-300 bg-white px-2 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             style={{
               left: `${textEditor.xPercent}%`,
               top: `${textEditor.yPercent}%`,
+              transform: "translate(-1px, -1px)",
               fontSize: `${Math.max(18, textFontSize)}px`,
               fontWeight: textFontStyle === "bold" ? 700 : 400,
               fontStyle: textFontStyle === "italic" ? "italic" : "normal",
@@ -750,7 +578,7 @@ export const GastroscopyDiagramCanvas = ({
       </div>
 
       <p className="text-xs text-gray-500">
-        Use the text tool to place labels, then drag them to reposition them before export.
+        Select a tool, then draw, erase, or place text directly on the diagram using touch, pen, or mouse.
       </p>
     </div>
   );

@@ -74,16 +74,16 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
         { label: "Start Time", value: String(preoperative.startTime || "").trim() },
         { label: "End Time", value: String(preoperative.endTime || "").trim() },
         {
-          label: "Pre-Operative Diagnosis",
+          label: "Diagnosis",
           value: formatSelectionListWithOther(preoperative.diagnosis, preoperative.diagnosisOther),
         },
         {
-          label: "Pre-Operative Imaging",
+          label: "Imaging",
           value: formatSelectionListWithOther(preoperative.imaging, preoperative.imagingOther),
         },
         { label: "Tumour Staging", value: tumourStaging },
         { label: "Urgency", value: titleCase(preoperative.urgency) },
-        { label: "Duration Of Procedure", value: formatMeasurement(preoperative.duration, "Min") },
+        { label: "Duration", value: formatMeasurement(preoperative.duration, "Min") },
       ],
     },
     {
@@ -176,7 +176,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
           label: "Specify Laboratory Sent To",
           value: asSingleLineEntry(
             specimen.specimenRetrieved === "Yes"
-              ? titleCase(specimen.laboratorySentTo) || "________________"
+              ? titleCase(specimen.laboratorySentTo)
               : "",
           ),
         },
@@ -202,26 +202,17 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
         },
       ],
     },
-    {
-      title: "SURGEON'S SIGNATURE",
-      layout: "label-value-table",
-      columns: 2,
-      entries: [
-        {
-          label: "Surgeon's Signature",
-          value: asSingleLineEntry(surgeonSignatureValue || "________________"),
-        },
-        {
-          label: "Date And Time",
-          value: asSingleLineEntry(signatureDateTimeValue || "________________"),
-        },
-      ],
-    },
   ];
 
   return generateStructuredTemplatePdf({
     title: "TRANSANAL MINIMALLY INVASIVE SURGERY REPORT",
     patientInfo: patientInfo || data?.patientInfo,
     sections,
+    signatureLayout: "appendectomy",
+    signature: {
+      text: surgeonSignatureValue || "________________",
+      dateTime: signatureDateTimeValue || "________________",
+      alwaysShow: true,
+    },
   });
 };

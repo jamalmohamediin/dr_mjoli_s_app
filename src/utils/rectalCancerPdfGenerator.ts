@@ -1,13 +1,8 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
-import { getFullASAText } from "./asaDescriptions";
 import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
-import {
-  formatPatientGender,
-  formatPatientStickerDate,
-  getPdfSafePatientInfo,
-} from './patientSticker';
+import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
 import {
   hasPdfDisplayValue,
@@ -240,12 +235,11 @@ export const generateRectalCancerPDF = async (
     pdf.text('COLORECTAL RESECTION REPORT', pageWidth / 2, y, { align: 'center' });
     y += 8;
     
-    // PATIENT INFORMATION Section
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('PATIENT INFORMATION', margin, y);
-    y += 6;
-    
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 5;
+
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
@@ -523,13 +517,9 @@ export const generateRectalCancerPDF = async (
       const lineHeight = options.lineHeight ?? 4;
       const rowGap = options.rowGap ?? 1.5;
 
-      rows.forEach(({ label, value, alwaysVisible = false }) => {
+      rows.forEach(({ label, value }) => {
         const normalizedValue = String(value || '').trim();
-        if (
-          !normalizedValue &&
-          !alwaysVisible &&
-          !(postPreoperativeSectionActive && isPostPreoperativeAlwaysVisibleField(label))
-        ) {
+        if (!normalizedValue) {
           return;
         }
 
@@ -607,71 +597,22 @@ export const generateRectalCancerPDF = async (
       return currentY + lineCount * spacing;
     };
 
-    const normalizedPatientInfo = getPdfSafePatientInfo(patientInfo);
-    const patientGender = formatPatientGender(normalizedPatientInfo);
-    const patientAsaClassification = Array.isArray(normalizedPatientInfo?.asaScore)
-      ? normalizedPatientInfo.asaScore
-          .filter(Boolean)
-          .map((item: string) => getFullASAText(item))
-          .join(', ')
-      : normalizedPatientInfo.asaScore
-        ? getFullASAText(normalizedPatientInfo.asaScore)
-        : "";
-    const patientNameValue = txt(normalizedPatientInfo.name || patientName);
-    const patientIdValue = txt(normalizedPatientInfo.patientId || patientId);
-    const patientDob = formatPatientStickerDate(normalizedPatientInfo.dateOfBirth);
-    const patientAddress = txt(normalizedPatientInfo.address);
-    const patientWeight = txt(normalizedPatientInfo.weight);
-    const patientHeight = txt(normalizedPatientInfo.height);
-    const patientBmi = txt(normalizedPatientInfo.bmi);
-    const patientVisitDate = formatPatientStickerDate(normalizedPatientInfo.visitDate);
-    const patientVisitTime = txt(normalizedPatientInfo.visitTime);
-
-    const drawPatientSubsectionTitle = (title: string) => {
-      checkPageBreak(6);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.text(title, margin, y);
-      y += 4.5;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(bodyFontSize);
-    };
-
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(bodyFontSize);
 
-    if (
-      hasPrintableValue(patientNameValue) ||
-      hasPrintableValue(patientGender) ||
-      hasPrintableValue(txt(normalizedPatientInfo.age)) ||
-      hasPrintableValue(patientIdValue) ||
-      hasPrintableValue(patientDob) ||
-      hasPrintableValue(patientAddress)
-    ) {
-      drawPatientSubsectionTitle('Patient Details');
-      drawWrappedColumns([
-        { text: `Patient Name: ${patientNameValue}`, x: col1X, width: threeColumnWidth },
-        { text: `Gender: ${patientGender}`, x: margin + 62, width: threeColumnWidth },
-        { text: `Age: ${txt(normalizedPatientInfo.age)}`, x: margin + 124, width: threeColumnWidth },
-      ]);
-      drawWrappedColumns([
-        { text: `Patient ID: ${patientIdValue}`, x: col1X, width: threeColumnWidth },
-        { text: `Date Of Birth: ${patientDob}`, x: margin + 62, width: threeColumnWidth },
-        { text: `Address: ${patientAddress}`, x: margin + 124, width: threeColumnWidth },
-      ]);
-    }
-
-    drawWrappedColumns([
-      { text: `Weight: ${patientWeight}`, x: col1X, width: threeColumnWidth },
-      { text: `Height: ${patientHeight}`, x: margin + 62, width: threeColumnWidth },
-      { text: `BMI: ${patientBmi}`, x: margin + 124, width: threeColumnWidth },
-    ]);
-    drawWrappedTextBlock(`ASA Physical Status Classification: ${patientAsaClassification}`, margin, fullWidth);
-    drawWrappedTextBlock(`ASA Notes: ${txt(normalizedPatientInfo.asaNotes)}`, margin, fullWidth);
-    drawWrappedColumns([
-      { text: `Date: ${patientVisitDate}`, x: col1X, width: threeColumnWidth },
-      { text: `Time: ${patientVisitTime}`, x: margin + 62, width: threeColumnWidth },
-    ]);
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: patientInfo || rectalCancerData?.patientInfo,
+      asaLabel: "ASA Score",
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight: 4.5,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      bottomPadding: 30,
+    });
 
     drawSectionDivider();
 
@@ -722,7 +663,7 @@ export const generateRectalCancerPDF = async (
     ]);
     drawWrappedColumns([
       { text: `Urgency: ${procedureUrgency}`, x: col1X, width: threeColumnWidth },
-      { text: `Preoperative Imaging: ${imagingText}`, x: margin + 62, width: threeColumnWidth },
+      { text: `Imaging: ${imagingText}`, x: margin + 62, width: threeColumnWidth },
       { text: `Neoadjuvant Treatment: ${neoadjuvantTreatment}`, x: margin + 124, width: threeColumnWidth },
     ]);
     drawWrappedTextBlock(`Indication for Surgery: ${indicationText}`, margin, fullWidth);
@@ -805,81 +746,142 @@ export const generateRectalCancerPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     
-    // RESTRUCTURED PROCEDURE DETAILS - According to new layout
-    
-    // Prepare all field values
+    // RESTRUCTURED PROCEDURE DETAILS - Three-column layout (question labels + answers + diagram)
     const primaryApproachRaw = rectalCancerData?.surgicalApproach?.primaryApproach;
-    const primaryApproachList = Array.isArray(primaryApproachRaw) 
-      ? primaryApproachRaw 
-      : primaryApproachRaw 
-        ? [primaryApproachRaw] 
+    const primaryApproachList = Array.isArray(primaryApproachRaw)
+      ? primaryApproachRaw
+      : primaryApproachRaw
+        ? [primaryApproachRaw]
         : [];
     const primaryApproach = primaryApproachList.join(', ');
     const operationTypeText = rectalCancerData?.operationType?.type?.join(', ') || '';
-    
-    // Prepare conversion data
+
     const normalizedApproaches = primaryApproachList.map((approach: string) => approach.toLowerCase());
-    const isConverted = normalizedApproaches.some((approach: string) => 
+    const isConverted = normalizedApproaches.some((approach: string) =>
       approach.includes('converted') || approach.includes('conversion')
     );
     const conversionReason = rectalCancerData?.surgicalApproach?.conversionReason?.join(', ') || '';
-    const conversionOther = rectalCancerData?.surgicalApproach?.conversionReasonOther ? `, ${rectalCancerData.surgicalApproach.conversionReasonOther}` : '';
+    const conversionOther = rectalCancerData?.surgicalApproach?.conversionReasonOther
+      ? `, ${rectalCancerData.surgicalApproach.conversionReasonOther}`
+      : '';
     const conversionText = isConverted ? `${conversionReason}${conversionOther}` : '';
-    
-    // Prepare rectum operation types
+
     const rectumOpsText = rectalCancerData?.operationType?.rectumOperationType?.join(', ') || '';
-    const rectumOtherText = rectalCancerData?.operationType?.rectumOperationOther ? `, Other: ${rectalCancerData.operationType.rectumOperationOther}` : '';
+    const rectumOtherText = rectalCancerData?.operationType?.rectumOperationOther
+      ? `, Other: ${rectalCancerData.operationType.rectumOperationOther}`
+      : '';
     const rectumFullText = `${rectumOpsText}${rectumOtherText}`;
-    const rectumOperationTypes = (rectumFullText && rectumFullText.trim() && rectumFullText.trim() !== ', Other: ') ? rectumFullText : '';
-    
-    // Prepare trocar number
-    const isMinimallyInvasive = normalizedApproaches.some((approach: string) => 
+    const rectumOperationTypes =
+      rectumFullText && rectumFullText.trim() && rectumFullText.trim() !== ', Other: '
+        ? rectumFullText
+        : '';
+
+    const isMinimallyInvasive = normalizedApproaches.some((approach: string) =>
       (approach.includes('laparoscopic') || approach.includes('robotic')) && !approach.includes('open')
     );
-    const trocarNumber = (isMinimallyInvasive || isConverted) ? (rectalCancerData?.surgicalApproach?.trocarNumber || '') : '';
-    
-    // REORDERED PROCEDURE DETAILS FIELDS WITH TEXT WRAPPING:
-    const procedureColumnWidth = (pageWidth / 2) - margin - 15; // Set max width for procedure column
-    
-    // Helper function to add procedure field with text wrapping
-    const addProcedureField = (label: string, value: string) => {
-      if (value && value.trim()) {
-        const labelText = `${label}:`;
-        const labelWidth = Math.min(42, Math.max(20, procedureColumnWidth * 0.42));
-        const valueWidth = Math.max(14, procedureColumnWidth - labelWidth - 2);
-        const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];
-        const valueLines = pdf.splitTextToSize(value, valueWidth) as string[];
-        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
-        for (let index = 0; index < lineCount; index += 1) {
-          if (labelLines[index]) {
-            pdf.setFont('helvetica', 'bold');
-            pdf.text(labelLines[index], col1X, y);
-          }
-          if (valueLines[index]) {
-            pdf.setFont('helvetica', 'normal');
-            pdf.text(valueLines[index], col1X + labelWidth + 2, y);
-          }
-          y += lineSpacing;
-        }
+    const trocarNumber = (isMinimallyInvasive || isConverted)
+      ? (rectalCancerData?.surgicalApproach?.trocarNumber || '')
+      : '';
+
+    const pointsOfDifficultyList = Array.isArray(rectalCancerData?.operativeEvents?.pointsOfDifficulty)
+      ? rectalCancerData.operativeEvents.pointsOfDifficulty
+      : [];
+    const pointsOfDifficultyOther = rectalCancerData?.operativeEvents?.pointsOfDifficultyOther || '';
+    const pointsOfDifficultyText = pointsOfDifficultyList
+      .map((item: string) =>
+        item === 'Other' && pointsOfDifficultyOther ? `Other: ${pointsOfDifficultyOther}` : item
+      )
+      .join(', ');
+
+    const intraoperativeEventsList = Array.isArray(rectalCancerData?.operativeEvents?.intraoperativeEvents)
+      ? rectalCancerData.operativeEvents.intraoperativeEvents
+      : [];
+    const intraoperativeEventsOther = rectalCancerData?.operativeEvents?.intraoperativeEventsOther || '';
+    const intraoperativeEventsText = intraoperativeEventsList
+      .map((item: string) =>
+        item === 'Other' && intraoperativeEventsOther ? `Other: ${intraoperativeEventsOther}` : item
+      )
+      .join(', ');
+
+    const procedureColumnStartY = procedureStartY + 6;
+    const procedureQuestionX = margin;
+    const procedureTextAreaWidth = portsCol1X - margin - 8;
+    const procedureQuestionWidth = Math.min(36, Math.max(24, procedureTextAreaWidth * 0.34));
+    const procedureAnswerX = procedureQuestionX + procedureQuestionWidth + 4;
+    const procedureAnswerWidth = Math.max(12, procedureTextAreaWidth - procedureQuestionWidth - 4);
+
+    const drawProcedureFieldRow = (
+      label: string,
+      value: string,
+      currentY: number,
+    ) => {
+      if (!value || !value.trim()) {
+        return currentY;
       }
+
+      const labelText = `${label}:`;
+      const labelLines = pdf.splitTextToSize(labelText, procedureQuestionWidth) as string[];
+      const valueLines = pdf.splitTextToSize(value, procedureAnswerWidth) as string[];
+      const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+
+      for (let index = 0; index < lineCount; index += 1) {
+        if (labelLines[index]) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(labelLines[index], procedureQuestionX, currentY);
+        }
+        if (valueLines[index]) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(valueLines[index], procedureAnswerX, currentY);
+        }
+        currentY += 4;
+      }
+
+      return currentY + 1.5;
     };
-    
-    // NEW LAYOUT ORDER - PROCEDURE DETAILS SECTION
-    addProcedureField('Operation Type', operationTypeText);
 
+    let procedureRowY = procedureColumnStartY;
+
+    procedureRowY = drawProcedureFieldRow(
+      'Operation Type',
+      operationTypeText,
+      procedureRowY,
+    );
     if (isRectumSelected) {
-      addProcedureField('Rectum Operation Types', rectumOperationTypes);
+      procedureRowY = drawProcedureFieldRow(
+        'Rectum Operation Types',
+        rectumOperationTypes,
+        procedureRowY,
+      );
     }
-
-    addProcedureField('Surgical Approach', primaryApproach);
-    
+    procedureRowY = drawProcedureFieldRow(
+      'Surgical Approach',
+      primaryApproach,
+      procedureRowY,
+    );
     if (isConverted && conversionText) {
-      addProcedureField('Reason for Conversion', conversionText);
+      procedureRowY = drawProcedureFieldRow(
+        'Reason for Conversion',
+        conversionText,
+        procedureRowY,
+      );
     }
-    
-    addProcedureField('Trocar Number', trocarNumber);
-    
-    y += 6;
+    procedureRowY = drawProcedureFieldRow(
+      'Trocar Number',
+      trocarNumber,
+      procedureRowY,
+    );
+    procedureRowY = drawProcedureFieldRow(
+      'Points of Difficulty',
+      pointsOfDifficultyText,
+      procedureRowY,
+    );
+    procedureRowY = drawProcedureFieldRow(
+      'Intraoperative Events/Complications',
+      intraoperativeEventsText,
+      procedureRowY,
+    );
+
+    const leftColumnEndY = procedureRowY;
     
     // RIGHT COLUMN: PORTS AND INCISIONS content (moved from later section)
     let portsY = procedureStartY + 6; // Start right after the title
@@ -981,14 +983,10 @@ export const generateRectalCancerPDF = async (
     } else {
       pdf.setFontSize(8);
       pdf.text('RECTAL CANCER DIAGRAM', portsCol1X + 15, portsY + 25);
-      pdf.text('(No surgical markings)', portsCol1X + 18, portsY + 35);
     }
-    
-    // Skip COMPLICATIONS here - it will be placed after CLOSURE section below
     
     // Coordinate Y position properly - make sure we're below both columns
     const diagramEndY = portsY + diagramHeight + 10;
-    const leftColumnEndY = y;
     y = Math.max(diagramEndY, leftColumnEndY) + 10;
     
     // Separator line
@@ -1174,17 +1172,17 @@ export const generateRectalCancerPDF = async (
           },
           {
             label: 'Anastomotic Height',
-            value: String(anastomosisDetails?.anastomoticHeight || '').trim() || 'N/A',
+            value: String(anastomosisDetails?.anastomoticHeight || '').trim(),
             alwaysVisible: true,
           },
           {
             label: 'Doughnut Assessment',
-            value: String(anastomosisDetails?.doughnutAssessment || '').trim() || 'N/A',
+            value: String(anastomosisDetails?.doughnutAssessment || '').trim(),
             alwaysVisible: true,
           },
           {
             label: 'Air Leak Test',
-            value: String(anastomosisDetails?.airLeakTest || '').trim() || 'N/A',
+            value: String(anastomosisDetails?.airLeakTest || '').trim(),
             alwaysVisible: true,
           },
         );
@@ -1341,49 +1339,6 @@ export const generateRectalCancerPDF = async (
       );
     }
     y += 8;
-    
-    // Line separator
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    
-    // COMPLICATIONS Section (moved here after CLOSURE)
-    checkPageBreak(30);
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('COMPLICATIONS', margin, y);
-    y += 6;
-    
-    pdf.setFontSize(9);
-    pdf.setFont('helvetica', 'normal');
-    
-    // Points of Difficulty
-    const pointsOfDifficulty = rectalCancerData?.operativeEvents?.pointsOfDifficulty?.join(', ') || '';
-    const difficultyOther = rectalCancerData?.operativeEvents?.pointsOfDifficultyOther ? `, ${rectalCancerData.operativeEvents.pointsOfDifficultyOther}` : '';
-    const pointsOfDifficultyText = `${pointsOfDifficulty}${difficultyOther}`;
-    const pointsOfDifficultyFinal =
-      pointsOfDifficultyText && pointsOfDifficultyText.trim() && pointsOfDifficultyText.trim() !== ', '
-        ? pointsOfDifficultyText
-        : '';
-    
-    y = drawInlineLabelValue(
-      `Points of Difficulty: ${pointsOfDifficultyFinal}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    
-    // Intraoperative Events/Complications
-    const intraOpEvents = rectalCancerData?.operativeEvents?.intraoperativeEvents?.join(', ') || '';
-    const intraOpEventsFinal = (intraOpEvents && intraOpEvents.trim()) ? intraOpEvents : '';
-    y = drawInlineLabelValue(
-      `Intraoperative Events/Complications: ${intraOpEventsFinal}`,
-      margin,
-      y,
-      pageWidth - margin * 2,
-    );
-    y += 6;
     
     // Line separator
     pdf.setDrawColor(0, 0, 0);

@@ -57,6 +57,7 @@ import { exportSavedRecordPdf } from "@/utils/exportSavedRecord";
 import {
   fetchPatientDatabaseSnapshot,
   loadPatientDatabaseCache,
+  loadPatientDatabaseCacheFromIndexedDb,
   loadPatientSyncQueue,
   processPatientSyncQueue,
   queuePatientAttachmentsSync,
@@ -160,6 +161,21 @@ const AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS = new Set([
 
 const DEFAULT_CLINICIAN_NAME_NORMALIZED = DEFAULT_CLINICIAN_NAME.toLowerCase();
 
+const AUTOSAVE_DIAGRAM_IMAGE_KEYS = new Set([
+  "canvasImageData",
+  "drawingImageData",
+  "gastroscopyCanvasData",
+  "colonoscopyCanvasData",
+]);
+
+const isAutosaveDiagramImageValue = (key: string | undefined, value: unknown) =>
+  Boolean(
+    key &&
+      AUTOSAVE_DIAGRAM_IMAGE_KEYS.has(key) &&
+      typeof value === "string" &&
+      value.trim().startsWith("data:"),
+  );
+
 const hasMeaningfulPostPreoperativeValue = (
   value: unknown,
   currentKey?: string,
@@ -170,6 +186,10 @@ const hasMeaningfulPostPreoperativeValue = (
 
   if (value === null || value === undefined) {
     return false;
+  }
+
+  if (isAutosaveDiagramImageValue(currentKey, value)) {
+    return true;
   }
 
   if (typeof value === "string") {
@@ -270,12 +290,215 @@ const getTemplatePostPreoperativePayload = (
   }
 };
 
+const isAutosaveComparisonValueEmpty = (value: unknown): boolean => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length === 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+
+  if (typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>).length === 0;
+  }
+
+  return false;
+};
+
+const normalizeAutosaveComparisonValue = (
+  value: unknown,
+  currentKey?: string,
+): unknown => {
+  if (currentKey && AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS.has(currentKey)) {
+    return undefined;
+  }
+
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (isAutosaveDiagramImageValue(currentKey, value)) {
+    return `diagram-image:${String(value).length}`;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === DEFAULT_CLINICIAN_NAME_NORMALIZED) {
+      return undefined;
+    }
+    return trimmed;
+  }
+
+  if (Array.isArray(value)) {
+    const normalizedEntries = value
+      .map((entry) => normalizeAutosaveComparisonValue(entry))
+      .filter((entry) => !isAutosaveComparisonValueEmpty(entry));
+    return normalizedEntries.length > 0 ? normalizedEntries : undefined;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    const normalizedObject = Object.entries(value as Record<string, unknown>)
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+      .reduce(
+        (next, [key, entry]) => {
+          const normalizedEntry = normalizeAutosaveComparisonValue(entry, key);
+          if (!isAutosaveComparisonValueEmpty(normalizedEntry)) {
+            next[key] = normalizedEntry;
+          }
+          return next;
+        },
+        {} as Record<string, unknown>,
+      );
+
+    return Object.keys(normalizedObject).length > 0 ? normalizedObject : undefined;
+  }
+
+  return undefined;
+};
+
+const getTemplateInitialPostPreoperativePayload = (templateType: TemplateType) => {
+  switch (templateType) {
+    case "gastroscopy":
+      return getTemplatePostPreoperativePayload(
+        { gastroscopy: createInitialGastroscopyState() },
+        templateType,
+      );
+    case "colonoscopy":
+      return getTemplatePostPreoperativePayload(
+        { colonoscopy: createInitialColonoscopyState() },
+        templateType,
+      );
+    case "appendectomy":
+      return getTemplatePostPreoperativePayload(
+        { appendectomy: createInitialAppendectomyState() },
+        templateType,
+      );
+    case "ventralHernia":
+      return getTemplatePostPreoperativePayload(
+        { ventralHernia: createInitialVentralHerniaState() },
+        templateType,
+      );
+    case "rectalCancer":
+      return getTemplatePostPreoperativePayload(
+        { rectalCancer: createInitialRectalCancerState() },
+        templateType,
+      );
+    case "smallBowel":
+      return getTemplatePostPreoperativePayload(
+        { smallBowel: createInitialSmallBowelSurgeryState() },
+        templateType,
+      );
+    case "cholecystectomy":
+      return getTemplatePostPreoperativePayload(
+        { cholecystectomy: createInitialCholecystectomyState() },
+        templateType,
+      );
+    case "periAnal":
+      return getTemplatePostPreoperativePayload(
+        { periAnal: createInitialPeriAnalState() },
+        templateType,
+      );
+    case "inguinalHernia":
+      return getTemplatePostPreoperativePayload(
+        { inguinalHernia: createInitialInguinalHerniaState() },
+        templateType,
+      );
+    case "transanalMinimallyInvasiveSurgery":
+      return getTemplatePostPreoperativePayload(
+        {
+          transanalMinimallyInvasiveSurgery: createInitialTransanalMinimallyInvasiveSurgeryState(),
+        },
+        templateType,
+      );
+    case "openGeneralSurgery":
+      return getTemplatePostPreoperativePayload(
+        { openGeneralSurgery: createInitialNarrativeSurgeryState("general") },
+        templateType,
+      );
+    case "openAbdominalSurgery":
+      return getTemplatePostPreoperativePayload(
+        { openAbdominalSurgery: createInitialNarrativeSurgeryState("abdominal") },
+        templateType,
+      );
+    case "procedure":
+    default:
+      return getTemplatePostPreoperativePayload(
+        {
+          gastroscopyFindings: { findings: [] },
+          colonoscopyFindings: { findings: [] },
+          procedureFindings: { findings: "", additionalNotes: "" },
+          specimen: {
+            sentForPathology: "",
+            laboratoryName: "",
+            otherSpecimensTaken: "",
+            otherSpecimensDetails: "",
+          },
+          conclusion: "",
+          followUp: {
+            enabled: false,
+            options: [],
+            other: "",
+            notes: "",
+            postOperativeManagement: "",
+          },
+          signature: {
+            surgeonSignature: "",
+            surgeonSignatureText: DEFAULT_CLINICIAN_NAME,
+            dateTime: "",
+          },
+          gastroscopyCanvasData: "",
+          colonoscopyCanvasData: "",
+        },
+        templateType,
+      );
+  }
+};
+
 const hasTemplateProgressBeyondPreoperative = (
   reportSnapshot: any,
   templateType: TemplateType,
-): boolean =>
-  hasMeaningfulPostPreoperativeValue(
-    getTemplatePostPreoperativePayload(reportSnapshot, templateType),
+): boolean => {
+  const currentPayload = getTemplatePostPreoperativePayload(reportSnapshot, templateType);
+  const baselinePayload = getTemplateInitialPostPreoperativePayload(templateType);
+  const hasPotentialProgress = hasMeaningfulPostPreoperativeValue(currentPayload);
+  const normalizedCurrentPayload =
+    normalizeAutosaveComparisonValue(currentPayload) || {};
+  const normalizedBaselinePayload =
+    normalizeAutosaveComparisonValue(baselinePayload) || {};
+
+  if (
+    !hasPotentialProgress &&
+    isAutosaveComparisonValueEmpty(normalizedCurrentPayload)
+  ) {
+    return false;
+  }
+
+  return (
+    JSON.stringify(normalizedCurrentPayload) !==
+    JSON.stringify(normalizedBaselinePayload)
+  );
+};
+
+const hasSavedRecordProgressBeyondPreoperative = (
+  record: PatientRecord | null | undefined,
+  templateType: TemplateType,
+) =>
+  Boolean(
+    record?.templateType === templateType &&
+      hasTemplateProgressBeyondPreoperative(record.reportSnapshot, templateType),
   );
 
 const LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS = 8000;
@@ -380,6 +603,42 @@ const createInitialAppendectomyState = (source: any = {}) => ({
     source.procedureFindings,
   ),
 });
+
+const createStrictClearedAppendectomyState = () => {
+  const initial = createInitialAppendectomyState();
+
+  return {
+    ...initial,
+    intraoperative: {
+      ...initial.intraoperative,
+      operationFindings: "",
+      appendixAppearance: [],
+      abscess: "",
+      peritonitis: [],
+      otherFindings: "",
+    },
+    procedure: {
+      ...initial.procedure,
+      directionOfDissection: [],
+      directionOfDissectionOther: "",
+      mesoAppendixExcision: [],
+      removalOfAppendix: [],
+      removalOfAppendixOther: "",
+    },
+    closure: {
+      ...initial.closure,
+      operativeDifficulty: [],
+      operativeDifficultyOther: "",
+      additionalNotes: "",
+      postOperativeManagement: "",
+    },
+    procedureFindings: {
+      ...initial.procedureFindings,
+      findings: "",
+      additionalNotes: "",
+    },
+  };
+};
 
 const createInitialVentralHerniaPreoperativeState = (source: any = {}) => ({
   surgeons: cloneStringArray(source.surgeons, createDefaultClinicianList()),
@@ -853,23 +1112,39 @@ const getCurrentExtractedPatientInfoFromReport = (report: any) => {
   return createInitialPatientInfoState(match);
 };
 
-const sanitizeLiveTemplateDraftValue = (value: any): any => {
+const isEndoscopyDiagramDataPath = (path: string[]) => {
+  const joinedPath = path.join(".");
+  return (
+    joinedPath === "gastroscopy.diagram.canvasImageData" ||
+    joinedPath === "gastroscopyCanvasData" ||
+    joinedPath === "gastroscopyFindings.canvasImageData" ||
+    joinedPath === "colonoscopy.diagram.canvasImageData" ||
+    joinedPath === "colonoscopyCanvasData" ||
+    joinedPath === "colonoscopyFindings.canvasImageData"
+  );
+};
+
+const sanitizeLiveTemplateDraftValue = (value: any, path: string[] = []): any => {
   if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeLiveTemplateDraftValue(entry));
+    return value.map((entry) => sanitizeLiveTemplateDraftValue(entry, path));
   }
 
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).map(([key, nestedValue]) => [
         key,
-        sanitizeLiveTemplateDraftValue(nestedValue),
+        sanitizeLiveTemplateDraftValue(nestedValue, [...path, key]),
       ]),
     );
   }
 
   if (typeof value === "string") {
     const trimmedValue = value.trim();
-    if (trimmedValue.startsWith("data:") && trimmedValue.length > 2000) {
+    if (
+      trimmedValue.startsWith("data:") &&
+      trimmedValue.length > 2000 &&
+      !isEndoscopyDiagramDataPath(path)
+    ) {
       return "";
     }
   }
@@ -1748,6 +2023,15 @@ const Index = () => {
     let isMounted = true;
 
     const hydratePatientDatabase = async () => {
+      try {
+        const indexedDbSnapshot = await loadPatientDatabaseCacheFromIndexedDb();
+        if (isMounted && indexedDbSnapshot) {
+          setPatientDatabaseCache(indexedDbSnapshot);
+        }
+      } catch (error) {
+        console.error("Failed to load local patient database cache", error);
+      }
+
       if (!isFirebaseConfigured) {
         setIsPatientDatabaseLoading(false);
         setPendingPatientSyncCount(loadPatientSyncQueue().length);
@@ -2694,6 +2978,8 @@ const Index = () => {
       currentReport,
       activeTemplateType,
     );
+    const canUpdateExistingTemplateRecordWithoutCurrentProgress =
+      hasSavedRecordProgressBeyondPreoperative(editingSavedRecord, activeTemplateType);
 
     if (!hasAutosaveIdentity) {
       patientListAutosaveSignatureRef.current = "";
@@ -2701,7 +2987,10 @@ const Index = () => {
       return;
     }
 
-    if (!hasProgressBeyondPreoperative && !editingPatientContext) {
+    if (
+      !hasProgressBeyondPreoperative &&
+      !canUpdateExistingTemplateRecordWithoutCurrentProgress
+    ) {
       patientListAutosaveSignatureRef.current = "";
       pendingPatientAutosaveContextRef.current = null;
       return;
@@ -2734,9 +3023,10 @@ const Index = () => {
 
     const timeoutId = window.setTimeout(() => {
       void saveCurrentTemplateToPatients(
-        editingPatientContext ? "update" : "create",
+        isEditingSavedPatientRecord ? "update" : "create",
         {
           silent: true,
+          requirePostPreoperativeProgress: true,
           targetContext,
         },
       )
@@ -2762,8 +3052,10 @@ const Index = () => {
     currentReport,
     currentTab,
     editingPatientContext,
+    editingSavedRecord,
     enablePersistence,
     patientDatabaseCache.patients,
+    patientDatabaseCache.records,
   ]);
   
   // Track user interaction to enable smart saving
@@ -3704,7 +3996,7 @@ const Index = () => {
   };
 
   const clearAllAppendectomyData = (showToast = true) => {
-    const initialAppendectomy = createInitialAppendectomyState();
+    const initialAppendectomy = createStrictClearedAppendectomyState();
 
     setCurrentReport(prev => ({
       ...prev,
@@ -3731,6 +4023,8 @@ const Index = () => {
     });
 
     clearCurrentExtractedPatient();
+    pendingPatientAutosaveContextRef.current = null;
+    setEditingPatientContext(null);
     if (showToast) {
       toast.success('All appendectomy data cleared');
     }
@@ -3771,7 +4065,7 @@ const Index = () => {
     setCurrentReport((prev) => ({
       ...prev,
       gastroscopy: createInitialGastroscopyState(),
-      colonoscopy: createInitialColonoscopyState(),
+      colonoscopy: createStrictClearedColonoscopyState(),
       gastroscopyCanvasData: "",
       colonoscopyCanvasData: "",
       gastroscopyFindings: {
@@ -4136,6 +4430,7 @@ const Index = () => {
     options: {
       silent?: boolean;
       requireNameAndDob?: boolean;
+      requirePostPreoperativeProgress?: boolean;
       syncImmediately?: boolean;
       patientInfoOverride?: Record<string, any> | null;
       reportSnapshotOverride?: Record<string, any> | null;
@@ -4193,6 +4488,17 @@ const Index = () => {
             deletedAt: null,
           } as PatientRecord)
         : null;
+
+    if (
+      options.requirePostPreoperativeProgress &&
+      !hasTemplateProgressBeyondPreoperative(reportSnapshotForSave, templateTypeForSave) &&
+      !hasSavedRecordProgressBeyondPreoperative(matchingContextRecord, templateTypeForSave)
+    ) {
+      if (!options.silent) {
+        toast.error("Fill in at least one section after Perioperative before saving this template.");
+      }
+      return null;
+    }
 
     const patientDocId =
       resolvedContext &&
@@ -4299,6 +4605,7 @@ const Index = () => {
     saveCurrentTemplateToPatients(canUpdateExistingRecord ? "update" : "create", {
       templateTypeOverride: inferredOverrides?.templateTypeOverride,
       currentTabOverride: inferredOverrides?.currentTabOverride,
+      requirePostPreoperativeProgress: true,
     });
   };
 
@@ -5166,6 +5473,20 @@ const Index = () => {
     });
   };
 
+  const createStrictClearedColonoscopyState = () => {
+    const initialColonoscopy = createInitialColonoscopyState() as any;
+
+    return {
+      ...initialColonoscopy,
+      preoperative: {
+        ...initialColonoscopy.preoperative,
+        indications: [],
+        indicationOther: "",
+        indication: [],
+      },
+    };
+  };
+
   const createInitialSimpleTemplateState = (templateKey: string) => {
     switch (templateKey) {
       case "gastroscopy":
@@ -5218,20 +5539,28 @@ const Index = () => {
       };
 
       // Keep legacy endoscopy preview/export paths synchronized with structured templates.
-      if (section === "diagram" && field === "canvasImageData") {
+      if (section === "diagram" && (field === "canvasImageData" || field === "drawingImageData")) {
         if (templateKey === "gastroscopy") {
-          nextReport.gastroscopyCanvasData = String(value || "");
+          if (field === "canvasImageData") {
+            nextReport.gastroscopyCanvasData = String(value || "");
+          }
           nextReport.gastroscopyFindings = {
             ...(nextReport.gastroscopyFindings || {}),
             findings: [],
-            canvasImageData: String(value || ""),
+            ...(field === "canvasImageData"
+              ? { canvasImageData: String(value || "") }
+              : { drawingImageData: String(value || "") }),
           };
         } else if (templateKey === "colonoscopy") {
-          nextReport.colonoscopyCanvasData = String(value || "");
+          if (field === "canvasImageData") {
+            nextReport.colonoscopyCanvasData = String(value || "");
+          }
           nextReport.colonoscopyFindings = {
             ...(nextReport.colonoscopyFindings || {}),
             findings: [],
-            canvasImageData: String(value || ""),
+            ...(field === "canvasImageData"
+              ? { canvasImageData: String(value || "") }
+              : { drawingImageData: String(value || "") }),
           };
         }
       }
@@ -5271,9 +5600,14 @@ const Index = () => {
     }
 
     setCurrentReport((prev) => {
+      const clearedTemplateState =
+        templateKey === "colonoscopy"
+          ? createStrictClearedColonoscopyState()
+          : createInitialSimpleTemplateState(templateKey);
+
       const nextReport: any = {
         ...prev,
-        [templateKey]: createInitialSimpleTemplateState(templateKey),
+        [templateKey]: clearedTemplateState,
       };
 
       if (templateKey === "gastroscopy") {
@@ -5283,6 +5617,15 @@ const Index = () => {
           canvasImageData: "",
         };
       } else if (templateKey === "colonoscopy") {
+        nextReport.colonoscopy = {
+          ...nextReport.colonoscopy,
+          preoperative: {
+            ...(nextReport.colonoscopy?.preoperative || {}),
+            indications: [],
+            indicationOther: "",
+            indication: [],
+          },
+        };
         nextReport.colonoscopyCanvasData = "";
         nextReport.colonoscopyFindings = {
           findings: [],
@@ -5328,9 +5671,19 @@ const Index = () => {
       const exportPatientInfo = createInitialPatientInfoState(
         getTemplatePatientInfo(currentReport, exportTemplateType),
       );
+      const exportEditingRecord =
+        editingPatientContext
+          ? patientDatabaseCache.records.find(
+              (record) => record.id === editingPatientContext.recordId,
+            ) || null
+          : null;
+      const canSaveExportRecord =
+        hasTemplateProgressBeyondPreoperative(currentReport, exportTemplateType) ||
+        hasSavedRecordProgressBeyondPreoperative(exportEditingRecord, exportTemplateType);
       const toPdfSafePatientInfo = (source: any) =>
         getPdfSafePatientInfo(createInitialPatientInfoState(source));
       if (
+        canSaveExportRecord &&
         String(exportPatientInfo.name || "").trim() &&
         String(exportPatientInfo.dateOfBirth || "").trim()
       ) {
@@ -5343,10 +5696,11 @@ const Index = () => {
         }
 
         await saveCurrentTemplateToPatients(
-          editingPatientContext ? "update" : "create",
+          exportEditingRecord?.templateType === exportTemplateType ? "update" : "create",
           {
             silent: true,
             requireNameAndDob: true,
+            requirePostPreoperativeProgress: true,
             syncImmediately: true,
             patientInfoOverride: exportPatientInfo,
             reportSnapshotOverride: currentReport,

@@ -1,11 +1,10 @@
 import jsPDF from "jspdf";
-import { getFullASAText } from "@/utils/asaDescriptions";
 import {
-  formatDateDDMMYYYYWithDashes,
   formatDateTimeDDMMYYYYWithDashes,
   getLocalDateTimeValue,
 } from "@/utils/dateFormatter";
-import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
+import { getPdfSafePatientInfo } from "@/utils/patientSticker";
 import {
   hasText,
   isPostPreoperativeAlwaysVisibleField,
@@ -229,7 +228,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
 
   const legendLines = hasText(diagramImageData)
     ? ["Diagram annotations are included directly in the image."]
-    : ["No diagram captured."];
+    : [];
 
   const pdf = new jsPDF("portrait", "mm", "a4");
   const pageWidth = 210;
@@ -442,8 +441,6 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   };
 
   const info = getPdfSafePatientInfo(patientInfo || data?.patientInfo || {});
-  const gender = formatPatientGender(info);
-  const asaText = hasText(info.asaScore) ? getFullASAText(info.asaScore) : "";
 
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "bold");
@@ -474,31 +471,15 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   y += 8;
   drawRule();
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(11);
-  pdf.text("Patient Information", margin, y);
-  y += 7;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-
-  drawTwoColRow(`Patient Name: ${info.name || ""}`, `Patient ID: ${info.patientId || ""}`);
-  drawTwoColRow(
-    `Date Of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
-    `Age / Sex: ${[info.age, gender].filter(Boolean).join(" / ")}`,
-  );
-  drawTwoColRow(
-    `Weight / Height: ${[
-      info.weight ? `${info.weight} kg` : "",
-      info.height ? `${info.height} cm` : "",
-    ]
-      .filter(Boolean)
-      .join(" / ")}`,
-    `BMI: ${info.bmi || ""}`,
-  );
-  drawEntryRow("ASA Score", asaText, false, false);
-  if (hasText(info.asaNotes)) {
-    drawEntryRow("ASA Notes", info.asaNotes, false, false);
-  }
+  y = drawStandardPatientInformation({
+    pdf,
+    patientInfo: info,
+    y,
+    margin,
+    pageWidth,
+    pageHeight,
+    lineHeight,
+  });
 
   drawSectionTitle("Preoperative Information");
   const preopCell = (label: string, value: unknown, titleCaseValue = true) => {
@@ -513,7 +494,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   drawThreeColRow(
     preopCell("Urgency", preoperative.procedureUrgency),
     preopCell(
-      "Preoperative Imaging",
+      "Imaging",
       joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
     ),
     "",
@@ -547,26 +528,96 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   );
   postPreoperativeSectionActive = true;
 
-  const procedureFindingRows: Array<{ label: string; value: string }> = [];
-  const appendFindingRow = (label: string, value: unknown, titleCaseValue = true) => {
+  const drawDiagramInBox = (
+    boxX: number,
+    boxY: number,
+    boxWidth: number,
+    boxHeight: number,
+  ) => {
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setLineWidth(0.2);
+    pdf.rect(boxX, boxY, boxWidth, boxHeight);
+
+    if (hasText(diagramImageData)) {
+      try {
+        const imageData = diagramImageData;
+        const imageType = detectImageFormat(imageData);
+        const imageProperties = pdf.getImageProperties(imageData);
+        const maxImageWidth = boxWidth - 1;
+        const maxImageHeight = boxHeight - 1;
+        const aspectRatio = imageProperties.width / imageProperties.height;
+
+        let imageWidth = maxImageWidth;
+        let imageHeight = maxImageWidth / aspectRatio;
+
+        if (imageHeight > maxImageHeight) {
+          imageHeight = maxImageHeight;
+          imageWidth = maxImageHeight * aspectRatio;
+        }
+
+        const imageX = boxX + (boxWidth - imageWidth) / 2;
+        const imageY = boxY + (boxHeight - imageHeight) / 2;
+        pdf.addImage(imageData, imageType, imageX, imageY, imageWidth, imageHeight);
+      } catch (error) {
+        pdf.setFont("helvetica", "italic");
+        pdf.setFontSize(8);
+        pdf.text("Diagram could not be rendered", boxX + boxWidth / 2, boxY + boxHeight / 2, {
+          align: "center",
+        });
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+      }
+      return;
+    }
+
+    return;
+  };
+
+  type GastroscopyPdfRow = { label: string; value: string };
+  type GastroscopyPdfFindingGroup = { title: string; rows: GastroscopyPdfRow[] };
+
+  const procedureFindingGroups: GastroscopyPdfFindingGroup[] = [];
+  const appendFindingRow = (
+    rows: GastroscopyPdfRow[],
+    label: string,
+    value: unknown,
+    titleCaseValue = true,
+  ) => {
     const normalized = formatValue(value, titleCaseValue);
     if (normalized) {
-      procedureFindingRows.push({ label, value: normalized });
+      rows.push({ label, value: normalized });
     }
   };
-  const appendFindingDetailsRow = (label: string, details: string[]) => {
+  const appendFindingDetailsRows = (rows: GastroscopyPdfRow[], details: string[]) => {
     const filtered = details.map((entry) => String(entry || "").trim()).filter(Boolean);
     if (filtered.length === 0) {
       return;
     }
 
-    procedureFindingRows.push({
-      label,
-      value: filtered.join(" | "),
+    filtered.forEach((entry) => {
+      const separatorIndex = entry.indexOf(":");
+      if (separatorIndex > 0) {
+        const label = entry.slice(0, separatorIndex).trim();
+        const value = entry.slice(separatorIndex + 1).trim();
+        if (label && value) {
+          rows.push({ label, value });
+          return;
+        }
+      }
+
+      rows.push({ label: "Details", value: entry });
     });
   };
 
+  const addFindingGroup = (title: string, rows: GastroscopyPdfRow[]) => {
+    if (rows.length > 0) {
+      procedureFindingGroups.push({ title, rows });
+    }
+  };
+
+  const pharynxLarynxRows: GastroscopyPdfRow[] = [];
   appendFindingRow(
+    pharynxLarynxRows,
     "Pharynx",
     pharynxLarynx.pharynxStatus === "Abnormal"
       ? `Abnormal: ${pharynxLarynx.pharynxAbnormality || ""}`
@@ -574,144 +625,136 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     false,
   );
   appendFindingRow(
+    pharynxLarynxRows,
     "Vocal Cords",
     pharynxLarynx.vocalCordsStatus === "Abnormal"
       ? `Abnormal: ${pharynxLarynx.vocalCordsAbnormality || ""}`
       : pharynxLarynx.vocalCordsStatus,
     false,
   );
-  appendFindingRow("Oesophagus Findings", toCsv(oesophagus.findings));
-  appendFindingDetailsRow("Oesophagus Details", oesophagusDetails);
-  appendFindingRow("Stomach Findings", toCsv(stomach.findings));
-  appendFindingDetailsRow("Stomach Details", stomachDetails);
-  appendFindingRow("Duodenum Findings", toCsv(duodenum.findings));
-  appendFindingDetailsRow("Duodenum Details", duodenumDetails);
+  addFindingGroup("Pharynx / Larynx", pharynxLarynxRows);
 
-  if (procedureFindingRows.length === 0) {
-    procedureFindingRows.push({
-      label: "Summary",
-      value: "No procedure findings recorded.",
-    });
-  }
+  const oesophagusRows: GastroscopyPdfRow[] = [];
+  appendFindingRow(oesophagusRows, "Oesophagus Findings", toCsv(oesophagus.findings));
+  appendFindingDetailsRows(oesophagusRows, oesophagusDetails);
+  addFindingGroup("Oesophagus", oesophagusRows);
 
-  const rightColumnWidth = 78;
-  const columnGap = 6;
-  const leftColumnWidth = contentWidth - rightColumnWidth - columnGap;
-  const procedureFindingLabelWidth = 36;
-  const procedureFindingValueWidth = leftColumnWidth - procedureFindingLabelWidth - 2;
-  const estimatedLeftLineCount = procedureFindingRows.reduce((count, row) => {
-    const labelLines = pdf.splitTextToSize(`${toUiTitleCase(row.label)}:`, procedureFindingLabelWidth);
-    const valueLines = pdf.splitTextToSize(row.value, procedureFindingValueWidth);
-    return count + Math.max(labelLines.length, valueLines.length, 1);
-  }, 0);
-  const estimatedLegendLineCount = legendLines.reduce(
-    (count, line) => count + Math.max(1, pdf.splitTextToSize(line, rightColumnWidth).length),
-    0,
-  );
-  const diagramBoxHeight = 82;
-  const estimatedFindingsSectionHeight =
-    Math.max(
-      estimatedLeftLineCount * lineHeight + 8,
-      estimatedLegendLineCount * lineHeight + diagramBoxHeight + 12,
-    ) + 20;
+  const stomachRows: GastroscopyPdfRow[] = [];
+  appendFindingRow(stomachRows, "Stomach Findings", toCsv(stomach.findings));
+  appendFindingDetailsRows(stomachRows, stomachDetails);
+  addFindingGroup("Stomach", stomachRows);
 
-  ensureSpace(estimatedFindingsSectionHeight, 24);
-  drawSectionTitle("Procedure Findings");
+  const duodenumRows: GastroscopyPdfRow[] = [];
+  appendFindingRow(duodenumRows, "Duodenum Findings", toCsv(duodenum.findings));
+  appendFindingDetailsRows(duodenumRows, duodenumDetails);
+  addFindingGroup("Duodenum", duodenumRows);
 
-  const findingsStartY = y;
-  const rightColumnX = margin + leftColumnWidth + columnGap;
+  const questionColumnWidth = 42;
+  const answerColumnWidth = 64;
+  const diagramColumnWidth = contentWidth - questionColumnWidth - answerColumnWidth - 8;
+  const questionX = margin;
+  const answerX = margin + questionColumnWidth + 4;
+  const diagramX = answerX + answerColumnWidth + 4;
+  const diagramBoxHeight = 92;
 
-  let leftY = findingsStartY;
-  procedureFindingRows.forEach((row) => {
-    const labelLines = pdf.splitTextToSize(`${toUiTitleCase(row.label)}:`, procedureFindingLabelWidth);
-    const valueLines = pdf.splitTextToSize(row.value, procedureFindingValueWidth);
-    const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+  const drawSpacedFindingRow = (row: GastroscopyPdfRow) => {
+    const labelColumnWidth = 78;
+    const valueColumnWidth = contentWidth - labelColumnWidth - 3;
+    const labelLines = pdf.splitTextToSize(`${toUiTitleCase(row.label)}:`, labelColumnWidth);
+    const answerLines = pdf.splitTextToSize(row.value, valueColumnWidth);
+    const lineCount = Math.max(labelLines.length, answerLines.length, 1);
 
+    ensureSpace(lineCount * lineHeight + 1);
     for (let index = 0; index < lineCount; index += 1) {
       if (labelLines[index]) {
         pdf.setFont("helvetica", "bold");
-        pdf.text(labelLines[index], margin, leftY);
+        pdf.text(labelLines[index], margin, y);
       }
 
-      if (valueLines[index]) {
+      if (answerLines[index]) {
         pdf.setFont("helvetica", "normal");
-        pdf.text(valueLines[index], margin + procedureFindingLabelWidth + 2, leftY);
+        pdf.text(answerLines[index], margin + labelColumnWidth + 3, y);
       }
 
-      leftY += lineHeight;
+      y += lineHeight;
     }
-    leftY += 0.2;
-  });
-  pdf.setFont("helvetica", "normal");
+    y += 0.4;
+  };
 
-  let rightY = findingsStartY;
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.text("Legend", rightColumnX, rightY);
-  rightY += lineHeight;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-
-  legendLines.forEach((line) => {
-    const wrapped = pdf.splitTextToSize(line, rightColumnWidth);
-    wrapped.forEach((segment: string) => {
-      pdf.text(segment, rightColumnX, rightY);
-      rightY += lineHeight;
-    });
-  });
-
-  rightY += 2;
-  const diagramTopY = rightY;
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.2);
-  pdf.rect(rightColumnX, diagramTopY, rightColumnWidth, diagramBoxHeight);
-
-  if (hasText(diagramImageData)) {
-    try {
-      const imageData = diagramImageData;
-      const imageType = detectImageFormat(imageData);
-      const imageProperties = pdf.getImageProperties(imageData);
-      const maxImageWidth = rightColumnWidth - 2;
-      const maxImageHeight = diagramBoxHeight - 2;
-      const aspectRatio = imageProperties.width / imageProperties.height;
-
-      let imageWidth = maxImageWidth;
-      let imageHeight = maxImageWidth / aspectRatio;
-
-      if (imageHeight > maxImageHeight) {
-        imageHeight = maxImageHeight;
-        imageWidth = maxImageHeight * aspectRatio;
-      }
-
-      const imageX = rightColumnX + (rightColumnWidth - imageWidth) / 2;
-      const imageY = diagramTopY + (diagramBoxHeight - imageHeight) / 2;
-      pdf.addImage(imageData, imageType, imageX, imageY, imageWidth, imageHeight);
-    } catch (error) {
-      pdf.setFont("helvetica", "italic");
-      pdf.setFontSize(8);
-      pdf.text("Diagram could not be rendered", rightColumnX + rightColumnWidth / 2, diagramTopY + diagramBoxHeight / 2, {
-        align: "center",
-      });
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
+  drawSectionTitle("Procedure Findings");
+  procedureFindingGroups.forEach((group, index) => {
+    if (index > 0) {
+      y += 1.2;
     }
-  } else {
-    pdf.setFont("helvetica", "italic");
-    pdf.setFontSize(8);
-    pdf.text("No diagram captured", rightColumnX + rightColumnWidth / 2, diagramTopY + diagramBoxHeight / 2, {
-      align: "center",
-    });
-    pdf.setFont("helvetica", "normal");
+    ensureSpace(8);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text(group.title, margin, y);
+    y += lineHeight + 0.8;
     pdf.setFontSize(9);
-  }
 
-  y = Math.max(leftY, diagramTopY + diagramBoxHeight) + 6;
+    group.rows.forEach(drawSpacedFindingRow);
+  });
+  pdf.setFont("helvetica", "normal");
 
   drawSectionTitle("Interventions / Therapy and Diagnosis");
-  drawEntryRow("Interventions / Therapy", toArray(interventions.interventions).join(", "));
-  drawEntryRow("Intervention Details", interventionDetails.join(" | "), false, false);
-  drawEntryRow("Final Endoscopic Diagnosis", toArray(diagnosis.diagnoses).join(", "));
-  drawEntryRow("Other Diagnosis", diagnosis.diagnosisOther, false, false);
+  const interventionRows: GastroscopyPdfRow[] = [];
+  appendFindingRow(interventionRows, "Interventions / Therapy", toArray(interventions.interventions).join(", "));
+  appendFindingDetailsRows(interventionRows, interventionDetails);
+  appendFindingRow(interventionRows, "Final Endoscopic Diagnosis", toArray(diagnosis.diagnoses).join(", "));
+  appendFindingRow(interventionRows, "Other Diagnosis", diagnosis.diagnosisOther, false);
+
+  if (hasText(diagramImageData)) {
+    const interventionsStartY = y;
+    let interventionsY = interventionsStartY;
+
+    interventionRows.forEach((row) => {
+      const questionLines = pdf.splitTextToSize(`${toUiTitleCase(row.label)}:`, questionColumnWidth);
+      const answerLines = pdf.splitTextToSize(row.value, answerColumnWidth);
+      const lineCount = Math.max(questionLines.length, answerLines.length, 1);
+
+      for (let index = 0; index < lineCount; index += 1) {
+        if (questionLines[index]) {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(questionLines[index], questionX, interventionsY);
+        }
+
+        if (answerLines[index]) {
+          pdf.setFont("helvetica", "normal");
+          pdf.text(answerLines[index], answerX, interventionsY);
+        }
+
+        interventionsY += lineHeight;
+      }
+      interventionsY += 0.2;
+    });
+    pdf.setFont("helvetica", "normal");
+
+    let diagramY = interventionsStartY;
+    if (legendLines.length > 0) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Legend", diagramX, diagramY);
+      diagramY += lineHeight;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+
+      legendLines.forEach((line) => {
+        const wrapped = pdf.splitTextToSize(line, diagramColumnWidth);
+        wrapped.forEach((segment: string) => {
+          pdf.text(segment, diagramX, diagramY);
+          diagramY += lineHeight;
+        });
+      });
+
+      diagramY += 2;
+    }
+
+    drawDiagramInBox(diagramX, diagramY, diagramColumnWidth, diagramBoxHeight);
+    y = Math.max(interventionsY, diagramY + diagramBoxHeight) + 6;
+  } else {
+    interventionRows.forEach((row) => drawEntryRow(row.label, row.value, false, false));
+  }
 
   drawSectionTitle("SPECIMEN");
   drawEntryRow("Specimen Sent For Pathology", additionalInfo.specimenSentForPathology);

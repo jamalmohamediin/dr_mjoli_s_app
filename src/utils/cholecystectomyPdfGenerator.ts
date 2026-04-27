@@ -1,16 +1,11 @@
 import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
-import {
-  formatDateDDMMYYYYWithDashes,
-  formatDateTimeDDMMYYYYWithDashes,
-} from "@/utils/dateFormatter";
-import { getFullASAText } from "@/utils/asaDescriptions";
-import { formatPatientGender, getPdfSafePatientInfo } from "@/utils/patientSticker";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
+import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 import {
   hasPdfDisplayValue,
-  isPostPreoperativeAlwaysVisibleField,
 } from "@/utils/templateDataHelpers";
 
 const CHOLECYSTECTOMY_DIAGRAM_MARKING_SCALE = 1.5;
@@ -123,21 +118,16 @@ export const generateCholecystectomyPDF = async (
     const lineHeight = 4.5;
     let y = margin;
 
-    const info = getPdfSafePatientInfo(patientInfo || cholecystectomyData?.patientInfo || {});
     const preop = cholecystectomyData?.preoperative || {};
     const intra = cholecystectomyData?.intraoperative || {};
     const proc = cholecystectomyData?.procedure || {};
     const closure = cholecystectomyData?.closure || {};
     const addInfo = cholecystectomyData?.additionalInfo || {};
     const diagramCanvas = await createSurgicalDiagramCanvas(diagrams);
-    const gender = formatPatientGender(info);
-    const asaClassification = info.asaScore ? getFullASAText(info.asaScore) : "";
-
     const col1X = margin;
     const col2X = margin + 63;
     const col3X = margin + 126;
     const twoCol2X = margin + 95;
-    let postPreoperativeSectionActive = false;
 
     const ensureSpace = (h = 10) => {
       if (y + h > pageHeight - 20) {
@@ -173,13 +163,8 @@ export const generateCholecystectomyPDF = async (
         return hasPdfDisplayValue(raw);
       }
 
-      const label = raw.slice(0, separatorIndex).trim();
       const value = raw.slice(separatorIndex + 1).trim();
-      if (!postPreoperativeSectionActive) {
-        return hasPdfDisplayValue(value);
-      }
-
-      return hasPdfDisplayValue(value) || isPostPreoperativeAlwaysVisibleField(label);
+      return hasPdfDisplayValue(value);
     };
 
     const rowFull = (text: string) => {
@@ -378,14 +363,14 @@ export const generateCholecystectomyPDF = async (
       pdf.setFont("helvetica", "normal");
     };
 
-    const rowAlignedToPreopImagingColumn = (text: string) => {
+    const rowAlignedToUrgencyColumn = (text: string, widthOverride = 58) => {
       const normalized = text || "";
       if (!shouldRenderCell(normalized)) {
         return;
       }
 
-      const x = col2X;
-      const width = pageWidth - margin - col2X;
+      const x = col1X;
+      const width = widthOverride;
       const separatorIndex = normalized.indexOf(":");
       if (separatorIndex === -1) {
         const lines = pdf.splitTextToSize(normalized, width);
@@ -403,8 +388,14 @@ export const generateCholecystectomyPDF = async (
 
       const label = `${normalized.slice(0, separatorIndex).trim()}:`;
       const value = normalized.slice(separatorIndex + 1).trim();
-      const labelWidth = Math.min(34, Math.max(20, width * 0.38));
-      const valueWidth = Math.max(16, width - labelWidth - 2);
+      pdf.setFont("helvetica", "bold");
+      const measuredLabelWidth = pdf.getTextWidth(label);
+      pdf.setFont("helvetica", "normal");
+      const labelWidth = Math.min(
+        Math.max(measuredLabelWidth + 1.5, 12),
+        Math.max(12, width - 10)
+      );
+      const valueWidth = Math.max(10, width - labelWidth - 2);
       const labelLines = pdf.splitTextToSize(label, labelWidth);
       const valueLines = pdf.splitTextToSize(value, valueWidth);
       const lines = Math.max(labelLines.length, valueLines.length, 1);
@@ -483,16 +474,6 @@ export const generateCholecystectomyPDF = async (
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
-    const patientSubsection = (title: string) => {
-      ensureSpace(7);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(9);
-      pdf.text(title, margin, y);
-      y += 5;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-    };
-
     const additionalProceduresText = [
       joinSelections(toArray(proc?.additionalProcedures), proc?.additionalProceduresOther),
       txt(proc?.additionalProcedureDrainSite)
@@ -543,26 +524,19 @@ export const generateCholecystectomyPDF = async (
     const hasStonesPresent =
       intra?.stonesPresent === "Solitary Stones" || intra?.stonesPresent === "Multiple Stones";
 
-    sec("PATIENT INFORMATION");
-    patientSubsection("Patient Details");
-    row3(
-      `Patient Name: ${txt(info.name || patientName)}`,
-      `Gender: ${gender}`,
-      `Age: ${txt(info.age)}`
-    );
-    row3(
-      `Patient ID: ${txt(info.patientId || patientId)}`,
-      `Date Of Birth: ${formatDateDDMMYYYYWithDashes(info.dateOfBirth)}`,
-      `Address: ${txt(info.address)}`
-    );
-    y += 1;
-    row3(`Weight: ${txt(info.weight)}`, `Height: ${txt(info.height)}`, `BMI: ${txt(info.bmi)}`);
-    if (hasPdfDisplayValue(asaClassification)) {
-      rowFull(`ASA Physical Status Classification: ${asaClassification}`);
-    }
-    if (hasPdfDisplayValue(txt(info.asaNotes))) {
-      rowFull(`ASA Notes: ${txt(info.asaNotes)}`);
-    }
+    y += 2;
+    drawRule();
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: patientInfo || cholecystectomyData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+    });
     y += 2;
 
     sec("PREOPERATIVE INFORMATION");
@@ -574,15 +548,18 @@ export const generateCholecystectomyPDF = async (
     row3(`Start Time: ${txt(preop?.startTime)}`, `End Time: ${txt(preop?.endTime)}`, `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`);
     row3(
       `Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Preoperative Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`,
+      `Imaging: ${joinSelections(toArray(preop?.imaging), preop?.imagingOther)}`,
       ""
     );
-    rowAlignedToPreopImagingColumn(
-      `Indication for Surgery: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`
+    rowAlignedToUrgencyColumn(
+      `Indication: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`,
+      pageWidth - margin * 2
     );
-    rowAlignedToPreopImagingColumn(`Operation Description: ${txt(preop?.operationDescription)}`);
+    rowAlignedToUrgencyColumn(
+      `Operation Description: ${txt(preop?.operationDescription)}`,
+      pageWidth - margin * 2
+    );
     y += 2;
-    postPreoperativeSectionActive = true;
 
     sec("INTRAOPERATIVE FINDINGS");
     rowQuestionAnswer(
@@ -620,6 +597,9 @@ export const generateCholecystectomyPDF = async (
     const addLeftCh = (label: string, value: string) => {
       const labelText = `${label}:`;
       const valueText = value || "";
+      if (!hasPdfDisplayValue(valueText)) {
+        return;
+      }
       const labelWidth = Math.min(40, Math.max(24, leftWCh * 0.5));
       const valueWidth = Math.max(14, leftWCh - labelWidth - 4);
       const labelLines = pdf.splitTextToSize(labelText, labelWidth);
@@ -670,15 +650,11 @@ export const generateCholecystectomyPDF = async (
     y = margin;
 
     sec("PROCEDURE DETAILS");
-    rowFull(`Critical View of Safety Confirmation: ${criticalViewSafetyConfirmationText}`);
-    rowFull(`Critical View of Safety - Calot's Triangle Dissected: ${txt(proc?.calotsTriangleDissected)}`);
-    rowFull(`Critical View of Safety - Cystic Duct Identified: ${txt(proc?.cysticDuctIdentified)}`);
-    rowFull(`Critical View of Safety - Cystic Artery Identified: ${txt(proc?.cysticArteryIdentified)}`);
-    rowFull(
-      `Critical View of Safety - Two Structures Entering Gallbladder Confirmed: ${txt(
-        proc?.twoStructuresConfirmed
-      )}`
-    );
+    rowQuestionAnswer("Critical View of Safety Confirmation", criticalViewSafetyConfirmationText);
+    rowQuestionAnswer("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
+    rowQuestionAnswer("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
+    rowQuestionAnswer("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
+    rowQuestionAnswer("Critical View of Safety - Two Structures Entering", txt(proc?.twoStructuresConfirmed));
     rowFull(`Cystic Duct Control: ${joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther)}`);
     rowFull(`Cystic Artery Control: ${joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther)}`);
     rowFull(

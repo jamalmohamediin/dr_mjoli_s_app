@@ -16,11 +16,14 @@ export default defineConfig(({ mode }) => {
       host: "127.0.0.1",
       port: 8081,
       strictPort: true,
-      hmr: {
-        host: "localhost",
-        port: 8081,
-        clientPort: 8081,
-        protocol: "ws",
+      watch: {
+        ignored: [
+          "**/.yoyo/**",
+          /(^|[/\\])\.yoyo([/\\]|$)/,
+          "**/.git/**",
+          "**/node_modules/**",
+          "**/dist/**",
+        ],
       },
       proxy: patientStickerProxyUrl
         ? {

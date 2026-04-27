@@ -62,7 +62,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
   const peritoneumClosureValue = !showLaparoscopicRepairSection
     ? ""
     : procedure.laparoscopicApproach === "TEP (Totally Extraperitoneal)"
-      ? "N/A"
+      ? ""
       : procedure.laparoscopicApproach === "TAPP (Transabdominal Preperitoneal)"
         ? formatChoice(procedure.peritoneumClosure)
         : "";
@@ -282,7 +282,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
         { label: "Assistant", value: preoperative.assistant || "" },
         { label: "Anaesthetist", value: preoperative.anaesthetist || "" },
         {
-          label: "Preoperative Imaging",
+          label: "Imaging",
           value: joinSelections(
             preoperative.preoperativeImaging,
             preoperative.preoperativeImagingOther,
@@ -291,7 +291,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
         { label: "Start Time", value: preoperative.startTime || "" },
         { label: "End Time", value: preoperative.endTime || "" },
         {
-          label: "Duration Of Operation (In Minutes)",
+          label: "Total Duration",
           value: preoperative.duration || "",
         },
         {
@@ -330,9 +330,8 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
           {
             title: "Procedure Details",
             layout: "label-value-table" as const,
-            columns: 2 as const,
             startOnNewPage: true,
-            fixedLabelWidth: 34,
+            fixedLabelWidth: 76,
             labelGap: 3,
             entries: laparoscopicContinuationEntries,
           },
@@ -358,7 +357,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
   return generateStructuredTemplatePdf({
     title: "INGUINAL HERNIA REPAIR REPORT",
     patientInfo: patientInfo || data?.patientInfo,
-    patientInfoLayout: "appendectomy",
+    patientInfoAsaLabel: "ASA Score",
     sections,
     diagram: diagramImageData
       ? {
@@ -367,6 +366,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
           placement: "inlineRight",
           sectionTitle: "Procedure Details",
           inlineValueOffset: 4,
+          inlineReserveHeight: 24,
         }
       : undefined,
     signature: {
