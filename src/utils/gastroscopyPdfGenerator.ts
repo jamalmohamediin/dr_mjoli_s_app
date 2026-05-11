@@ -523,178 +523,58 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   });
 
   drawSectionTitle("Procedure Details");
-  const procedureDetailsRows = [
-    {
-      label: "Date Of Operation",
-      value:
-        formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________",
-    },
-    {
-      label: "Endoscopist",
-      value: toArray(preoperative.endoscopists).join(", "),
-    },
-    {
-      label: "Anesthetist",
-      value: toArray(preoperative.anaesthetists).join(", "),
-    },
-    {
-      label: "Urgency",
-      value: formatValue(preoperative.procedureUrgency),
-    },
-    {
-      label: "Imaging",
-      value: joinSelections(
-        preoperative.preoperativeImaging,
-        preoperative.preoperativeImagingOther,
-      ),
-    },
-    {
-      label: "Start Time",
-      value: formatValue(preoperative.startTime, false),
-    },
-    {
-      label: "End Time",
-      value: formatValue(preoperative.endTime, false),
-    },
-    {
-      label: "Total Duration",
-      value: preoperative.duration ? `${preoperative.duration} minutes` : "",
-    },
-    {
-      label: "Signs & Symptoms",
-      value: joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
-    },
-    {
-      label: "Indications",
-      value: joinSelections(preoperative.indications, preoperative.indicationOther),
-    },
-    {
-      label: "Extent Of Examination",
-      value: toArray(preoperative.extentOfExamination).join(", "),
-    },
-  ].filter((row) => hasText(row.value));
+  const preopCell = (label: string, value: unknown, titleCaseValue = true) => {
+    const normalized = formatValue(value, titleCaseValue);
+    return normalized ? `${label}: ${normalized}` : "";
+  };
 
-  if (hasText(diagramImageData)) {
-    const questionColumnWidth = 40;
-    const answerColumnWidth = 54;
-    const columnGap = 4;
-    const diagramColumnWidth =
-      contentWidth - questionColumnWidth - answerColumnWidth - columnGap * 2;
-    const questionX = margin;
-    const answerX = questionX + questionColumnWidth + columnGap;
-    const diagramX = answerX + answerColumnWidth + columnGap;
-    const legendLineHeight = Math.max(lineHeight - 0.5, 3.8);
-    const legendSwatchSize = Math.max(2.2, legendLineHeight - 1.6);
-    const legendTextWidth = diagramColumnWidth - legendSwatchSize - 1.5;
-    const legendLinesCount = legendItems.reduce(
-      (count, item) =>
-        count +
-        pdf.splitTextToSize(String(item.label || ""), Math.max(legendTextWidth, 10)).length,
-      0,
-    );
-    const legendBlockHeight =
-      legendItems.length > 0 ? lineHeight + legendLinesCount * legendLineHeight + 2 : 0;
-    const diagramBoxHeight = 74;
-    const leftBlockHeight =
-      procedureDetailsRows.reduce((total, row) => {
-        const questionLines = pdf.splitTextToSize(`${row.label}:`, questionColumnWidth);
-        const answerLines = pdf.splitTextToSize(row.value, answerColumnWidth);
-        return total + Math.max(questionLines.length, answerLines.length, 1) * lineHeight;
-      }, 0) || lineHeight;
-    const rightBlockHeight =
-      diagramBoxHeight + (legendItems.length > 0 ? legendBlockHeight + 2 : 0);
-    ensureSpace(Math.max(leftBlockHeight, rightBlockHeight) + 4, 24);
-
-    let leftY = y;
-    procedureDetailsRows.forEach((row) => {
-      const questionLines = pdf.splitTextToSize(`${row.label}:`, questionColumnWidth);
-      const answerLines = pdf.splitTextToSize(row.value, answerColumnWidth);
-      const lineCount = Math.max(questionLines.length, answerLines.length, 1);
-
-      for (let index = 0; index < lineCount; index += 1) {
-        if (questionLines[index]) {
-          pdf.setFont("helvetica", "bold");
-          pdf.text(questionLines[index], questionX, leftY);
-        }
-
-        if (answerLines[index]) {
-          pdf.setFont("helvetica", "normal");
-          pdf.text(answerLines[index], answerX, leftY);
-        }
-
-        leftY += lineHeight;
-      }
-    });
-
-    let rightY = y;
-    if (legendItems.length > 0) {
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.text("Legend", diagramX, rightY);
-      rightY += lineHeight;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-      rightY = drawLegendItems(diagramX, rightY, diagramColumnWidth, legendLineHeight) + 2;
-    }
-
-    drawDiagramInBox(diagramX, rightY, diagramColumnWidth, diagramBoxHeight);
-    y = Math.max(leftY, rightY + diagramBoxHeight) + 6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-  } else {
-    const preopCell = (label: string, value: unknown, titleCaseValue = true) => {
-      const normalized = formatValue(value, titleCaseValue);
-      return normalized ? `${label}: ${normalized}` : "";
-    };
-
-    drawThreeColRow(
-      `Date of Operation: ${
-        formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________"
-      }`,
-      "",
-      "",
-    );
-    drawThreeColRow(
-      preopCell("Endoscopist", toArray(preoperative.endoscopists).join(", "), false),
-      preopCell("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false),
-      "",
-    );
-    drawThreeColRow(
-      preopCell("Urgency", preoperative.procedureUrgency),
-      preopCell(
-        "Imaging",
-        joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
-      ),
-      "",
-    );
-    drawThreeColRow(
-      preopCell("Start Time", preoperative.startTime, false),
-      preopCell("End Time", preoperative.endTime, false),
-      preopCell(
-        "Total Duration",
-        preoperative.duration ? `${preoperative.duration} minutes` : "",
-        false,
-      ),
-    );
-    drawEntryRow(
-      "Signs & Symptoms",
-      joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+  drawThreeColRow(
+    `Date of Operation: ${
+      formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________"
+    }`,
+    "",
+    "",
+  );
+  drawThreeColRow(
+    preopCell("Endoscopist", toArray(preoperative.endoscopists).join(", "), false),
+    preopCell("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false),
+    "",
+  );
+  drawThreeColRow(
+    preopCell("Urgency", preoperative.procedureUrgency),
+    preopCell(
+      "Imaging",
+      joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
+    ),
+    "",
+  );
+  drawThreeColRow(
+    preopCell("Start Time", preoperative.startTime, false),
+    preopCell("End Time", preoperative.endTime, false),
+    preopCell(
+      "Total Duration",
+      preoperative.duration ? `${preoperative.duration} minutes` : "",
       false,
-      false,
-    );
-    drawEntryRow(
-      "Indications",
-      joinSelections(preoperative.indications, preoperative.indicationOther),
-      false,
-      false,
-    );
-    drawEntryRow(
-      "Extent Of Examination",
-      toArray(preoperative.extentOfExamination).join(", "),
-      false,
-      false,
-    );
-  }
+    ),
+  );
+  drawEntryRow(
+    "Signs & Symptoms",
+    joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+    false,
+    false,
+  );
+  drawEntryRow(
+    "Indications",
+    joinSelections(preoperative.indications, preoperative.indicationOther),
+    false,
+    false,
+  );
+  drawEntryRow(
+    "Extent Of Examination",
+    toArray(preoperative.extentOfExamination).join(", "),
+    false,
+    false,
+  );
   postPreoperativeSectionActive = true;
 
   function drawDiagramInBox(
@@ -876,21 +756,121 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     y += 0.4;
   };
 
-  drawSectionTitle("Procedure Findings");
-  procedureFindingGroups.forEach((group, index) => {
-    if (index > 0) {
-      y += 1.2;
-    }
-    ensureSpace(8);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.text(group.title, margin, y);
-    y += lineHeight + 0.8;
-    pdf.setFontSize(9);
+  drawSectionTitle("Operative Findings");
+  if (hasText(diagramImageData)) {
+    const questionColumnWidth = 40;
+    const answerColumnWidth = 54;
+    const columnGap = 4;
+    const diagramColumnWidth =
+      contentWidth - questionColumnWidth - answerColumnWidth - columnGap * 2;
+    const questionX = margin;
+    const answerX = questionX + questionColumnWidth + columnGap;
+    const diagramX = answerX + answerColumnWidth + columnGap;
+    const diagramBoxHeight = 74;
+    const legendLineHeight = Math.max(lineHeight - 0.5, 3.8);
+    const legendSwatchSize = Math.max(2.2, legendLineHeight - 1.6);
+    const legendTextWidth = diagramColumnWidth - legendSwatchSize - 1.5;
+    const legendLinesCount = legendItems.reduce(
+      (count, item) =>
+        count +
+        pdf.splitTextToSize(String(item.label || ""), Math.max(legendTextWidth, 10)).length,
+      0,
+    );
+    const legendBlockHeight =
+      legendItems.length > 0 ? lineHeight + legendLinesCount * legendLineHeight + 2 : 0;
 
-    group.rows.forEach(drawSpacedFindingRow);
-  });
-  pdf.setFont("helvetica", "normal");
+    const rightHeight = diagramBoxHeight + (legendItems.length > 0 ? legendBlockHeight + 2 : 0);
+    ensureSpace(rightHeight + 4, 24);
+
+    let rightY = y;
+    if (legendItems.length > 0) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Legend", diagramX, rightY);
+      rightY += lineHeight;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      rightY = drawLegendItems(diagramX, rightY, diagramColumnWidth, legendLineHeight) + 2;
+    }
+
+    drawDiagramInBox(diagramX, rightY, diagramColumnWidth, diagramBoxHeight);
+    const diagramBottomY = rightY + diagramBoxHeight;
+
+    let leftY = y;
+    let leftSpilledToNewPage = false;
+    const ensureLeftSpace = (heightNeeded: number) => {
+      if (leftY + heightNeeded > pageHeight - 24) {
+        pdf.addPage();
+        leftY = margin;
+        leftSpilledToNewPage = true;
+      }
+    };
+
+    procedureFindingGroups.forEach((group, groupIndex) => {
+      if (groupIndex > 0) {
+        ensureLeftSpace(1.2 + lineHeight);
+        leftY += 1.2;
+      }
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      const titleLines = pdf.splitTextToSize(
+        group.title,
+        questionColumnWidth + answerColumnWidth + columnGap,
+      );
+      ensureLeftSpace(Math.max(titleLines.length, 1) * lineHeight + 0.8);
+      titleLines.forEach((line: string) => {
+        pdf.text(line, questionX, leftY);
+        leftY += lineHeight;
+      });
+      leftY += 0.8;
+      pdf.setFontSize(9);
+
+      group.rows.forEach((row) => {
+        const labelLines = pdf.splitTextToSize(
+          `${toUiTitleCase(row.label)}:`,
+          questionColumnWidth,
+        );
+        const valueLines = pdf.splitTextToSize(row.value, answerColumnWidth);
+        const rowLineCount = Math.max(labelLines.length, valueLines.length, 1);
+        ensureLeftSpace(rowLineCount * lineHeight + 0.2);
+
+        for (let lineIndex = 0; lineIndex < rowLineCount; lineIndex += 1) {
+          if (labelLines[lineIndex]) {
+            pdf.setFont("helvetica", "bold");
+            pdf.text(labelLines[lineIndex], questionX, leftY);
+          }
+
+          if (valueLines[lineIndex]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(valueLines[lineIndex], answerX, leftY);
+          }
+
+          leftY += lineHeight;
+        }
+        leftY += 0.2;
+      });
+    });
+
+    y = leftSpilledToNewPage ? leftY + 6 : Math.max(leftY, diagramBottomY) + 6;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+  } else {
+    procedureFindingGroups.forEach((group, index) => {
+      if (index > 0) {
+        y += 1.2;
+      }
+      ensureSpace(8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text(group.title, margin, y);
+      y += lineHeight + 0.8;
+      pdf.setFontSize(9);
+
+      group.rows.forEach(drawSpacedFindingRow);
+    });
+    pdf.setFont("helvetica", "normal");
+  }
 
   drawSectionTitle("Interventions / Therapy and Diagnosis");
   const interventionRows: GastroscopyPdfRow[] = [];
