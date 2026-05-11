@@ -48,6 +48,7 @@ export const initialColonoscopyState = {
     totalBbps: "",
   },
   procedureDetails: {
+    dateOfOperation: "",
     procedures: [] as string[],
     procedureOther: "",
     depthOfExamination: [] as string[],
@@ -166,6 +167,8 @@ export const initialColonoscopyState = {
     specimenSentForPathology: "",
     otherSpecimensTaken: "",
     otherSpecimensTakenDetails: "",
+    laboratorySentToSelections: [] as string[],
+    laboratorySentToOther: "",
     laboratorySentTo: "",
     conclusion: "",
     followUpOptions: [] as string[],
@@ -180,6 +183,7 @@ export const initialColonoscopyState = {
   },
   diagram: {
     findings: [] as any[],
+    legendItems: [] as any[],
     canvasImageData: "",
   },
 };

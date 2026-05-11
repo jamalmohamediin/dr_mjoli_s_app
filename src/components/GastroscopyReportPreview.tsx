@@ -3,7 +3,11 @@ import {
   StructuredTemplateReportPreview,
   StructuredTemplatePreviewSection,
 } from "@/components/StructuredTemplateReportPreview";
-import { joinSelections, toArray } from "@/utils/templateDataHelpers";
+import {
+  formatPathologyLaboratorySelection,
+  joinSelections,
+  toArray,
+} from "@/utils/templateDataHelpers";
 
 interface GastroscopyReportPreviewProps {
   report: any;
@@ -31,6 +35,14 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
   const diagnosis = template.diagnosis || {};
   const additionalInfo = template.additionalInfo || {};
   const diagram = template.diagram || {};
+  const pathologyLaboratoryText =
+    additionalInfo.specimenSentForPathology === "Yes"
+      ? formatPathologyLaboratorySelection(
+          additionalInfo.laboratorySentToSelections,
+          additionalInfo.laboratorySentToOther,
+          additionalInfo.laboratorySentTo,
+        )
+      : "";
 
   const oesophagusDetails: string[] = [];
   if (hasSelection(oesophagus.findings, "Barrett’s Oesophagus")) {
@@ -131,7 +143,6 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
       title: "Preoperative Information",
       entries: [
         { label: "Endoscopist", value: toArray(preoperative.endoscopists).join(", ") },
-        { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
         { label: "Anesthetist", value: toArray(preoperative.anaesthetists).join(", "), fullWidth: true },
         { label: "Procedure Urgency", value: preoperative.procedureUrgency },
         { label: "Preoperative Imaging", value: joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther), fullWidth: true },
@@ -190,10 +201,7 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
         { label: "Specimen Sent for Pathology", value: additionalInfo.specimenSentForPathology },
         {
           label: "Specify Laboratory Sent To",
-          value:
-            additionalInfo.specimenSentForPathology === "Yes"
-              ? additionalInfo.laboratorySentTo
-              : "",
+          value: pathologyLaboratoryText,
         },
         { label: "Other Specimens Taken", value: additionalInfo.otherSpecimensTaken === "Yes" ? `Yes - ${additionalInfo.otherSpecimensDetails || ""}` : additionalInfo.otherSpecimensTaken },
         { label: "Conclusion", value: additionalInfo.conclusion, fullWidth: true },
@@ -213,6 +221,8 @@ export const GastroscopyReportPreview = ({ report }: GastroscopyReportPreviewPro
         imageData: diagram.canvasImageData,
         alt: "Gastroscopy anatomy diagram",
         maxHeightPx: 240,
+        legendTitle: "Legend",
+        legendItems: diagram.legendItems,
       }}
       signature={{
         label: "Surgeon's Signature",

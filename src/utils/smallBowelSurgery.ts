@@ -30,6 +30,7 @@ export const initialSmallBowelSurgeryState = {
     description: "",
   },
   procedure: {
+    dateOfOperation: "",
     approach: [] as string[],
     reasonForConversion: [] as string[],
     reasonForConversionOther: "",

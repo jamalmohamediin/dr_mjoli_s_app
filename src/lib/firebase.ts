@@ -3,22 +3,24 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  // Keep the known public Firebase app config as a fallback so
-  // local/manual builds do not silently disconnect from Firestore.
-  apiKey:
-    import.meta.env.VITE_FIREBASE_API_KEY?.trim() || "AIzaSyANAp02TgbOEdONXxZQiluFb1nbON8os5E",
-  authDomain:
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || "dr-mjoli.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim() || "dr-mjoli",
-  storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim() || "dr-mjoli.firebasestorage.app",
-  messagingSenderId:
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() || "211488805925",
-  appId:
-    import.meta.env.VITE_FIREBASE_APP_ID?.trim() || "1:211488805925:web:f05614e58622785ee29bcc",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim() || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim() || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim() || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim() || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim() || "",
 };
 
-const hasFirebaseConfig = Object.values(firebaseConfig).every((value) => Boolean(value));
+const missingFirebaseConfigKeys = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+const hasFirebaseConfig = missingFirebaseConfigKeys.length === 0;
+
+if (!hasFirebaseConfig && typeof window !== "undefined") {
+  console.warn(
+    `Firebase is not configured. Missing env keys: ${missingFirebaseConfigKeys.join(", ")}`,
+  );
+}
 
 export const firebaseApp = hasFirebaseConfig
   ? getApps().length > 0

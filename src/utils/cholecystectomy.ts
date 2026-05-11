@@ -27,6 +27,7 @@ export const initialCholecystectomyState = {
     sizeOfStones: "",
   },
   procedure: {
+    dateOfOperation: "",
     approach: [] as string[],
     reasonForConversion: [] as string[],
     reasonForConversionOther: "",
@@ -89,6 +90,8 @@ export const initialCholecystectomyState = {
     skinClosureOther: "",
     useOfSpecimenBag: "",
     gallbladderSentForHistology: "",
+    laboratorySentTo: [] as string[],
+    laboratorySentToOther: "",
     laboratoryName: "",
     intraoperativeDifficulty: [] as string[],
     intraoperativeDifficultyOther: "",

@@ -7,6 +7,7 @@ import {
   hasText,
   isPostPreoperativeAlwaysVisibleField,
   isPreoperativeSectionTitle,
+  normalizeDiagramLegendItems,
   toArray,
 } from "@/utils/templateDataHelpers";
 
@@ -37,6 +38,7 @@ interface StructuredTemplatePdfOptions {
   title: string;
   patientInfo?: any;
   patientInfoAsaLabel?: string;
+  showSectionDividers?: boolean;
   sections: StructuredTemplatePdfSection[];
   diagram?: {
     title: string;
@@ -45,7 +47,7 @@ interface StructuredTemplatePdfOptions {
     sectionTitle?: string;
     style?: "plain" | "portsLegend";
     legendTitle?: string;
-    legendItems?: string[];
+    legendItems?: unknown;
     legendPosition?: "top" | "bottom";
     boxHeight?: number;
     inlineValueOffset?: number;
@@ -99,10 +101,35 @@ const detectImageFormat = (value: string): "PNG" | "JPEG" => {
   return "PNG";
 };
 
+const parseHexColorToRgb = (hexColor: string) => {
+  const normalized = String(hexColor || "").trim();
+  const shortMatch = normalized.match(/^#([0-9a-fA-F]{3})$/);
+  if (shortMatch) {
+    const [r, g, b] = shortMatch[1].split("");
+    return [
+      parseInt(`${r}${r}`, 16),
+      parseInt(`${g}${g}`, 16),
+      parseInt(`${b}${b}`, 16),
+    ] as const;
+  }
+
+  const longMatch = normalized.match(/^#([0-9a-fA-F]{6})$/);
+  if (longMatch) {
+    return [
+      parseInt(longMatch[1].slice(0, 2), 16),
+      parseInt(longMatch[1].slice(2, 4), 16),
+      parseInt(longMatch[1].slice(4, 6), 16),
+    ] as const;
+  }
+
+  return [107, 114, 128] as const;
+};
+
 export const generateStructuredTemplatePdf = async ({
   title,
   patientInfo,
   patientInfoAsaLabel,
+  showSectionDividers = false,
   sections,
   diagram,
   signature,
@@ -158,9 +185,44 @@ export const generateStructuredTemplatePdf = async ({
       return section.layout !== "label-value-three-column" && section.entries.length > 0;
     })
     .map(({ hideWhenOnlySubheadings, ...section }) => section);
-  const normalizedDiagramLegendItems = toArray(diagram?.legendItems)
-    .map((item) => String(item || "").trim())
-    .filter((item) => item.length > 0);
+  const normalizedDiagramLegendItems = normalizeDiagramLegendItems(diagram?.legendItems);
+
+  const getLegendLines = (label: string, availableWidth: number) =>
+    pdf.splitTextToSize(String(label || ""), Math.max(availableWidth, 10));
+
+  const drawLegendItems = (
+    x: number,
+    startY: number,
+    width: number,
+    itemLineHeight: number,
+  ) => {
+    const swatchSize = Math.max(2.2, itemLineHeight - 1.6);
+    const swatchGap = 1.5;
+    const textWidth = Math.max(width - swatchSize - swatchGap, 10);
+    let currentY = startY;
+
+    normalizedDiagramLegendItems.forEach((item) => {
+      const lines = getLegendLines(item.label, textWidth);
+      if (lines.length === 0) {
+        return;
+      }
+
+      const [r, g, b] = parseHexColorToRgb(item.color);
+      const swatchY = currentY - itemLineHeight + 1.1;
+      pdf.setFillColor(r, g, b);
+      pdf.rect(x, swatchY, swatchSize, swatchSize, "F");
+      pdf.setDrawColor(140, 140, 140);
+      pdf.rect(x, swatchY, swatchSize, swatchSize);
+      pdf.setDrawColor(0, 0, 0);
+
+      lines.forEach((line: string) => {
+        pdf.text(line, x + swatchSize + swatchGap, currentY);
+        currentY += itemLineHeight;
+      });
+    });
+
+    return currentY;
+  };
 
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (y + height > pageHeight - bottomPadding) {
@@ -170,9 +232,11 @@ export const generateStructuredTemplatePdf = async ({
   };
 
   const drawRule = () => {
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 5;
   };
 
@@ -757,8 +821,10 @@ export const generateStructuredTemplatePdf = async ({
         ) || inlineTextLineHeight;
       pdf.setFontSize(9);
       const legendPosition = diagram?.legendPosition === "top" ? "top" : "bottom";
+      const inlineLegendSwatchSize = Math.max(2.2, legendLineHeight - 1.6);
+      const inlineLegendTextWidth = rightWidth - inlineLegendSwatchSize - 1.5;
       const legendLinesCount = normalizedDiagramLegendItems.reduce(
-        (count, item) => count + pdf.splitTextToSize(`- ${item}`, rightWidth - 1).length,
+        (count, item) => count + getLegendLines(item.label, inlineLegendTextWidth).length,
         0,
       );
       const legendBlockHeight =
@@ -792,13 +858,7 @@ export const generateStructuredTemplatePdf = async ({
           legendY += lineHeight;
 
           pdf.setFont("helvetica", "normal");
-          normalizedDiagramLegendItems.forEach((item) => {
-            const legendLines = pdf.splitTextToSize(`- ${item}`, rightWidth - 1);
-            legendLines.forEach((line: string) => {
-              pdf.text(line, rightX, legendY);
-              legendY += legendLineHeight;
-            });
-          });
+          legendY = drawLegendItems(rightX, legendY, rightWidth, legendLineHeight);
           diagramY = legendY + 2;
         }
 
@@ -842,13 +902,7 @@ export const generateStructuredTemplatePdf = async ({
           legendY += lineHeight;
 
           pdf.setFont("helvetica", "normal");
-          normalizedDiagramLegendItems.forEach((item) => {
-            const legendLines = pdf.splitTextToSize(`- ${item}`, rightWidth - 1);
-            legendLines.forEach((line: string) => {
-              pdf.text(line, rightX, legendY);
-              legendY += legendLineHeight;
-            });
-          });
+          legendY = drawLegendItems(rightX, legendY, rightWidth, legendLineHeight);
           rightBottomY = Math.max(rightBottomY, legendY);
         }
       } else {
@@ -1042,8 +1096,10 @@ export const generateStructuredTemplatePdf = async ({
     y += 2;
     const endLegendPosition = diagram?.legendPosition === "top" ? "top" : "bottom";
     const endLegendLineHeight = Math.max(lineHeight - 0.5, 3.8);
+    const endLegendSwatchSize = Math.max(2.2, endLegendLineHeight - 1.6);
+    const endLegendTextWidth = contentWidth - endLegendSwatchSize - 1.5;
     const endLegendLinesCount = normalizedDiagramLegendItems.reduce(
-      (count, item) => count + pdf.splitTextToSize(`- ${item}`, contentWidth).length,
+      (count, item) => count + getLegendLines(item.label, endLegendTextWidth).length,
       0,
     );
     const endLegendHeight =
@@ -1065,14 +1121,7 @@ export const generateStructuredTemplatePdf = async ({
       pdf.text(diagram?.legendTitle || "Legend", margin, y);
       y += lineHeight;
       pdf.setFont("helvetica", "normal");
-      normalizedDiagramLegendItems.forEach((item) => {
-        const lines = pdf.splitTextToSize(`- ${item}`, contentWidth);
-        lines.forEach((line: string) => {
-          ensureSpace(endLegendLineHeight + 1, 20);
-          pdf.text(line, margin, y);
-          y += endLegendLineHeight;
-        });
-      });
+      y = drawLegendItems(margin, y, contentWidth, endLegendLineHeight);
       y += 2;
     }
     const endDiagramImageData = String(diagram?.imageData || "");
@@ -1091,14 +1140,7 @@ export const generateStructuredTemplatePdf = async ({
       pdf.text(diagram?.legendTitle || "Legend", margin, y);
       y += lineHeight;
       pdf.setFont("helvetica", "normal");
-      normalizedDiagramLegendItems.forEach((item) => {
-        const lines = pdf.splitTextToSize(`- ${item}`, contentWidth);
-        lines.forEach((line: string) => {
-          ensureSpace(endLegendLineHeight + 1, 20);
-          pdf.text(line, margin, y);
-          y += endLegendLineHeight;
-        });
-      });
+      y = drawLegendItems(margin, y, contentWidth, endLegendLineHeight);
       y += 1;
     }
   }
@@ -1146,14 +1188,18 @@ export const generateStructuredTemplatePdf = async ({
       const signatureY = y;
       const signatureLabel = "Surgeon's Signature:";
       const dateLabel = "Date & Time:";
+      const signatureValueGap = 6;
+      const dateValueGap = 2;
 
       pdf.setFont("helvetica", "bold");
+      const signatureLabelWidth = pdf.getTextWidth(signatureLabel);
+      const dateLabelWidth = pdf.getTextWidth(dateLabel);
       pdf.text(signatureLabel, signatureCol1X, signatureY);
       pdf.text(dateLabel, signatureCol2X, signatureY);
       pdf.setFont("helvetica", "normal");
 
-      const signatureValueX = signatureCol1X + pdf.getTextWidth(signatureLabel) + 2;
-      const dateValueX = signatureCol2X + pdf.getTextWidth(dateLabel) + 2;
+      const signatureValueX = signatureCol1X + signatureLabelWidth + signatureValueGap;
+      const dateValueX = signatureCol2X + dateLabelWidth + dateValueGap;
 
       if (hasText(signatureDate)) {
         pdf.text(signatureDate, dateValueX, signatureY);

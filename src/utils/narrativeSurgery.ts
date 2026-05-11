@@ -9,6 +9,7 @@ export const createInitialNarrativeSurgeryState = (variant: "general" | "abdomin
     anaesthetists: [""],
     imaging: [] as string[],
     imagingOther: "",
+    dateOfOperation: "",
     urgency: "",
     startTime: "",
     endTime: "",

@@ -1,4 +1,10 @@
-import { hasText, joinSelections, toArray } from "@/utils/templateDataHelpers";
+import {
+  formatPathologyLaboratorySelection,
+  hasText,
+  joinSelections,
+  toArray,
+} from "@/utils/templateDataHelpers";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 
 export interface ColonoscopyReportSectionEntry {
   label: string;
@@ -62,6 +68,14 @@ export const buildColonoscopyReportSections = (
   const interventions = template?.interventions || {};
   const diagnosis = template?.diagnosis || {};
   const additionalInfo = template?.additionalInfo || {};
+  const pathologyLaboratoryText =
+    additionalInfo.specimenSentForPathology === "Yes"
+      ? formatPathologyLaboratorySelection(
+          additionalInfo.laboratorySentToSelections,
+          additionalInfo.laboratorySentToOther,
+          additionalInfo.laboratorySentTo,
+        )
+      : "";
 
   const selectedFindings = toArray(findingsSummary.findings);
   const selectedDepth = toArray(procedureDetails.depthOfExamination);
@@ -141,6 +155,11 @@ export const buildColonoscopyReportSections = (
   }
 
   const procedureDetailsEntries: ColonoscopyReportSectionEntry[] = [
+    {
+      label: "Date of Operation",
+      value:
+        formatDateOfOperationForDisplay(procedureDetails.dateOfOperation) || "________________",
+    },
     {
       label: "Procedure",
       value: joinSelections(procedureDetails.procedures, procedureDetails.procedureOther),
@@ -601,7 +620,7 @@ export const buildColonoscopyReportSections = (
         },
         {
           label: "Specify Laboratory Sent to",
-          value: additionalInfo.laboratorySentTo,
+          value: pathologyLaboratoryText,
           fullWidth: true,
         },
       ],

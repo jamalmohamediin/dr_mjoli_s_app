@@ -3,6 +3,7 @@ import {
   StructuredTemplateReportPreview,
   StructuredTemplatePreviewSection,
 } from "@/components/StructuredTemplateReportPreview";
+import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import { joinSelections, toArray } from "@/utils/templateDataHelpers";
 
 interface TransanalMinimallyInvasiveSurgeryReportPreviewProps {
@@ -88,7 +89,10 @@ export const TransanalMinimallyInvasiveSurgeryReportPreview = ({
         { label: "Specimen retrieved", value: specimen.specimenRetrieved },
         {
           label: "Laboratory sent to",
-          value: specimen.specimenRetrieved === "Yes" ? specimen.laboratorySentTo : "",
+          value:
+            specimen.specimenRetrieved === "Yes"
+              ? joinSelections(toArray(specimen.laboratorySentTo), specimen.laboratorySentToOther)
+              : "",
         },
         { label: "Orientation marked", value: specimen.orientationMarked },
         { label: "Additional information", value: additionalInfo.additionalInformation, fullWidth: true },
@@ -105,7 +109,9 @@ export const TransanalMinimallyInvasiveSurgeryReportPreview = ({
       signature={{
         label: "Doctor Signature",
         text: additionalInfo.doctorSignature,
-        dateTime: additionalInfo.dateTime,
+        dateTime:
+          formatDateTimeDDMMYYYYWithDashes(additionalInfo.dateTime) ||
+          additionalInfo.dateTime,
       }}
       emptyMessage="Start filling out the transanal minimally invasive surgery form to see findings appear here."
     />

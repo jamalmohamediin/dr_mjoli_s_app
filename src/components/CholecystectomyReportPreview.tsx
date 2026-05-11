@@ -206,6 +206,9 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
     toArray(cholecystectomy?.procedure?.extentOfCholecystectomy),
     cholecystectomy?.procedure?.extentOfCholecystectomyOther
   );
+  const isSubtotalCholecystectomyRequired =
+    cholecystectomy?.procedure?.extentOfCholecystectomy ===
+    "Subtotal Cholecystectomy Required";
   const hemostasis = renderSelection(
     toArray(cholecystectomy?.procedure?.hemostasis),
     cholecystectomy?.procedure?.hemostasisOther
@@ -254,6 +257,14 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
     toArray(cholecystectomy?.closure?.complications),
     cholecystectomy?.closure?.complicationsOther
   );
+  const histologyLaboratories = renderSelection(
+    toArray(cholecystectomy?.closure?.laboratorySentTo),
+    cholecystectomy?.closure?.laboratorySentToOther
+  );
+  const histologyLaboratoryText =
+    histologyLaboratories.length > 0
+      ? histologyLaboratories.join(", ")
+      : (cholecystectomy?.closure?.laboratoryName || "").trim();
 
   return (
     <div className="space-y-4">
@@ -437,13 +448,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               <SurgicalDiagramDisplay markings={surgicalMarkings} />
             </div>
           )}
-          {cholecystectomy?.procedure?.subtotalCholecystectomy && (
-            <div>
-              <span className="font-medium">Subtotal Cholecystectomy:</span>{" "}
-              {cholecystectomy.procedure.subtotalCholecystectomy}
-            </div>
-          )}
-          {subtotalReasons.length > 0 && (
+          {isSubtotalCholecystectomyRequired && subtotalReasons.length > 0 && (
             <div>
               <span className="font-medium">Reason for Subtotal Cholecystectomy:</span>{" "}
               {subtotalReasons.join(", ")}
@@ -461,7 +466,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               {extentOfCholecystectomy.join(", ")}
             </div>
           )}
-          {methodOfSubtotalControl.length > 0 && (
+          {isSubtotalCholecystectomyRequired && methodOfSubtotalControl.length > 0 && (
             <div>
               <span className="font-medium">Method of Subtotal Cholecystectomy Control:</span>{" "}
               {methodOfSubtotalControl.join(", ")}
@@ -486,37 +491,6 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
               {criticalViewSafetyConfirmation.join(", ")}
             </div>
           )}
-          <div>
-            <span className="font-medium">Critical View of Safety:</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {cholecystectomy?.procedure?.calotsTriangleDissected && (
-              <div>
-                <span className="font-medium">Calot&apos;s Triangle Dissected:</span>{" "}
-                {cholecystectomy.procedure.calotsTriangleDissected}
-              </div>
-            )}
-            {cholecystectomy?.procedure?.cysticDuctIdentified && (
-              <div>
-                <span className="font-medium">Cystic Duct Identified:</span>{" "}
-                {cholecystectomy.procedure.cysticDuctIdentified}
-              </div>
-            )}
-            {cholecystectomy?.procedure?.cysticArteryIdentified && (
-              <div>
-                <span className="font-medium">Cystic Artery Identified:</span>{" "}
-                {cholecystectomy.procedure.cysticArteryIdentified}
-              </div>
-            )}
-            {cholecystectomy?.procedure?.twoStructuresConfirmed && (
-              <div>
-                <span className="font-medium">
-                  Two Structures Entering Gallbladder Confirmed:
-                </span>{" "}
-                {cholecystectomy.procedure.twoStructuresConfirmed}
-              </div>
-            )}
-          </div>
           {cysticDuctControl.length > 0 && (
             <div>
               <span className="font-medium">Cystic Duct Control:</span>{" "}
@@ -637,9 +611,7 @@ export const CholecystectomyReportPreview = ({ report }: CholecystectomyReportPr
             <div>
               <span className="font-medium">Gallbladder Sent For Histology:</span>{" "}
               {cholecystectomy.closure.gallbladderSentForHistology}
-              {cholecystectomy?.closure?.laboratoryName
-                ? ` (${cholecystectomy.closure.laboratoryName})`
-                : ""}
+              {histologyLaboratoryText ? ` (${histologyLaboratoryText})` : ""}
             </div>
           )}
           {difficulty.length > 0 && (

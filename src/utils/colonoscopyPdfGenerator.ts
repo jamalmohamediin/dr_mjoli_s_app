@@ -4,6 +4,7 @@ import {
 } from "@/utils/structuredTemplatePdf";
 import { buildColonoscopyReportSections } from "@/utils/colonoscopyReportSections";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
+import { normalizeDiagramLegendItems } from "@/utils/templateDataHelpers";
 
 const PRESERVE_UPPERCASE_TOKENS = new Set([
   "ASA",
@@ -76,14 +77,18 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     ? findingsSummary.findings
     : [];
   const findingOther = String(findingsSummary.findingOther || "").trim();
-  const diagramLegendItems = Array.from(
+  const fallbackLegendItems = Array.from(
     new Set(
       [
         ...selectedFindings.map((item) => toTitleCaseText(String(item || "").trim())),
         findingOther ? toTitleCaseText(findingOther) : "",
       ].filter(Boolean),
     ),
-  );
+  ).map((label) => ({ label, color: "#6b7280" }));
+  const configuredLegendItems = normalizeDiagramLegendItems(diagram?.legendItems);
+  const diagramLegendItems = configuredLegendItems.length
+    ? configuredLegendItems
+    : fallbackLegendItems;
   const surgeonSignatureText =
     additionalInfo.surgeonSignatureText || additionalInfo.endoscopistName;
   const signatureDateTime = String(additionalInfo.dateTime || "").trim() || getLocalDateTimeValue();
@@ -139,12 +144,6 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
         section.title === "Preoperative Information" &&
         entry.label === "Preoperative Imaging"
           ? "Imaging"
-          : section.title === "Preoperative Information" &&
-              entry.label === "Total Duration (Min)"
-            ? "Total Duration"
-          : section.title === "Preoperative Information" &&
-              entry.label === "Duration of Withdrawal (Min)"
-            ? "Withdrawal Duration"
           : entry.label,
       value: formatExportValue(entry.value),
       fullWidth: entry.fullWidth,
@@ -154,6 +153,8 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
   return generateStructuredTemplatePdf({
     title: "COLONOSCOPY REPORT",
     patientInfo: patientInfo || data?.patientInfo,
+    patientInfoAsaLabel: "ASA Score",
+    showSectionDividers: false,
     sections,
     signatureLayout: "appendectomy",
     prioritizeSignsBeforeIndication: true,
@@ -170,8 +171,8 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
             diagramLegendItems.length > 0
               ? diagramLegendItems
               : ["Diagram annotations are included directly in the image."],
-          boxHeight: 82,
-          inlineReserveHeight: 64,
+          boxHeight: 74,
+          inlineReserveHeight: 28,
           inlineLayout: "questionAnswerDiagram",
         }
       : undefined,

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import {
   DateTimeDDMMYYYY24HourInput,
   Time24HourInput,
@@ -244,6 +245,8 @@ const decompressionFluidTypeOptions = [
   "Other",
 ];
 
+const histologyLaboratoryOptions = ["Pathcare", "Ampath", "NHLS", "Lancet", "Other"];
+
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.filter(Boolean) as string[];
@@ -337,9 +340,6 @@ export const CholecystectomyForm = ({
 
   const isLaparoscopicOrConverted = () =>
     toArray(cholecystectomy.procedure?.approach).includes("Laparoscopic") || isConvertedToOpen();
-
-  const isSubtotalSelected = () =>
-    cholecystectomy.procedure?.subtotalCholecystectomy === "Yes";
 
   const hasAdditionalDrain = () =>
     toArray(cholecystectomy.procedure?.additionalProcedures).includes("Drain Insertion") ||
@@ -878,6 +878,10 @@ export const CholecystectomyForm = ({
         {expanded.procedure && (
           <CardContent className="px-6 py-4">
             <div className="space-y-6">
+              <DateOfOperationField
+                value={cholecystectomy.procedure?.dateOfOperation || ""}
+                onChange={(value) => updateCholecystectomy("procedure", "dateOfOperation", value)}
+              />
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
                 <div className="flex flex-wrap gap-4 ml-4">
@@ -1009,34 +1013,44 @@ export const CholecystectomyForm = ({
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">
-                  Subtotal Cholecystectomy:
-                </p>
-                <div className="flex space-x-4 ml-4">
-                  {["Yes", "No"].map((option) => (
-                    <div className="flex items-center" key={`subtotal-${option}`}>
+                <p className="text-sm font-medium text-gray-700 mb-2">Extent of Cholecystectomy:</p>
+                <div className="flex flex-wrap gap-4 ml-4">
+                  {extentOfCholecystectomyOptions.map((option) => (
+                    <div className="flex items-center" key={`extent-of-chole-${option}`}>
                       <Checkbox
-                        id={`subtotal-${option}`}
-                        checked={cholecystectomy.procedure?.subtotalCholecystectomy === option}
+                        id={`extent-of-chole-${option}`}
+                        checked={cholecystectomy.procedure?.extentOfCholecystectomy === option}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            updateCholecystectomy(
-                              "procedure",
-                              "subtotalCholecystectomy",
-                              option
-                            );
+                            updateCholecystectomy("procedure", "extentOfCholecystectomy", option);
                           }
                         }}
                       />
-                      <label htmlFor={`subtotal-${option}`} className="ml-2 block text-sm">
+                      <label htmlFor={`extent-of-chole-${option}`} className="ml-2 block text-sm">
                         {option}
                       </label>
                     </div>
                   ))}
                 </div>
+                {cholecystectomy.procedure?.extentOfCholecystectomy === "Other" && (
+                  <div className="mt-3 ml-4">
+                    <Input
+                      type="text"
+                      placeholder="Specify Other Extent of Cholecystectomy"
+                      value={cholecystectomy.procedure?.extentOfCholecystectomyOther || ""}
+                      onChange={(e) =>
+                        updateCholecystectomy(
+                          "procedure",
+                          "extentOfCholecystectomyOther",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
-              {isSubtotalSelected() && (
+              {isSubtotalCholecystectomyRequired() && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">
                     Reason for Subtotal Cholecystectomy:
@@ -1083,71 +1097,8 @@ export const CholecystectomyForm = ({
                       />
                     </div>
                   )}
-                </div>
-              )}
 
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Adhesiolysis:</p>
-                <div className="flex flex-wrap gap-4 ml-4">
-                  {adhesiolysisOptions.map((option) => (
-                    <div className="flex items-center" key={`adhesiolysis-${option}`}>
-                      <Checkbox
-                        id={`adhesiolysis-${option}`}
-                        checked={cholecystectomy.procedure?.adhesiolysis === option}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            updateCholecystectomy("procedure", "adhesiolysis", option);
-                          }
-                        }}
-                      />
-                      <label htmlFor={`adhesiolysis-${option}`} className="ml-2 block text-sm">
-                        {option}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Extent of Cholecystectomy:</p>
-                <div className="flex flex-wrap gap-4 ml-4">
-                  {extentOfCholecystectomyOptions.map((option) => (
-                    <div className="flex items-center" key={`extent-of-chole-${option}`}>
-                      <Checkbox
-                        id={`extent-of-chole-${option}`}
-                        checked={cholecystectomy.procedure?.extentOfCholecystectomy === option}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            updateCholecystectomy("procedure", "extentOfCholecystectomy", option);
-                          }
-                        }}
-                      />
-                      <label htmlFor={`extent-of-chole-${option}`} className="ml-2 block text-sm">
-                        {option}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                {cholecystectomy.procedure?.extentOfCholecystectomy === "Other" && (
-                  <div className="mt-3 ml-4">
-                    <Input
-                      type="text"
-                      placeholder="Specify Other Extent of Cholecystectomy"
-                      value={cholecystectomy.procedure?.extentOfCholecystectomyOther || ""}
-                      onChange={(e) =>
-                        updateCholecystectomy(
-                          "procedure",
-                          "extentOfCholecystectomyOther",
-                          e.target.value
-                        )
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-
-              {isSubtotalCholecystectomyRequired() && (
-                <div>
+                  <div className="mt-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">
                     Method of Subtotal Cholecystectomy Control:
                   </p>
@@ -1193,8 +1144,31 @@ export const CholecystectomyForm = ({
                       />
                     </div>
                   )}
+                  </div>
                 </div>
               )}
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Adhesiolysis:</p>
+                <div className="flex flex-wrap gap-4 ml-4">
+                  {adhesiolysisOptions.map((option) => (
+                    <div className="flex items-center" key={`adhesiolysis-${option}`}>
+                      <Checkbox
+                        id={`adhesiolysis-${option}`}
+                        checked={cholecystectomy.procedure?.adhesiolysis === option}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            updateCholecystectomy("procedure", "adhesiolysis", option);
+                          }
+                        }}
+                      />
+                      <label htmlFor={`adhesiolysis-${option}`} className="ml-2 block text-sm">
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">
@@ -1327,37 +1301,6 @@ export const CholecystectomyForm = ({
                     </div>
                   )}
                 </div>
-                {[
-                  ["Calot's Triangle Dissected:", "calotsTriangleDissected"],
-                  ["Cystic Duct Identified:", "cysticDuctIdentified"],
-                  ["Cystic Artery Identified:", "cysticArteryIdentified"],
-                  [
-                    "Two Structures Entering Gall Bladder Confirmed:",
-                    "twoStructuresConfirmed",
-                  ],
-                ].map(([label, field]) => (
-                  <div key={field}>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{label}</p>
-                    <div className="flex space-x-4 ml-4">
-                      {["Yes", "No"].map((option) => (
-                        <div className="flex items-center" key={`${field}-${option}`}>
-                          <Checkbox
-                            id={`${field}-${option}`}
-                            checked={cholecystectomy.procedure?.[field] === option}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                updateCholecystectomy("procedure", field, option);
-                              }
-                            }}
-                          />
-                          <label htmlFor={`${field}-${option}`} className="ml-2 block text-sm">
-                            {option}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
               </div>
 
               <div>
@@ -2112,14 +2055,48 @@ export const CholecystectomyForm = ({
                       <p className="text-sm font-medium text-gray-700 mb-2">
                         Please Specify Laboratory Sent To:
                       </p>
-                      <Input
-                        type="text"
-                        placeholder="Enter laboratory name"
-                        value={cholecystectomy.closure?.laboratoryName || ""}
-                        onChange={(e) =>
-                          updateCholecystectomy("closure", "laboratoryName", e.target.value)
-                        }
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-4">
+                        {histologyLaboratoryOptions.map((option) => (
+                          <div className="flex items-center" key={`histology-lab-${option}`}>
+                            <Checkbox
+                              id={`histology-lab-${option}`}
+                              checked={toArray(cholecystectomy.closure?.laboratorySentTo).includes(
+                                option
+                              )}
+                              onCheckedChange={() =>
+                                toggleArrayValue(
+                                  "closure",
+                                  "laboratorySentTo",
+                                  option,
+                                  cholecystectomy.closure?.laboratorySentTo
+                                )
+                              }
+                            />
+                            <label
+                              htmlFor={`histology-lab-${option}`}
+                              className="ml-2 block text-sm text-gray-700"
+                            >
+                              {option}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      {toArray(cholecystectomy.closure?.laboratorySentTo).includes("Other") && (
+                        <div className="mt-3 ml-4">
+                          <Input
+                            type="text"
+                            placeholder="Specify Other Laboratory"
+                            value={cholecystectomy.closure?.laboratorySentToOther || ""}
+                            onChange={(e) =>
+                              updateCholecystectomy(
+                                "closure",
+                                "laboratorySentToOther",
+                                e.target.value
+                              )
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

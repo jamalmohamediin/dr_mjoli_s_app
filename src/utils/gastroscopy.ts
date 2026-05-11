@@ -10,6 +10,7 @@ export const initialGastroscopyState = {
     procedureUrgency: "",
     preoperativeImaging: [] as string[],
     preoperativeImagingOther: "",
+    dateOfOperation: "",
     startTime: "",
     endTime: "",
     duration: "",
@@ -107,6 +108,8 @@ export const initialGastroscopyState = {
   },
   additionalInfo: {
     specimenSentForPathology: "",
+    laboratorySentToSelections: [] as string[],
+    laboratorySentToOther: "",
     laboratorySentTo: "",
     otherSpecimensTaken: "",
     otherSpecimensDetails: "",
@@ -126,6 +129,7 @@ export const initialGastroscopyState = {
     findings: [] as any[],
     drawingImageData: "",
     textAnnotations: [] as any[],
+    legendItems: [] as any[],
     canvasImageData: "",
   },
 };

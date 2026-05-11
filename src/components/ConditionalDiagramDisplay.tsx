@@ -17,6 +17,7 @@ interface SurgicalDiagramState {
   activeVariant: string;
   markingsByVariant: Record<string, any[]>;
   visibleVariants?: string[];
+  drawLegendEntries?: { color: string; label: string }[];
 }
 
 interface ConditionalDiagramDisplayProps {
@@ -128,6 +129,9 @@ export const ConditionalDiagramDisplay = ({
           currentSurgicalDiagramState.activeVariant || activeDiagramVariant || variantKeys[0] || "default",
         markingsByVariant: currentMarkingsByVariant,
         visibleVariants,
+        drawLegendEntries: Array.isArray(currentSurgicalDiagramState.drawLegendEntries)
+          ? currentSurgicalDiagramState.drawLegendEntries
+          : [],
       };
     }
 
@@ -141,6 +145,7 @@ export const ConditionalDiagramDisplay = ({
         [defaultVariant]: readLegacyMarkings(),
       },
       visibleVariants: initialVisibleVariants,
+      drawLegendEntries: [],
     };
   };
 
@@ -260,6 +265,7 @@ export const ConditionalDiagramDisplay = ({
                           activeVariant: variantKey,
                           markingsByVariant: diagramState.markingsByVariant,
                           visibleVariants: nextVisibleVariants,
+                          drawLegendEntries: diagramState.drawLegendEntries || [],
                         };
                         setActiveDiagramVariant(variantKey);
                         emitSurgicalState(nextState);
@@ -286,8 +292,9 @@ export const ConditionalDiagramDisplay = ({
                         key={`${activeSurgicalProcedureName}-${variantKey}`}
                         diagramImage={diagramVariants[variantKey]}
                         initialMarkings={diagramState.markingsByVariant[variantKey] || []}
+                        initialDrawLegendEntries={diagramState.drawLegendEntries || []}
                         markingScale={diagramMarkingScale}
-                        onUpdate={(markings) => {
+                        onUpdate={(markings, nextDrawLegendEntries) => {
                           emitSurgicalState({
                             activeVariant: variantKey,
                             markingsByVariant: {
@@ -295,6 +302,16 @@ export const ConditionalDiagramDisplay = ({
                               [variantKey]: markings,
                             },
                             visibleVariants,
+                            drawLegendEntries:
+                              nextDrawLegendEntries || diagramState.drawLegendEntries || [],
+                          });
+                        }}
+                        onDrawLegendChange={(drawLegendEntries) => {
+                          emitSurgicalState({
+                            activeVariant: variantKey,
+                            markingsByVariant: diagramState.markingsByVariant,
+                            visibleVariants,
+                            drawLegendEntries,
                           });
                         }}
                       />
@@ -324,6 +341,7 @@ export const ConditionalDiagramDisplay = ({
                           ...diagramState.markingsByVariant,
                           [variantKey]: markings,
                         },
+                        drawLegendEntries: diagramState.drawLegendEntries || [],
                       });
                     }}
                   />
@@ -344,6 +362,7 @@ export const ConditionalDiagramDisplay = ({
                       const nextState = {
                         activeVariant: variantKey,
                         markingsByVariant: diagramState.markingsByVariant,
+                        drawLegendEntries: diagramState.drawLegendEntries || [],
                       };
                       setActiveDiagramVariant(variantKey);
                       emitSurgicalState(nextState);
@@ -368,6 +387,7 @@ export const ConditionalDiagramDisplay = ({
                     ...diagramState.markingsByVariant,
                     [currentVariant]: markings,
                   },
+                  drawLegendEntries: diagramState.drawLegendEntries || [],
                 });
               }}
             />

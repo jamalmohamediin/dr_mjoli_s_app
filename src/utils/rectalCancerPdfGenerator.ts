@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
+import { formatDateOfOperationForDisplay } from './operationDate';
 import { mapNewStructureToOld } from './rectalCancerPdfGeneratorMappings';
 import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
@@ -165,6 +166,7 @@ export const generateRectalCancerPDF = async (
     const pageWidth = 210;
     const pageHeight = 297;
     const margin = 15;
+    const showSectionDividers = false;
     let y = margin;
     let currentPage = 1;
     
@@ -235,9 +237,11 @@ export const generateRectalCancerPDF = async (
     pdf.text('COLORECTAL RESECTION REPORT', pageWidth / 2, y, { align: 'center' });
     y += 8;
     
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 5;
 
     pdf.setFontSize(9);
@@ -369,9 +373,11 @@ export const generateRectalCancerPDF = async (
     };
 
     const drawSectionDivider = (spacingAfter: number = 6) => {
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.2);
-      pdf.line(margin, y, pageWidth - margin, y);
+      if (showSectionDividers) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, y, pageWidth - margin, y);
+      }
       y += spacingAfter;
     };
 
@@ -842,6 +848,12 @@ export const generateRectalCancerPDF = async (
     let procedureRowY = procedureColumnStartY;
 
     procedureRowY = drawProcedureFieldRow(
+      'Date of Operation',
+      formatDateOfOperationForDisplay(rectalCancerData?.procedureDetails?.dateOfOperation) ||
+        "________________",
+      procedureRowY,
+    );
+    procedureRowY = drawProcedureFieldRow(
       'Operation Type',
       operationTypeText,
       procedureRowY,
@@ -989,10 +1001,12 @@ export const generateRectalCancerPDF = async (
     const diagramEndY = portsY + diagramHeight + 10;
     y = Math.max(diagramEndY, leftColumnEndY) + 10;
     
-    // Separator line
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    // Separator spacing
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 6;
     
     pdf.addPage();
@@ -1054,9 +1068,11 @@ export const generateRectalCancerPDF = async (
     addWrappedField('Excised En-Bloc Resection', enBlocResection);
 
     y += 3;
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 6;
 
     checkPageBreak(85);
@@ -1340,10 +1356,12 @@ export const generateRectalCancerPDF = async (
     }
     y += 8;
     
-    // Line separator
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    // Line separator spacing
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 6;
     
     // SPECIMEN Section
@@ -1399,10 +1417,12 @@ export const generateRectalCancerPDF = async (
     );
     y += 4; // Reduced spacing
     
-    // Line separator
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    // Line separator spacing
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 6;
     
     // POST OPERATIVE MANAGEMENT Section

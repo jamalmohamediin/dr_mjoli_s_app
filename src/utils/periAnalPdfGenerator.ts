@@ -1,8 +1,10 @@
 import jsPDF from "jspdf";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import {
   getPeriAnalAdditionalFindingSection,
   getPeriAnalFindingSections,
+  getPeriAnalSpecimenLaboratoryText,
   joinSelections,
   parsePeriAnalDiagramState,
 } from "@/utils/periAnalHelpers";
@@ -18,6 +20,19 @@ import {
 } from "@/utils/templateDataHelpers";
 
 const PERI_ANAL_DIAGRAM_MARKING_SCALE = 1.8;
+const DIAGRAM_CANVAS_PADDING = 60;
+
+const hexColorToRgb = (value: string): [number, number, number] => {
+  const normalized = String(value || "").trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return [17, 17, 17];
+  }
+  return [
+    parseInt(normalized.slice(0, 2), 16),
+    parseInt(normalized.slice(2, 4), 16),
+    parseInt(normalized.slice(4, 6), 16),
+  ];
+};
 
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{ width: number; height: number }> =>
   new Promise((resolve) => {
@@ -50,30 +65,40 @@ const createSurgicalDiagramCanvas = async (
     const image = new Image();
     image.onload = () => {
       const drawingMetrics = getSurgicalDiagramMarkingMetrics(PERI_ANAL_DIAGRAM_MARKING_SCALE);
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = image.naturalWidth + DIAGRAM_CANVAS_PADDING * 2;
+      canvas.height = image.naturalHeight + DIAGRAM_CANVAS_PADDING * 2;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(image, 0, 0);
+      ctx.drawImage(
+        image,
+        DIAGRAM_CANVAS_PADDING,
+        DIAGRAM_CANVAS_PADDING,
+        image.naturalWidth,
+        image.naturalHeight,
+      );
 
       (markings || []).forEach((marking) => {
         if (marking.type === "port") {
+          const x = Number(marking?.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking?.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
+          ctx.fillText(marking.size, x, y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
-          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
+          ctx.moveTo(x - drawingMetrics.portHalfLength, y);
+          ctx.lineTo(x + drawingMetrics.portHalfLength, y);
           ctx.strokeStyle = "black";
           ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
+          const x = Number(marking?.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking?.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
+          ctx.arc(x, y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
           ctx.lineWidth =
             marking.stomaType === "ileostomy"
@@ -85,8 +110,14 @@ const createSurgicalDiagramCanvas = async (
         } else if (marking.type === "incision") {
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(marking.start.x, marking.start.y);
-          ctx.lineTo(marking.end.x, marking.end.y);
+          ctx.moveTo(
+            Number(marking.start.x) + DIAGRAM_CANVAS_PADDING,
+            Number(marking.start.y) + DIAGRAM_CANVAS_PADDING,
+          );
+          ctx.lineTo(
+            Number(marking.end.x) + DIAGRAM_CANVAS_PADDING,
+            Number(marking.end.y) + DIAGRAM_CANVAS_PADDING,
+          );
           ctx.strokeStyle = "#8B0000";
           ctx.lineWidth = drawingMetrics.incisionLineWidth;
           ctx.setLineDash(drawingMetrics.incisionDash);
@@ -101,12 +132,21 @@ const createSurgicalDiagramCanvas = async (
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
           ctx.beginPath();
-          ctx.moveTo(points[0].x, points[0].y);
+          ctx.moveTo(
+            Number(points[0].x) + DIAGRAM_CANVAS_PADDING,
+            Number(points[0].y) + DIAGRAM_CANVAS_PADDING,
+          );
           for (let index = 1; index < points.length; index += 1) {
-            ctx.lineTo(points[index].x, points[index].y);
+            ctx.lineTo(
+              Number(points[index].x) + DIAGRAM_CANVAS_PADDING,
+              Number(points[index].y) + DIAGRAM_CANVAS_PADDING,
+            );
           }
           if (points.length === 1) {
-            ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+            ctx.lineTo(
+              Number(points[0].x) + DIAGRAM_CANVAS_PADDING + 0.01,
+              Number(points[0].y) + DIAGRAM_CANVAS_PADDING + 0.01,
+            );
           }
           ctx.stroke();
           ctx.restore();
@@ -115,19 +155,21 @@ const createSurgicalDiagramCanvas = async (
           const textSize = Number(marking.size) > 0 ? Number(marking.size) : 20;
           const fontWeight = marking.fontWeight || (marking.fontStyle === "bold" ? "700" : "400");
           const fontStyle = marking.fontStyle === "italic" ? "italic" : "normal";
+          const x = Number(marking.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.fillStyle = marking.color || "#111111";
           ctx.font = `${fontStyle} ${fontWeight} ${textSize}px Arial`;
           ctx.textBaseline = "top";
-          ctx.fillText(marking.text, marking.x, marking.y);
+          ctx.fillText(marking.text, x, y);
           if (marking.underline) {
             const measuredTextWidth = ctx.measureText(marking.text).width;
-            const underlineY = marking.y + textSize + 1;
+            const underlineY = y + textSize + 1;
             ctx.strokeStyle = marking.color || "#111111";
             ctx.lineWidth = Math.max(1, textSize / 14);
             ctx.beginPath();
-            ctx.moveTo(marking.x, underlineY);
-            ctx.lineTo(marking.x + measuredTextWidth, underlineY);
+            ctx.moveTo(x, underlineY);
+            ctx.lineTo(x + measuredTextWidth, underlineY);
             ctx.stroke();
           }
           ctx.restore();
@@ -250,6 +292,9 @@ export const generatePeriAnalPDF = async (
     const findingsSummary = getPeriAnalAdditionalFindingSection(periAnalData);
     const findingSections = getPeriAnalFindingSections(periAnalData);
     const diagramState = parsePeriAnalDiagramState(periAnalData?.procedureFindings);
+    const drawLegendEntries = Array.isArray(diagramState.drawLegendEntries)
+      ? diagramState.drawLegendEntries
+      : [];
     const selectedDiagramVariants = PERI_ANAL_DIAGRAM_VARIANTS.filter((variant) => {
       const isSelected = diagramState.visibleVariants.includes(variant.key);
       const hasMarkings =
@@ -279,6 +324,7 @@ export const generatePeriAnalPDF = async (
     const col3X = margin + 126;
     const twoCol2X = margin + 95;
     let postPreoperativeSectionActive = false;
+    const showSectionDividers = false;
 
     const txt = (value: any) => (value === undefined || value === null ? "" : String(value));
     const shouldRenderField = (label: string, value: unknown) => {
@@ -313,9 +359,11 @@ export const generatePeriAnalPDF = async (
     };
 
     const drawRule = () => {
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.2);
-      pdf.line(margin, y, pageWidth - margin, y);
+      if (showSectionDividers) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, y, pageWidth - margin, y);
+      }
       y += 5;
     };
 
@@ -517,7 +565,12 @@ export const generatePeriAnalPDF = async (
       patientIdFallback: patientId,
       asaLabel: "ASA Score",
     });
-    startSection("Preoperative Information");
+    startSection("Procedure Details");
+    row3(
+      `Date of Operation: ${formatDateOfOperationForDisplay(preop?.dateOfOperation) || "________________"}`,
+      "",
+      ""
+    );
     row3(
       `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
       `Assistant: ${(preop?.assistants || []).filter((x: string) => x?.trim()).join(", ")}`,
@@ -569,14 +622,24 @@ export const generatePeriAnalPDF = async (
       pdf.setFontSize(11);
       pdf.text("Peri-Anal Diagrams", margin, y);
       y += 6;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
-      pdf.text(
-        "Legend: Freehand Drawings And Textbox Notes Are Rendered Exactly As Marked On The Diagram.",
-        margin,
-        y,
-      );
-      y += lineHeight;
+      if (drawLegendEntries.length > 0) {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("Legend:", margin, y);
+        y += lineHeight;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        drawLegendEntries.forEach((entry) => {
+          const [red, green, blue] = hexColorToRgb(entry.color);
+          pdf.setDrawColor(110, 110, 110);
+          pdf.setFillColor(red, green, blue);
+          pdf.rect(margin, y - 3.2, 2.8, 2.8, "FD");
+          pdf.setTextColor(31, 41, 55);
+          pdf.text(entry.label, margin + 4.2, y - 0.7);
+          y += lineHeight - 0.2;
+        });
+        pdf.setTextColor(0, 0, 0);
+      }
       const gridStartY = y;
 
       diagramCanvasEntries.forEach((entry, index) => {
@@ -659,12 +722,26 @@ export const generatePeriAnalPDF = async (
         { label: "Sent For Histology", value: txt(specimen?.sentForHistology) },
         {
           label: "Histology Laboratory Sent To",
-          value: specimen?.sentForHistology === "Yes" ? txt(specimen?.histologyLaboratorySentTo) : "",
+          value:
+            specimen?.sentForHistology === "Yes"
+              ? getPeriAnalSpecimenLaboratoryText(
+                  specimen?.histologyLaboratories,
+                  specimen?.histologyLaboratoryOther,
+                  specimen?.histologyLaboratorySentTo,
+                )
+              : "",
         },
         { label: "Sent For Microbiology", value: txt(specimen?.sentForMicrobiology) },
         {
           label: "Microbiology Laboratory Sent To",
-          value: specimen?.sentForMicrobiology === "Yes" ? txt(specimen?.microbiologyLaboratorySentTo) : "",
+          value:
+            specimen?.sentForMicrobiology === "Yes"
+              ? getPeriAnalSpecimenLaboratoryText(
+                  specimen?.microbiologyLaboratories,
+                  specimen?.microbiologyLaboratoryOther,
+                  specimen?.microbiologyLaboratorySentTo,
+                )
+              : "",
         },
       ].filter((entry) => entry.value)
     );

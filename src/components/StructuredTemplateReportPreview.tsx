@@ -2,7 +2,11 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
-import { hasText, toArray } from "@/utils/templateDataHelpers";
+import {
+  hasText,
+  normalizeDiagramLegendItems,
+  toArray,
+} from "@/utils/templateDataHelpers";
 
 export interface StructuredTemplatePreviewEntry {
   label: string;
@@ -25,6 +29,8 @@ interface StructuredTemplateReportPreviewProps {
     imageData?: string;
     alt: string;
     maxHeightPx?: number;
+    legendTitle?: string;
+    legendItems?: unknown;
   };
   signature?: {
     label?: string;
@@ -53,6 +59,7 @@ export const StructuredTemplateReportPreview = ({
   const visibleSections = sections.filter(hasSectionData);
   const hasSignature =
     hasText(signature?.text) || hasText(signature?.dateTime) || hasText(signature?.imageData);
+  const diagramLegendItems = normalizeDiagramLegendItems(diagram?.legendItems);
 
   if (
     patientEntries.length === 0 &&
@@ -164,6 +171,22 @@ export const StructuredTemplateReportPreview = ({
                 style={{ maxHeight: diagram?.maxHeightPx ? `${diagram.maxHeightPx}px` : undefined }}
               />
             </div>
+            {diagramLegendItems.length > 0 ? (
+              <div className="space-y-1 rounded border border-gray-200 bg-white p-2 text-xs text-gray-700">
+                <p className="font-medium text-gray-600">{diagram?.legendTitle || "Legend"}</p>
+                <div className="space-y-1">
+                  {diagramLegendItems.map((item, index) => (
+                    <div key={`${item.color}-${item.label}-${index}`} className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
           {hasSignature ? <Separator /> : null}
         </>

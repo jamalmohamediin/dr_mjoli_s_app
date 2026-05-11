@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
-import { CheckboxGrid, LabeledTextarea, MultiValueTextField, OptionalOtherInput, RadioGrid } from "@/components/TemplateFormHelpers";
+import { CheckboxGrid, DateOfOperationField, LabeledTextarea, MultiValueTextField, OptionalOtherInput, RadioGrid } from "@/components/TemplateFormHelpers";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
 import { createInitialNarrativeSurgeryState } from "@/utils/narrativeSurgery";
 import { toArray } from "@/utils/templateDataHelpers";
@@ -196,6 +196,10 @@ export const NarrativeSurgeryForm = ({
             onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)}
           />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <DateOfOperationField
+              value={preoperative.dateOfOperation || ""}
+              onChange={(value) => updateTemplate("preoperative", "dateOfOperation", value)}
+            />
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">Start Time</Label>
               <Time24HourInput value={preoperative.startTime || ""} onChange={(value) => handleTimeChange("startTime", value)} />

@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { ChevronDown, ChevronUp, User, Stethoscope, Activity, Scissors, Shield, FileSearch, ClipboardList, Trash2, Download, FileText, Undo2, Redo2, RotateCcw } from "lucide-react";
 import { formatDateTimeDDMMYYYYWithDashes, getLocalDateTimeValue } from "@/utils/dateFormatter";
@@ -480,6 +481,12 @@ export const RectalCancerForm = ({
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-gray-800 mb-4">Procedure Details</h3>
                 <div className="space-y-4">
+                  <DateOfOperationField
+                    value={currentReport.rectalCancer?.procedureDetails?.dateOfOperation || ""}
+                    onChange={(value) =>
+                      updateRectalCancer("procedureDetails", "dateOfOperation", value)
+                    }
+                  />
                   
                   <div>
                     <p className="text-sm font-medium text-gray-700 mb-2">Procedure Urgency:</p>

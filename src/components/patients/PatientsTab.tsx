@@ -183,11 +183,9 @@ const toSortableTimestamp = (value: string) => {
 };
 
 const getRecordRecencyTimestamp = (record: PatientRecord) =>
-  Math.max(
-    toSortableTimestamp(record.updatedAt),
-    toSortableTimestamp(record.recordDate),
-    toSortableTimestamp(record.createdAt),
-  );
+  toSortableTimestamp(record.recordDate) ||
+  toSortableTimestamp(record.updatedAt) ||
+  toSortableTimestamp(record.createdAt);
 
 const getPatientRecordDedupSignature = (record: PatientRecord) => {
   const normalizedRecordDate = (record.recordDate || record.updatedAt || "").slice(0, 10);
@@ -231,15 +229,13 @@ const dedupePatientRecordsForView = (records: PatientRecord[]) => {
 };
 
 const getPatientRecencyTimestamp = (patient: PatientSummary) =>
-  Math.max(
-    toSortableTimestamp(patient.latestRecordDate),
-    toSortableTimestamp(patient.updatedAt),
-    toSortableTimestamp(patient.createdAt),
-  );
+  toSortableTimestamp(patient.latestRecordDate) ||
+  toSortableTimestamp(patient.updatedAt) ||
+  toSortableTimestamp(patient.createdAt);
 
 const sortRecordsByRecency = (left: PatientRecord, right: PatientRecord) =>
-  (right.updatedAt || "").localeCompare(left.updatedAt || "") ||
-  (right.recordDate || "").localeCompare(left.recordDate || "");
+  (right.recordDate || "").localeCompare(left.recordDate || "") ||
+  (right.updatedAt || "").localeCompare(left.updatedAt || "");
 
 const SummaryValue = ({
   label,

@@ -5,6 +5,7 @@ import {
 } from './dateFormatter';
 import { getPatientInfoPdfSections } from './patientSticker';
 import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
+import { formatDateOfOperationForDisplay } from './operationDate';
 
 export interface FinalDiagramCapture {
   canvasImageData?: string;
@@ -431,10 +432,10 @@ export const generateFinalPDF = async (
     const col2XThree = margin + threeColumnWidth + 8;    // Middle column  
     const col3XThree = margin + (threeColumnWidth * 2) + 16;  // Right column
 
-    // PROCEDURE INFORMATION section
+    // PROCEDURE DETAILS section
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('PROCEDURE INFORMATION', margin, y);
+    pdf.text('PROCEDURE DETAILS', margin, y);
     y += 8;
     
     if (reportData?.patientInfo) {
@@ -447,8 +448,15 @@ export const generateFinalPDF = async (
       const bowelPrepRaw = reportData.patientInfo.preparation || '';
       const bowelPrep = bowelPrepRaw ? bowelPrepRaw.charAt(0).toUpperCase() + bowelPrepRaw.slice(1).toLowerCase() : '';
       const anesthesiaType = capitalizeAnesthesia(reportData.patientInfo.sedation || '');
+      const dateOfOperation = formatDateOfOperationForDisplay(
+        reportData.patientInfo.dateOfOperation || reportData.patientInfo.date,
+      );
+      const dateOfOperationValue = dateOfOperation || "________________";
       
       pdf.setFont('helvetica', 'normal');
+      pdf.text(`Date of Operation: ${dateOfOperationValue}`, col1XThree, y);
+      y += 5;
+
       pdf.text('Procedures Performed:', col1XThree, y);
       pdf.text('Type of Anesthesia:', col2XThree, y);
       pdf.text('Bowel Preparation:', col3XThree, y);

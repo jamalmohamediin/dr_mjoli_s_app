@@ -13,10 +13,16 @@ export interface PeriAnalSection {
   entries: PeriAnalEntry[];
 }
 
+export interface PeriAnalDrawLegendEntry {
+  color: string;
+  label: string;
+}
+
 export interface PeriAnalDiagramState {
   activeVariant: string;
   markingsByVariant: Record<string, any[]>;
   visibleVariants: string[];
+  drawLegendEntries: PeriAnalDrawLegendEntry[];
 }
 
 export const toArray = (value: unknown): string[] => {
@@ -34,6 +40,47 @@ export const joinSelections = (values: unknown, otherValue?: string) =>
     .map((value) => (value === "Other" && otherValue?.trim() ? `Other: ${otherValue}` : value))
     .filter(Boolean)
     .join(", ");
+
+const normalizeHexColor = (value: unknown): string => {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+  const prefixed = raw.startsWith("#") ? raw : `#${raw}`;
+  const normalized = prefixed.toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(normalized) ? normalized : "";
+};
+
+const normalizeLegendLabel = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+export const normalizePeriAnalDrawLegendEntries = (value: unknown): PeriAnalDrawLegendEntry[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalized: PeriAnalDrawLegendEntry[] = [];
+
+  value.forEach((entry) => {
+    const color = normalizeHexColor((entry as any)?.color);
+    const label = normalizeLegendLabel((entry as any)?.label);
+    if (!color || !label || seen.has(color)) return;
+    seen.add(color);
+    normalized.push({ color, label });
+  });
+
+  return normalized;
+};
+
+export const getPeriAnalSpecimenLaboratoryText = (
+  selections: unknown,
+  otherValue?: string,
+  legacyValue?: string,
+) => {
+  const normalizedSelections = toArray(selections);
+  if (normalizedSelections.length > 0) {
+    return joinSelections(normalizedSelections, otherValue);
+  }
+  return typeof legacyValue === "string" ? legacyValue.trim() : "";
+};
 
 const pushEntry = (entries: PeriAnalEntry[], label: string, value: unknown) => {
   const text = typeof value === "string" ? value.trim() : String(value || "").trim();
@@ -54,6 +101,15 @@ export const parsePeriAnalDiagramState = (procedureFindings: any): PeriAnalDiagr
   const state = procedureFindings || {};
   const defaultMarkings = createInitialPeriAnalDiagramMarkings();
   const defaultVariantKeys = Object.keys(defaultMarkings);
+  const drawLegendEntriesFromState = normalizePeriAnalDrawLegendEntries(state.drawLegendEntries);
+  const drawLegendEntriesFromLegacyMap =
+    !Array.isArray(state.drawLegendEntries) && state.drawLegendByColor && typeof state.drawLegendByColor === "object"
+      ? Object.entries(state.drawLegendByColor).map(([color, label]) => ({ color, label }))
+      : [];
+  const drawLegendEntries =
+    drawLegendEntriesFromState.length > 0
+      ? drawLegendEntriesFromState
+      : normalizePeriAnalDrawLegendEntries(drawLegendEntriesFromLegacyMap);
   const rawMarkings = state.diagramMarkingsByVariant || {};
   const parsedLegacyFindings =
     typeof state.findings === "string" && state.findings.trim()
@@ -124,6 +180,7 @@ export const parsePeriAnalDiagramState = (procedureFindings: any): PeriAnalDiagr
       : DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
     markingsByVariant,
     visibleVariants,
+    drawLegendEntries,
   };
 };
 

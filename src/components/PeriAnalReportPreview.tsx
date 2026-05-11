@@ -5,6 +5,7 @@ import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
 import {
   getPeriAnalAdditionalFindingSection,
   getPeriAnalFindingSections,
+  getPeriAnalSpecimenLaboratoryText,
   joinSelections,
   parsePeriAnalDiagramState,
   toArray,
@@ -17,6 +18,7 @@ import { getPatientInfoDisplayEntries } from "@/utils/patientSticker";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
 
 const PERI_ANAL_PREVIEW_MARKING_SCALE = 1.8;
+const DIAGRAM_CANVAS_PADDING = 60;
 
 interface PeriAnalReportPreviewProps {
   report: any;
@@ -43,27 +45,37 @@ const SurgicalDiagramDisplay = ({
 
     const drawDiagram = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(image, 0, 0);
+      ctx.drawImage(
+        image,
+        DIAGRAM_CANVAS_PADDING,
+        DIAGRAM_CANVAS_PADDING,
+        image.naturalWidth,
+        image.naturalHeight,
+      );
 
       (markings || []).forEach((marking) => {
         if (marking.type === "port") {
+          const x = Number(marking?.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking?.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
           ctx.fillStyle = "black";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(marking.size, marking.x, marking.y - drawingMetrics.portLabelOffset);
+          ctx.fillText(marking.size, x, y - drawingMetrics.portLabelOffset);
           ctx.beginPath();
-          ctx.moveTo(marking.x - drawingMetrics.portHalfLength, marking.y);
-          ctx.lineTo(marking.x + drawingMetrics.portHalfLength, marking.y);
+          ctx.moveTo(x - drawingMetrics.portHalfLength, y);
+          ctx.lineTo(x + drawingMetrics.portHalfLength, y);
           ctx.strokeStyle = "black";
           ctx.lineWidth = drawingMetrics.portLineWidth;
           ctx.stroke();
           ctx.restore();
         } else if (marking.type === "stoma") {
+          const x = Number(marking?.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking?.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.beginPath();
-          ctx.arc(marking.x, marking.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
+          ctx.arc(x, y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = marking.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
           ctx.lineWidth =
             marking.stomaType === "ileostomy"
@@ -75,8 +87,14 @@ const SurgicalDiagramDisplay = ({
         } else if (marking.type === "incision") {
           ctx.save();
           ctx.beginPath();
-          ctx.moveTo(marking.start.x, marking.start.y);
-          ctx.lineTo(marking.end.x, marking.end.y);
+          ctx.moveTo(
+            Number(marking.start.x) + DIAGRAM_CANVAS_PADDING,
+            Number(marking.start.y) + DIAGRAM_CANVAS_PADDING,
+          );
+          ctx.lineTo(
+            Number(marking.end.x) + DIAGRAM_CANVAS_PADDING,
+            Number(marking.end.y) + DIAGRAM_CANVAS_PADDING,
+          );
           ctx.strokeStyle = "#8B0000";
           ctx.lineWidth = drawingMetrics.incisionLineWidth;
           ctx.setLineDash(drawingMetrics.incisionDash);
@@ -91,12 +109,21 @@ const SurgicalDiagramDisplay = ({
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
           ctx.beginPath();
-          ctx.moveTo(points[0].x, points[0].y);
+          ctx.moveTo(
+            Number(points[0].x) + DIAGRAM_CANVAS_PADDING,
+            Number(points[0].y) + DIAGRAM_CANVAS_PADDING,
+          );
           for (let index = 1; index < points.length; index += 1) {
-            ctx.lineTo(points[index].x, points[index].y);
+            ctx.lineTo(
+              Number(points[index].x) + DIAGRAM_CANVAS_PADDING,
+              Number(points[index].y) + DIAGRAM_CANVAS_PADDING,
+            );
           }
           if (points.length === 1) {
-            ctx.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+            ctx.lineTo(
+              Number(points[0].x) + DIAGRAM_CANVAS_PADDING + 0.01,
+              Number(points[0].y) + DIAGRAM_CANVAS_PADDING + 0.01,
+            );
           }
           ctx.stroke();
           ctx.restore();
@@ -105,19 +132,21 @@ const SurgicalDiagramDisplay = ({
           const textSize = Number(marking.size) > 0 ? Number(marking.size) : 20;
           const fontWeight = marking.fontWeight || (marking.fontStyle === "bold" ? "700" : "400");
           const fontStyle = marking.fontStyle === "italic" ? "italic" : "normal";
+          const x = Number(marking.x) + DIAGRAM_CANVAS_PADDING;
+          const y = Number(marking.y) + DIAGRAM_CANVAS_PADDING;
           ctx.save();
           ctx.fillStyle = marking.color || "#111111";
           ctx.font = `${fontStyle} ${fontWeight} ${textSize}px Arial`;
           ctx.textBaseline = "top";
-          ctx.fillText(marking.text, marking.x, marking.y);
+          ctx.fillText(marking.text, x, y);
           if (marking.underline) {
             const measuredTextWidth = ctx.measureText(marking.text).width;
-            const underlineY = marking.y + textSize + 1;
+            const underlineY = y + textSize + 1;
             ctx.strokeStyle = marking.color || "#111111";
             ctx.lineWidth = Math.max(1, textSize / 14);
             ctx.beginPath();
-            ctx.moveTo(marking.x, underlineY);
-            ctx.lineTo(marking.x + measuredTextWidth, underlineY);
+            ctx.moveTo(x, underlineY);
+            ctx.lineTo(x + measuredTextWidth, underlineY);
             ctx.stroke();
           }
           ctx.restore();
@@ -126,14 +155,14 @@ const SurgicalDiagramDisplay = ({
     };
 
     image.onload = () => {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = image.naturalWidth + DIAGRAM_CANVAS_PADDING * 2;
+      canvas.height = image.naturalHeight + DIAGRAM_CANVAS_PADDING * 2;
       drawDiagram();
     };
 
     if (image.complete && image.naturalHeight !== 0) {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = image.naturalWidth + DIAGRAM_CANVAS_PADDING * 2;
+      canvas.height = image.naturalHeight + DIAGRAM_CANVAS_PADDING * 2;
       drawDiagram();
     } else {
       image.src = diagramImage;
@@ -147,7 +176,7 @@ const SurgicalDiagramDisplay = ({
   return (
     <div className="mt-3 border rounded-lg overflow-hidden bg-white" style={{ maxWidth: "fit-content" }}>
       <img ref={imageRef} src={diagramImage} alt="Peri-Anal diagram" className="hidden" />
-      <canvas ref={canvasRef} className="max-w-full h-auto" style={{ maxHeight: "320px" }} />
+      <canvas ref={canvasRef} className="max-w-full h-auto" style={{ maxHeight: "360px" }} />
     </div>
   );
 };
@@ -275,24 +304,22 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
         <Separator />
         <div className="space-y-2">
           <h5 className="text-xs font-medium text-gray-600">Peri-Anal Diagrams</h5>
-          <div className="bg-gray-50 p-3 rounded border text-xs">
-            <h6 className="font-medium text-gray-700 mb-2">Legend:</h6>
-            <div className="grid grid-cols-1 gap-1 text-gray-600">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-black"></div>
-                <span>Draw: Freehand Markings</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border border-gray-500 rounded-sm flex items-center justify-center text-[8px] font-semibold text-gray-700 bg-white">
-                  T
-                </div>
-                <span>Textbox: Placed Text Notes</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span>Any Color/Thickness Selected In Draw Tool Is Preserved</span>
+          {diagramState.drawLegendEntries.length > 0 ? (
+            <div className="bg-gray-50 p-3 rounded border text-xs">
+              <h6 className="font-medium text-gray-700 mb-2">Legend:</h6>
+              <div className="grid grid-cols-1 gap-1 text-gray-600">
+                {diagramState.drawLegendEntries.map((entry) => (
+                  <div key={entry.color} className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm border border-gray-400"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span>{entry.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {visibleDiagramVariants.map((variant) => (
               <div key={variant.key} className="space-y-2 rounded-lg border bg-white p-3">
@@ -375,7 +402,11 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
               label: "Histology Laboratory Sent To",
               value:
                 periAnal?.specimen?.sentForHistology === "Yes"
-                  ? periAnal?.specimen?.histologyLaboratorySentTo || ""
+                  ? getPeriAnalSpecimenLaboratoryText(
+                      periAnal?.specimen?.histologyLaboratories,
+                      periAnal?.specimen?.histologyLaboratoryOther,
+                      periAnal?.specimen?.histologyLaboratorySentTo,
+                    )
                   : "",
             },
             { label: "Sent for Microbiology", value: periAnal?.specimen?.sentForMicrobiology || "" },
@@ -383,7 +414,11 @@ export const PeriAnalReportPreview = ({ report }: PeriAnalReportPreviewProps) =>
               label: "Microbiology Laboratory Sent To",
               value:
                 periAnal?.specimen?.sentForMicrobiology === "Yes"
-                  ? periAnal?.specimen?.microbiologyLaboratorySentTo || ""
+                  ? getPeriAnalSpecimenLaboratoryText(
+                      periAnal?.specimen?.microbiologyLaboratories,
+                      periAnal?.specimen?.microbiologyLaboratoryOther,
+                      periAnal?.specimen?.microbiologyLaboratorySentTo,
+                    )
                   : "",
             },
           ].filter((entry) => entry.value)}

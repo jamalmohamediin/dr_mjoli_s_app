@@ -34,6 +34,7 @@ import { TransanalMinimallyInvasiveSurgeryReportPreview } from "@/components/Tra
 import { NarrativeSurgeryForm } from "@/components/NarrativeSurgeryForm";
 import { NarrativeSurgeryReportPreview } from "@/components/NarrativeSurgeryReportPreview";
 import { DateTime24HourInput, DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import { AppLayout, GlassContainer, GlassHeader } from "@/components/layout/AppLayout";
 import { PatientsTab } from "@/components/patients/PatientsTab";
 import { ReportsTab } from "@/components/reports/ReportsTab";
@@ -51,6 +52,9 @@ import { generateTransanalMinimallyInvasiveSurgeryPDF } from "@/utils/transanalM
 import { generateNarrativeSurgeryPDF } from "@/utils/narrativeSurgeryPdfGenerator";
 import { generateVentralHerniaPDF } from "@/utils/ventralHerniaPdfGenerator";
 import { getLocalDateTimeValue, formatDateOnly, formatDOBForFilename } from "@/utils/dateFormatter";
+import {
+  getTemplateDateOfOperation,
+} from "@/utils/operationDate";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { exportSavedRecordPdf } from "@/utils/exportSavedRecord";
@@ -157,6 +161,7 @@ const AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS = new Set([
   "doctorSignature",
   "doctorName",
   "activeDiagramVariant",
+  "visibleDiagramVariants",
 ]);
 
 const DEFAULT_CLINICIAN_NAME_NORMALIZED = DEFAULT_CLINICIAN_NAME.toLowerCase();
@@ -168,6 +173,10 @@ const AUTOSAVE_DIAGRAM_IMAGE_KEYS = new Set([
   "colonoscopyCanvasData",
 ]);
 
+type TemplateProgressOptions = {
+  countDiagramImages?: boolean;
+};
+
 const isAutosaveDiagramImageValue = (key: string | undefined, value: unknown) =>
   Boolean(
     key &&
@@ -176,9 +185,77 @@ const isAutosaveDiagramImageValue = (key: string | undefined, value: unknown) =>
       value.trim().startsWith("data:"),
   );
 
+const isAutosaveEmptyDiagramMarkupValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length === 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0 || value.every((entry) => isAutosaveEmptyDiagramMarkupValue(entry));
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+
+    if (entries.length === 0) {
+      return true;
+    }
+
+    const isSyntheticDiagramMarkup =
+      String((value as Record<string, unknown>).type || "").trim() === "diagramMarkup";
+
+    if (isSyntheticDiagramMarkup) {
+      return entries.every(
+        ([key, entry]) => key === "type" || isAutosaveEmptyDiagramMarkupValue(entry),
+      );
+    }
+
+    return entries.every(([, entry]) => isAutosaveEmptyDiagramMarkupValue(entry));
+  }
+
+  return false;
+};
+
+const isAutosaveGeneratedFindingsPlaceholder = (
+  key: string | undefined,
+  value: unknown,
+): boolean => {
+  if (key !== "findings") {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0 || value.every((entry) => isAutosaveEmptyDiagramMarkupValue(entry));
+  }
+
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+    return false;
+  }
+
+  try {
+    return isAutosaveEmptyDiagramMarkupValue(JSON.parse(trimmed));
+  } catch (_error) {
+    return false;
+  }
+};
+
 const hasMeaningfulPostPreoperativeValue = (
   value: unknown,
   currentKey?: string,
+  options: TemplateProgressOptions = {},
 ): boolean => {
   if (currentKey && AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS.has(currentKey)) {
     return false;
@@ -189,7 +266,11 @@ const hasMeaningfulPostPreoperativeValue = (
   }
 
   if (isAutosaveDiagramImageValue(currentKey, value)) {
-    return true;
+    return options.countDiagramImages !== false;
+  }
+
+  if (isAutosaveGeneratedFindingsPlaceholder(currentKey, value)) {
+    return false;
   }
 
   if (typeof value === "string") {
@@ -206,7 +287,9 @@ const hasMeaningfulPostPreoperativeValue = (
   }
 
   if (Array.isArray(value)) {
-    return value.some((entry) => hasMeaningfulPostPreoperativeValue(entry));
+    return value.some((entry) =>
+      hasMeaningfulPostPreoperativeValue(entry, currentKey, options),
+    );
   }
 
   if (typeof value === "number") {
@@ -219,7 +302,7 @@ const hasMeaningfulPostPreoperativeValue = (
 
   if (typeof value === "object") {
     return Object.entries(value as Record<string, unknown>).some(([key, entry]) =>
-      hasMeaningfulPostPreoperativeValue(entry, key),
+      hasMeaningfulPostPreoperativeValue(entry, key, options),
     );
   }
 
@@ -313,6 +396,7 @@ const isAutosaveComparisonValueEmpty = (value: unknown): boolean => {
 const normalizeAutosaveComparisonValue = (
   value: unknown,
   currentKey?: string,
+  options: TemplateProgressOptions = {},
 ): unknown => {
   if (currentKey && AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS.has(currentKey)) {
     return undefined;
@@ -323,7 +407,13 @@ const normalizeAutosaveComparisonValue = (
   }
 
   if (isAutosaveDiagramImageValue(currentKey, value)) {
-    return `diagram-image:${String(value).length}`;
+    return options.countDiagramImages === false
+      ? undefined
+      : `diagram-image:${String(value).length}`;
+  }
+
+  if (isAutosaveGeneratedFindingsPlaceholder(currentKey, value)) {
+    return undefined;
   }
 
   if (typeof value === "string") {
@@ -336,7 +426,7 @@ const normalizeAutosaveComparisonValue = (
 
   if (Array.isArray(value)) {
     const normalizedEntries = value
-      .map((entry) => normalizeAutosaveComparisonValue(entry))
+      .map((entry) => normalizeAutosaveComparisonValue(entry, currentKey, options))
       .filter((entry) => !isAutosaveComparisonValueEmpty(entry));
     return normalizedEntries.length > 0 ? normalizedEntries : undefined;
   }
@@ -354,7 +444,7 @@ const normalizeAutosaveComparisonValue = (
       .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
       .reduce(
         (next, [key, entry]) => {
-          const normalizedEntry = normalizeAutosaveComparisonValue(entry, key);
+          const normalizedEntry = normalizeAutosaveComparisonValue(entry, key, options);
           if (!isAutosaveComparisonValueEmpty(normalizedEntry)) {
             next[key] = normalizedEntry;
           }
@@ -470,14 +560,19 @@ const getTemplateInitialPostPreoperativePayload = (templateType: TemplateType) =
 const hasTemplateProgressBeyondPreoperative = (
   reportSnapshot: any,
   templateType: TemplateType,
+  options: TemplateProgressOptions = {},
 ): boolean => {
   const currentPayload = getTemplatePostPreoperativePayload(reportSnapshot, templateType);
   const baselinePayload = getTemplateInitialPostPreoperativePayload(templateType);
-  const hasPotentialProgress = hasMeaningfulPostPreoperativeValue(currentPayload);
+  const hasPotentialProgress = hasMeaningfulPostPreoperativeValue(
+    currentPayload,
+    undefined,
+    options,
+  );
   const normalizedCurrentPayload =
-    normalizeAutosaveComparisonValue(currentPayload) || {};
+    normalizeAutosaveComparisonValue(currentPayload, undefined, options) || {};
   const normalizedBaselinePayload =
-    normalizeAutosaveComparisonValue(baselinePayload) || {};
+    normalizeAutosaveComparisonValue(baselinePayload, undefined, options) || {};
 
   if (
     !hasPotentialProgress &&
@@ -500,6 +595,33 @@ const hasSavedRecordProgressBeyondPreoperative = (
     record?.templateType === templateType &&
       hasTemplateProgressBeyondPreoperative(record.reportSnapshot, templateType),
   );
+
+const isPreoperativeProgressSection = (
+  templateType: TemplateType,
+  section: string | undefined,
+) => {
+  if (!section) {
+    return false;
+  }
+
+  if (
+    section === "patientInfo" ||
+    section === "preoperative" ||
+    section === "procedureInfo" ||
+    section === "selectedProcedures"
+  ) {
+    return true;
+  }
+
+  if (
+    templateType === "rectalCancer" &&
+    (section === "surgicalTeam" || section === "procedureDetails" || section === "section1")
+  ) {
+    return true;
+  }
+
+  return false;
+};
 
 const LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS = 8000;
 
@@ -541,6 +663,7 @@ const createInitialAppendectomyIntraoperativeState = (source: any = {}) => ({
 });
 
 const createInitialAppendectomyProcedureState = (source: any = {}) => ({
+  dateOfOperation: source.dateOfOperation || "",
   approach: cloneStringArray(source.approach),
   reasonForConversion: cloneStringArray(source.reasonForConversion),
   reasonForConversionOther: source.reasonForConversionOther || "",
@@ -678,6 +801,7 @@ const createInitialVentralHerniaOperativeState = (source: any = {}) => ({
 });
 
 const createInitialVentralHerniaProcedureState = (source: any = {}) => ({
+  dateOfOperation: source.dateOfOperation || "",
   dissection: source.dissection || "",
   sacExcised: source.sacExcised || "",
   fatDissected: source.fatDissected || "",
@@ -757,6 +881,7 @@ const createInitialRectalCancerState = () => ({
     anaesthetist: "",
   },
   procedureDetails: {
+    dateOfOperation: "",
     startTime: "",
     endTime: "",
     duration: "",
@@ -1302,6 +1427,36 @@ const Index = () => {
     recordId: string;
     templateType: TemplateType;
   } | null>(null);
+  const manualPostPreoperativeProgressRef = useRef<Partial<Record<TemplateType, boolean>>>({});
+
+  const markManualPostPreoperativeProgress = (
+    templateType: TemplateType,
+    section?: string,
+  ) => {
+    if (isPreoperativeProgressSection(templateType, section)) {
+      return;
+    }
+
+    manualPostPreoperativeProgressRef.current = {
+      ...manualPostPreoperativeProgressRef.current,
+      [templateType]: true,
+    };
+  };
+
+  const clearManualPostPreoperativeProgress = (templateType?: TemplateType) => {
+    if (!templateType) {
+      manualPostPreoperativeProgressRef.current = {};
+      return;
+    }
+
+    if (!manualPostPreoperativeProgressRef.current[templateType]) {
+      return;
+    }
+
+    const nextProgress = { ...manualPostPreoperativeProgressRef.current };
+    delete nextProgress[templateType];
+    manualPostPreoperativeProgressRef.current = nextProgress;
+  };
 
 	  // Helper function to calculate duration between start and end times
   const calculateDuration = (startTime: string, endTime: string): string => {
@@ -1828,6 +1983,22 @@ const Index = () => {
   };
   const activeTemplateType = getTemplateTypeFromTab(currentTab);
   const activeTemplateLabel = getTemplateLabel(activeTemplateType);
+  const getDateOfOperationForTemplate = (
+    templateType: TemplateType,
+    reportSnapshot: any = currentReport,
+  ) => getTemplateDateOfOperation(reportSnapshot, templateType);
+  const validateDateOfOperation = (
+    templateType: TemplateType,
+    actionLabel: "saving" | "exporting",
+    reportSnapshot: any = currentReport,
+  ) => {
+    if (getDateOfOperationForTemplate(templateType, reportSnapshot)) {
+      return true;
+    }
+
+    toast.error(`Please fill in Date of Operation before ${actionLabel} this template.`);
+    return false;
+  };
   const activeTemplatePatientInfo = createInitialPatientInfoState(
     getTemplatePatientInfo(currentReport, activeTemplateType),
   );
@@ -2294,6 +2465,8 @@ const Index = () => {
   };
 
   const clearAllEndoscopyData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("procedure");
+
     const initialEndoscopyData = {
       patientInfo: createInitialPatientInfoState(),
       procedureInfo: {},
@@ -2974,9 +3147,13 @@ const Index = () => {
     const trimmedDob = String(patientInfo.dateOfBirth || "").trim();
     const trimmedPatientId = String(patientInfo.patientId || "").trim().toLowerCase();
     const hasAutosaveIdentity = Boolean((trimmedName && trimmedDob) || trimmedPatientId);
+    const hasManualProgressBeyondPreoperative = Boolean(
+      manualPostPreoperativeProgressRef.current[activeTemplateType],
+    );
     const hasProgressBeyondPreoperative = hasTemplateProgressBeyondPreoperative(
       currentReport,
       activeTemplateType,
+      { countDiagramImages: hasManualProgressBeyondPreoperative },
     );
     const canUpdateExistingTemplateRecordWithoutCurrentProgress =
       hasSavedRecordProgressBeyondPreoperative(editingSavedRecord, activeTemplateType);
@@ -2996,7 +3173,22 @@ const Index = () => {
       return;
     }
 
+    if (
+      !hasManualProgressBeyondPreoperative &&
+      !canUpdateExistingTemplateRecordWithoutCurrentProgress
+    ) {
+      patientListAutosaveSignatureRef.current = "";
+      pendingPatientAutosaveContextRef.current = null;
+      return;
+    }
+
     if (!canCurrentSessionDrivePatientAutosave()) {
+      return;
+    }
+
+    if (!getTemplateDateOfOperation(currentReport, activeTemplateType)) {
+      patientListAutosaveSignatureRef.current = "";
+      pendingPatientAutosaveContextRef.current = null;
       return;
     }
 
@@ -3144,6 +3336,8 @@ const Index = () => {
   };
 
   const updateReport = (section: keyof typeof currentReport, data: any) => {
+    markManualPostPreoperativeProgress(activeTemplateType, String(section));
+
     // Handle findings data
     if (section === 'gastroscopyFindings') {
       setCurrentReport(prev => ({
@@ -3321,6 +3515,8 @@ const Index = () => {
 
   // Update appendectomy specific data
   const updateAppendectomy = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("appendectomy", section);
+
     setCurrentReport(prev => {
       const newAppendectomy = {
         ...prev.appendectomy,
@@ -3630,6 +3826,8 @@ const Index = () => {
   };
 
   const clearAllRectalCancerData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("rectalCancer");
+
     const initialRectalCancer = createInitialRectalCancerState();
 
     setCurrentReport(prev => ({
@@ -3741,6 +3939,8 @@ const Index = () => {
   };
 
   const clearAllSmallBowelData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("smallBowel");
+
     const initialSmallBowel = createInitialSmallBowelSurgeryState();
 
     setCurrentReport(prev => ({
@@ -3851,6 +4051,8 @@ const Index = () => {
   };
 
   const clearAllCholecystectomyData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("cholecystectomy");
+
     const initialCholecystectomy = createInitialCholecystectomyState();
 
     setCurrentReport(prev => ({
@@ -3957,6 +4159,8 @@ const Index = () => {
   };
 
   const clearAllPeriAnalData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("periAnal");
+
     const initialPeriAnal = createInitialPeriAnalState();
 
     setCurrentReport(prev => ({
@@ -3996,6 +4200,8 @@ const Index = () => {
   };
 
   const clearAllAppendectomyData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("appendectomy");
+
     const initialAppendectomy = createStrictClearedAppendectomyState();
 
     setCurrentReport(prev => ({
@@ -4031,6 +4237,8 @@ const Index = () => {
   };
 
   const clearAllVentralHerniaData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("ventralHernia");
+
     const initialVentralHernia = createInitialVentralHerniaState();
 
     setCurrentReport(prev => ({
@@ -4062,6 +4270,13 @@ const Index = () => {
   };
 
   const clearAllNewTemplateData = (showToast = true) => {
+    clearManualPostPreoperativeProgress("gastroscopy");
+    clearManualPostPreoperativeProgress("colonoscopy");
+    clearManualPostPreoperativeProgress("inguinalHernia");
+    clearManualPostPreoperativeProgress("transanalMinimallyInvasiveSurgery");
+    clearManualPostPreoperativeProgress("openGeneralSurgery");
+    clearManualPostPreoperativeProgress("openAbdominalSurgery");
+
     setCurrentReport((prev) => ({
       ...prev,
       gastroscopy: createInitialGastroscopyState(),
@@ -4092,6 +4307,7 @@ const Index = () => {
   };
 
   const handleClearAllTemplatesData = () => {
+    clearManualPostPreoperativeProgress();
     clearQueuedLiveTemplateDraftSync();
     liveTemplateDraftSignatureRef.current = "";
     hasPendingLocalLiveTemplateChangesRef.current = true;
@@ -4160,6 +4376,10 @@ const Index = () => {
     );
     const localEditAtIso = new Date().toISOString();
     const nextTab = getCurrentTabForTemplate(record.templateType) || record.currentTab || "gastroscopy";
+
+    if (createNewEntry) {
+      clearManualPostPreoperativeProgress(record.templateType);
+    }
 
     const cloneValue = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -4598,6 +4818,10 @@ const Index = () => {
           : undefined);
 
     const templateTypeForSave = inferredOverrides?.templateTypeOverride || activeTemplateType;
+    if (!validateDateOfOperation(templateTypeForSave, "saving")) {
+      return;
+    }
+
     const canUpdateExistingRecord = Boolean(
       editingSavedRecord && editingSavedRecord.templateType === templateTypeForSave,
     );
@@ -4611,6 +4835,7 @@ const Index = () => {
 
   const handleStartNewEntry = (_patient: any, record?: PatientRecord | null) => {
     if (!record) {
+      clearManualPostPreoperativeProgress();
       setEditingPatientContext(null);
       setAppSection("templates");
       toast.success("Ready for a new patient entry.");
@@ -5024,6 +5249,8 @@ const Index = () => {
 
   // Update ventral hernia specific data
   const updateVentralHernia = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("ventralHernia", section);
+
     setCurrentReport(prev => {
       const newVentralHernia = {
         ...prev.ventralHernia,
@@ -5072,6 +5299,8 @@ const Index = () => {
 
   // Update rectal cancer specific data
   const updateRectalCancer = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("rectalCancer", section);
+
     setCurrentReport(prev => {
       const newRectalCancer = {
         ...prev.rectalCancer,
@@ -5119,6 +5348,8 @@ const Index = () => {
   };
 
   const updateSmallBowel = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("smallBowel", section);
+
     setCurrentReport(prev => {
       const newSmallBowel = {
         ...prev.smallBowel,
@@ -5163,6 +5394,8 @@ const Index = () => {
   };
 
   const updateCholecystectomy = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("cholecystectomy", section);
+
     setCurrentReport(prev => {
       const currentCholecystectomy = prev.cholecystectomy || createInitialCholecystectomyState();
       const newCholecystectomy = {
@@ -5212,6 +5445,8 @@ const Index = () => {
   };
 
   const updatePeriAnal = (section: string, field: string, value: any) => {
+    markManualPostPreoperativeProgress("periAnal", section);
+
     setCurrentReport(prev => {
       const currentPeriAnal = prev.periAnal || createInitialPeriAnalState();
       const newPeriAnal = {
@@ -5512,6 +5747,8 @@ const Index = () => {
     field: string,
     value: any,
   ) => {
+    markManualPostPreoperativeProgress(templateKey as TemplateType, section);
+
     setCurrentReport((prev) => {
       const initialTemplateState = createInitialSimpleTemplateState(templateKey) as any;
       const currentTemplateState = ((prev as any)?.[templateKey] || initialTemplateState) as any;
@@ -5599,6 +5836,8 @@ const Index = () => {
       return;
     }
 
+    clearManualPostPreoperativeProgress(templateKey as TemplateType);
+
     setCurrentReport((prev) => {
       const clearedTemplateState =
         templateKey === "colonoscopy"
@@ -5668,6 +5907,10 @@ const Index = () => {
     try {
       const exportSection = section || currentTab;
       const exportTemplateType = getTemplateTypeFromTab(exportSection);
+      if (!validateDateOfOperation(exportTemplateType, "exporting")) {
+        return;
+      }
+
       const exportPatientInfo = createInitialPatientInfoState(
         getTemplatePatientInfo(currentReport, exportTemplateType),
       );
@@ -6651,41 +6894,41 @@ const Index = () => {
                 <div className="space-y-6">
                   {appSection === "templates" ? (
                     <Tabs value={currentTab} onValueChange={setCurrentTab} className="mobile-form-layout w-full">
-	                  <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-lg p-1">
-                      <TabsTrigger value="gastroscopy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+	                  <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-lg p-1 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+                      <TabsTrigger value="gastroscopy" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Gastroscopy
                       </TabsTrigger>
-                      <TabsTrigger value="colonoscopy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="colonoscopy" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Colonoscopy
                       </TabsTrigger>
-                    <TabsTrigger value="appendectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                    <TabsTrigger value="appendectomy" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                       Appendicectomy
                     </TabsTrigger>
-                    <TabsTrigger value="hernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                    <TabsTrigger value="hernia" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                       Ventral Hernia Repair
                     </TabsTrigger>
-                    <TabsTrigger value="inguinalHernia" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                    <TabsTrigger value="inguinalHernia" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                       Inguinal Hernia Repair
                     </TabsTrigger>
-	                    <TabsTrigger value="rectal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+	                    <TabsTrigger value="rectal" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
 	                      Colorectal Resection
 	                    </TabsTrigger>
-                      <TabsTrigger value="smallBowel" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="smallBowel" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Small Bowel Surgery
                       </TabsTrigger>
-                      <TabsTrigger value="cholecystectomy" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="cholecystectomy" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Cholecystectomy
                       </TabsTrigger>
-                      <TabsTrigger value="periAnal" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="periAnal" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Peri-Anal
                       </TabsTrigger>
-                      <TabsTrigger value="transanalMinimallyInvasiveSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="transanalMinimallyInvasiveSurgery" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         TAMIS
                       </TabsTrigger>
-                      <TabsTrigger value="openGeneralSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="openGeneralSurgery" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Open General Surgery
                       </TabsTrigger>
-                      <TabsTrigger value="openAbdominalSurgery" className="flex min-w-[8.75rem] shrink-0 items-center justify-center whitespace-normal text-center leading-tight sm:min-w-0 sm:whitespace-nowrap">
+                      <TabsTrigger value="openAbdominalSurgery" className="flex w-full items-center justify-center whitespace-normal px-2 text-center leading-tight">
                         Open Abdominal Surgery
                       </TabsTrigger>
 	                  </TabsList>
@@ -8034,6 +8277,20 @@ const Index = () => {
                       {expanded.section4 && (
                         <CardContent className="px-6 py-4">
                           <div className="space-y-6">
+                            <div className="space-y-2">
+                              <DateOfOperationField
+                                value={
+                                  currentReport.appendectomy?.procedure?.dateOfOperation || ""
+                                }
+                                onChange={(value) =>
+                                  updateAppendectomy(
+                                    "procedure",
+                                    "dateOfOperation",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
                             <div>
                               <p className="text-sm font-medium text-gray-700 mb-2">Surgical Approach:</p>
                               <div className="flex flex-wrap gap-4 ml-4">
@@ -10286,6 +10543,20 @@ const Index = () => {
                       {herniaExpanded.section4 && (
                         <CardContent className="px-6 py-4">
                           <div className="space-y-6">
+                            <div className="space-y-2">
+                              <DateOfOperationField
+                                value={
+                                  currentReport.ventralHernia?.procedure?.dateOfOperation || ""
+                                }
+                                onChange={(value) =>
+                                  updateVentralHernia(
+                                    "procedure",
+                                    "dateOfOperation",
+                                    value,
+                                  )
+                                }
+                              />
+                            </div>
                             <div>
                               <h3 className="text-md font-medium text-gray-800 mb-3">Procedure Details</h3>
                               <div className="ml-4 space-y-4">
@@ -11958,11 +12229,13 @@ const Index = () => {
                                 activeVariant: periAnalDiagramState.activeVariant,
                                 markingsByVariant: periAnalDiagramState.markingsByVariant,
                                 visibleVariants: periAnalDiagramState.visibleVariants,
+                                drawLegendEntries: periAnalDiagramState.drawLegendEntries,
                               }}
                               onSurgicalDiagramStateChange={(state) => {
                                 updatePeriAnal('procedureFindings', 'activeDiagramVariant', state.activeVariant);
                                 updatePeriAnal('procedureFindings', 'diagramMarkingsByVariant', state.markingsByVariant);
                                 updatePeriAnal('procedureFindings', 'visibleDiagramVariants', state.visibleVariants || []);
+                                updatePeriAnal('procedureFindings', 'drawLegendEntries', state.drawLegendEntries || []);
                                 updatePeriAnal('procedureFindings', 'findings', JSON.stringify(state.markingsByVariant || {}));
                               }}
                               surgicalDiagramVariants={periAnalDiagramImages}

@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import smallBowelDiagramImage from "@/assets/APPENDECTOMY IMAGE.png";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
@@ -117,6 +118,7 @@ export const generateSmallBowelSurgeryPDF = async (
     const margin = 15;
     const contentWidth = pageWidth - margin * 2;
     const lineHeight = 4.5;
+    const showSectionDividers = false;
     let y = margin;
 
     const preop = smallBowelData?.preoperative || {};
@@ -148,9 +150,11 @@ export const generateSmallBowelSurgeryPDF = async (
     };
 
     const drawRule = () => {
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.2);
-      pdf.line(margin, y, pageWidth - margin, y);
+      if (showSectionDividers) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, y, pageWidth - margin, y);
+      }
       y += 5;
     };
 
@@ -510,6 +514,10 @@ export const generateSmallBowelSurgeryPDF = async (
     const rightX = twoCol2X + 2;
     const rightWidth = twoColWidth;
     const procedureEntries = [
+      cell(
+        "Date of Operation",
+        formatDateOfOperationForDisplay(proc?.dateOfOperation) || "________________",
+      ),
       cell("Operation Done", txt(proc?.operationDone)),
       cell("Surgical Approach", toArray(proc?.approach).join(", ")),
       cell(

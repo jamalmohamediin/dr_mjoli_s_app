@@ -8,6 +8,7 @@ import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time2
 import { FreeDrawDiagram } from "@/components/FreeDrawDiagram";
 import {
   CheckboxGrid,
+  DateOfOperationField,
   LabeledInput,
   LabeledTextarea,
   MultiValueTextField,
@@ -16,7 +17,12 @@ import {
 } from "@/components/TemplateFormHelpers";
 import { createInitialColonoscopyState } from "@/utils/colonoscopy";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
-import { toArray } from "@/utils/templateDataHelpers";
+import {
+  formatPathologyLaboratorySelection,
+  normalizePathologyLabSelections,
+  PATHOLOGY_LAB_OPTIONS,
+  toArray,
+} from "@/utils/templateDataHelpers";
 import colonoscopyTemplateImage from "@/assets/colonoscopy-template-replacement.png";
 
 interface ColonoscopyFormProps {
@@ -159,6 +165,10 @@ export const ColonoscopyForm = ({
   const interventions = template.interventions;
   const diagnosis = template.diagnosis;
   const additionalInfo = template.additionalInfo;
+  const selectedPathologyLaboratories = normalizePathologyLabSelections(
+    additionalInfo.laboratorySentToSelections,
+    additionalInfo.laboratorySentTo,
+  );
 
   React.useEffect(() => {
     if (!String(additionalInfo.dateTime || "").trim()) {
@@ -214,7 +224,7 @@ export const ColonoscopyForm = ({
     title: string,
     content: React.ReactNode,
   ) => (
-    <div className="rounded-md border border-gray-200 bg-gray-50/40 p-3">
+    <div className="rounded-md border border-gray-200 bg-white p-3">
       <button
         type="button"
         className="flex w-full items-center justify-between text-left"
@@ -627,6 +637,10 @@ export const ColonoscopyForm = ({
           </div>
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-semibold text-gray-800">Procedure Details</h3>
+            <DateOfOperationField
+              value={procedureDetails.dateOfOperation || ""}
+              onChange={(value) => updateTemplate("procedureDetails", "dateOfOperation", value)}
+            />
             <CheckboxGrid label="Procedure" options={procedureOptions} values={procedureDetails.procedures} onChange={(value) => updateTemplate("procedureDetails", "procedures", value)} />
             <OptionalOtherInput enabled={toArray(procedureDetails.procedures).includes("Other")} value={procedureDetails.procedureOther || ""} placeholder="Specify other procedure" onChange={(value) => updateTemplate("procedureDetails", "procedureOther", value)} />
             <CheckboxGrid label="Depth of Examination" options={depthOptions} values={procedureDetails.depthOfExamination} onChange={(value) => updateTemplate("procedureDetails", "depthOfExamination", value)} />
@@ -655,7 +669,7 @@ export const ColonoscopyForm = ({
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-700">Findings</Label>
-            <div className="space-y-3 rounded-md border border-gray-200 bg-white p-3">
+            <div className="space-y-3 rounded-md border border-gray-200 bg-gray-100 p-3">
               {findingOptions.map((findingOption) => {
                 const checked = selectedFindings.includes(findingOption);
                 return (
@@ -695,9 +709,13 @@ export const ColonoscopyForm = ({
             key={`colonoscopy-diagram-${diagramResetCounter}`}
             backgroundImage={colonoscopyTemplateImage}
             initialCanvasImageData={template.diagram?.canvasImageData || ""}
+            initialLegendItems={template.diagram?.legendItems || []}
             maxWidth={300}
+            enableDrawColorLegend
+            allowTextOutsideDiagram
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
+              updateTemplate("diagram", "legendItems", data.legendItems || []);
               updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
             }}
           />
@@ -721,10 +739,76 @@ export const ColonoscopyForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Specimen, Conclusion and Notes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <RadioGrid label="Specimen Sent for Pathology" options={["Yes", "No"]} value={additionalInfo.specimenSentForPathology || ""} onChange={(value) => updateTemplate("additionalInfo", "specimenSentForPathology", value)} columns="grid-cols-2" />
+          <RadioGrid
+            label="Specimen Sent for Pathology"
+            options={["Yes", "No"]}
+            value={additionalInfo.specimenSentForPathology || ""}
+            onChange={(value) => {
+              updateTemplate("additionalInfo", "specimenSentForPathology", value);
+              if (value !== "Yes") {
+                updateTemplate("additionalInfo", "laboratorySentToSelections", []);
+                updateTemplate("additionalInfo", "laboratorySentToOther", "");
+                updateTemplate("additionalInfo", "laboratorySentTo", "");
+              }
+            }}
+            columns="grid-cols-2"
+          />
           <RadioGrid label="Other Specimens Taken" options={["No", "Yes"]} value={additionalInfo.otherSpecimensTaken || ""} onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensTaken", value)} columns="grid-cols-2" />
           <OptionalOtherInput enabled={additionalInfo.otherSpecimensTaken === "Yes"} label="Yes (Specify)" value={additionalInfo.otherSpecimensTakenDetails || ""} placeholder="e.g. Biopsies" onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensTakenDetails", value)} />
-          <LabeledInput label="Specify Laboratory Sent to" value={additionalInfo.laboratorySentTo || ""} onChange={(value) => updateTemplate("additionalInfo", "laboratorySentTo", value)} />
+          {additionalInfo.specimenSentForPathology === "Yes" ? (
+            <div className="space-y-3">
+              <Label className="text-sm font-medium text-gray-700">
+                Specify Laboratory Sent To
+              </Label>
+              <div className="grid grid-cols-2 gap-2 rounded-md border border-gray-200 bg-white p-3 md:grid-cols-5">
+                {PATHOLOGY_LAB_OPTIONS.map((option) => (
+                  <label key={`colono-lab-${option}`} className="flex items-center gap-2 text-sm text-gray-700">
+                    <Checkbox
+                      checked={selectedPathologyLaboratories.includes(option)}
+                      onCheckedChange={() => {
+                        const nextSelections = selectedPathologyLaboratories.includes(option)
+                          ? selectedPathologyLaboratories.filter((entry) => entry !== option)
+                          : [...selectedPathologyLaboratories, option];
+                        const otherText = nextSelections.includes("Other")
+                          ? additionalInfo.laboratorySentToOther || ""
+                          : "";
+
+                        updateTemplate("additionalInfo", "laboratorySentToSelections", nextSelections);
+                        updateTemplate(
+                          "additionalInfo",
+                          "laboratorySentTo",
+                          formatPathologyLaboratorySelection(nextSelections, otherText),
+                        );
+
+                        if (!nextSelections.includes("Other")) {
+                          updateTemplate("additionalInfo", "laboratorySentToOther", "");
+                        }
+                      }}
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+              {selectedPathologyLaboratories.includes("Other") ? (
+                <LabeledInput
+                  label="Other Laboratory"
+                  value={additionalInfo.laboratorySentToOther || ""}
+                  onChange={(value) => {
+                    updateTemplate("additionalInfo", "laboratorySentToOther", value);
+                    updateTemplate(
+                      "additionalInfo",
+                      "laboratorySentTo",
+                      formatPathologyLaboratorySelection(
+                        selectedPathologyLaboratories,
+                        value,
+                      ),
+                    );
+                  }}
+                  placeholder="Specify laboratory"
+                />
+              ) : null}
+            </div>
+          ) : null}
           <LabeledTextarea label="Conclusion" value={additionalInfo.conclusion || ""} onChange={(value) => updateTemplate("additionalInfo", "conclusion", value)} />
           <LabeledTextarea label="Additional Notes" value={additionalInfo.additionalNotes || ""} onChange={(value) => updateTemplate("additionalInfo", "additionalNotes", value)} />
           <LabeledTextarea label="Post Operative Management" value={additionalInfo.postOperativeManagement || additionalInfo.management || ""} onChange={(value) => {

@@ -31,28 +31,84 @@ interface TextAnnotation {
 
 interface DraftTextAnnotation extends TextAnnotation {}
 
+interface DiagramLegendItem {
+  color: string;
+  label: string;
+}
+
+interface FreeDrawDiagramUpdate {
+  findings: any[];
+  canvasImageData: string;
+  legendItems?: DiagramLegendItem[];
+}
+
 interface FreeDrawDiagramProps {
   backgroundImage: string;
   initialCanvasImageData?: string;
+  initialLegendItems?: DiagramLegendItem[];
   maxHeight?: number;
   maxWidth?: number;
-  onUpdate: (data: { findings: any[]; canvasImageData: string }) => void;
+  onUpdate: (data: FreeDrawDiagramUpdate) => void;
+  enableDrawColorLegend?: boolean;
+  allowTextOutsideDiagram?: boolean;
 }
 
 const DEFAULT_CANVAS_WIDTH = 1200;
 const DEFAULT_CANVAS_HEIGHT = 800;
+const DEFAULT_OUTSIDE_TEXT_PADDING = 120;
 const TEXT_SIZE_OPTIONS = [32, 36, 40, 44, 48, 56, 64];
+
+const normalizeColor = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const normalized = raw.toLowerCase();
+  const shortHexMatch = normalized.match(/^#([0-9a-f]{3})$/i);
+  if (shortHexMatch) {
+    const [r, g, b] = shortHexMatch[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  const fullHexMatch = normalized.match(/^#([0-9a-f]{6})$/i);
+  if (fullHexMatch) {
+    return `#${fullHexMatch[1].toLowerCase()}`;
+  }
+
+  return normalized;
+};
+
+const toLegendItemsMap = (items?: DiagramLegendItem[]) => {
+  const next: Record<string, string> = {};
+  (items || []).forEach((item) => {
+    const color = normalizeColor(item?.color || "");
+    const label = String(item?.label || "").trim();
+    if (!color || !label) {
+      return;
+    }
+
+    next[color] = label;
+  });
+  return next;
+};
 
 export const FreeDrawDiagram = ({
   backgroundImage,
   initialCanvasImageData,
+  initialLegendItems,
   maxHeight,
   maxWidth = 480,
   onUpdate,
+  enableDrawColorLegend = false,
+  allowTextOutsideDiagram = false,
 }: FreeDrawDiagramProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
   const lastEmittedImageRef = useRef<string>("");
+  const initializedFromSavedMarkupRef = useRef(
+    Boolean(String(initialCanvasImageData || "").trim()),
+  );
 
   const [mode, setMode] = useState<DiagramMode>("draw");
   const [strokeColor, setStrokeColor] = useState("#e11d48");
@@ -73,6 +129,10 @@ export const FreeDrawDiagram = ({
     width: DEFAULT_CANVAS_WIDTH,
     height: DEFAULT_CANVAS_HEIGHT,
   });
+  const [isPaddedBaseImage, setIsPaddedBaseImage] = useState(false);
+  const [legendLabelsByColor, setLegendLabelsByColor] = useState<
+    Record<string, string>
+  >(() => toLegendItemsMap(initialLegendItems));
   const [baseImageSource, setBaseImageSource] = useState(() => {
     const initial = String(initialCanvasImageData || "").trim();
     return initial || backgroundImage;
@@ -85,18 +145,47 @@ export const FreeDrawDiagram = ({
       return;
     }
 
+    initializedFromSavedMarkupRef.current = Boolean(incoming);
     const nextSource = incoming || backgroundImage;
     setBaseImageSource((prev) => (prev === nextSource ? prev : nextSource));
+    setIsPaddedBaseImage(false);
+    setLegendLabelsByColor(toLegendItemsMap(initialLegendItems));
     setPaths([]);
     setCurrentPath(null);
     setTextAnnotations([]);
+    setDraftTextAnnotation(null);
+    setDraggingTextId(null);
     setIsDrawing(false);
-  }, [backgroundImage, initialCanvasImageData]);
+  }, [backgroundImage, initialCanvasImageData, initialLegendItems]);
 
   useEffect(() => {
     setImageReady(false);
     const image = new Image();
     image.onload = () => {
+      const shouldPadBackgroundImage =
+        allowTextOutsideDiagram &&
+        !initializedFromSavedMarkupRef.current &&
+        !isPaddedBaseImage &&
+        baseImageSource === backgroundImage;
+
+      if (shouldPadBackgroundImage) {
+        const pad = DEFAULT_OUTSIDE_TEXT_PADDING;
+        const sourceWidth = image.naturalWidth || DEFAULT_CANVAS_WIDTH;
+        const sourceHeight = image.naturalHeight || DEFAULT_CANVAS_HEIGHT;
+        const paddedCanvas = document.createElement("canvas");
+        paddedCanvas.width = sourceWidth + pad * 2;
+        paddedCanvas.height = sourceHeight + pad * 2;
+        const paddedContext = paddedCanvas.getContext("2d");
+        if (paddedContext) {
+          paddedContext.fillStyle = "#ffffff";
+          paddedContext.fillRect(0, 0, paddedCanvas.width, paddedCanvas.height);
+          paddedContext.drawImage(image, pad, pad, sourceWidth, sourceHeight);
+          setIsPaddedBaseImage(true);
+          setBaseImageSource(paddedCanvas.toDataURL("image/png"));
+          return;
+        }
+      }
+
       baseImageRef.current = image;
       setCanvasSize({
         width: image.naturalWidth || DEFAULT_CANVAS_WIDTH,
@@ -108,7 +197,14 @@ export const FreeDrawDiagram = ({
       setImageReady(false);
     };
     image.src = baseImageSource;
-  }, [baseImageSource]);
+  }, [allowTextOutsideDiagram, backgroundImage, baseImageSource, isPaddedBaseImage]);
+
+  const normalizedLegendItems = Object.entries(legendLabelsByColor)
+    .map(([color, label]) => ({
+      color: normalizeColor(color),
+      label: String(label || "").trim(),
+    }))
+    .filter((item) => item.color && item.label);
 
   const getCanvasCoordinates = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -154,6 +250,35 @@ export const FreeDrawDiagram = ({
       bottom: annotation.y + lines.length * lineHeight + padding,
     };
   }, []);
+
+  const fitTextAnnotationWithinCanvas = useCallback(
+    (annotation: TextAnnotation): TextAnnotation => {
+      const bounds = getTextAnnotationBounds(annotation);
+      const padding = 2;
+      let nextX = annotation.x;
+      let nextY = annotation.y;
+
+      if (bounds.left < padding) {
+        nextX += padding - bounds.left;
+      }
+      if (bounds.right > canvasSize.width - padding) {
+        nextX -= bounds.right - (canvasSize.width - padding);
+      }
+      if (bounds.top < padding) {
+        nextY += padding - bounds.top;
+      }
+      if (bounds.bottom > canvasSize.height - padding) {
+        nextY -= bounds.bottom - (canvasSize.height - padding);
+      }
+
+      return {
+        ...annotation,
+        x: Math.max(0, Math.min(canvasSize.width, nextX)),
+        y: Math.max(0, Math.min(canvasSize.height, nextY)),
+      };
+    },
+    [canvasSize.height, canvasSize.width, getTextAnnotationBounds],
+  );
 
   const findTextAnnotationAtPoint = useCallback(
     (point: { x: number; y: number }) => {
@@ -262,9 +387,16 @@ export const FreeDrawDiagram = ({
     onUpdate({
       findings: [{ type: "diagramMarkup" }],
       canvasImageData,
+      legendItems: normalizedLegendItems,
     });
     lastEmittedImageRef.current = canvasImageData;
-  }, [canvasSize.height, canvasSize.width, imageReady, onUpdate]);
+  }, [
+    canvasSize.height,
+    canvasSize.width,
+    imageReady,
+    normalizedLegendItems,
+    onUpdate,
+  ]);
 
   useEffect(() => {
     redrawOverlay();
@@ -280,17 +412,30 @@ export const FreeDrawDiagram = ({
       onUpdate({
         findings: [{ type: "diagramMarkup" }],
         canvasImageData: incoming,
+        legendItems: normalizedLegendItems,
       });
       lastEmittedImageRef.current = incoming;
       return;
     }
 
-    if (paths.length === 0 && textAnnotations.length === 0) {
+    if (
+      paths.length === 0 &&
+      textAnnotations.length === 0 &&
+      normalizedLegendItems.length === 0
+    ) {
       return;
     }
 
     emitCanvasUpdate();
-  }, [emitCanvasUpdate, imageReady, initialCanvasImageData, onUpdate, paths, textAnnotations]);
+  }, [
+    emitCanvasUpdate,
+    imageReady,
+    initialCanvasImageData,
+    normalizedLegendItems,
+    onUpdate,
+    paths,
+    textAnnotations,
+  ]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -351,20 +496,29 @@ export const FreeDrawDiagram = ({
       event.preventDefault();
       const point = getCanvasCoordinates(event);
       const offset = textDragOffsetRef.current;
-      const nextX = Math.max(0, Math.min(canvasSize.width - 4, point.x - offset.x));
-      const nextY = Math.max(0, Math.min(canvasSize.height - 4, point.y - offset.y));
 
-      setTextAnnotations((previous) =>
-        previous.map((annotation) =>
+      setTextAnnotations((previous) => {
+        const dragged = previous.find((annotation) => annotation.id === draggingTextId);
+        if (!dragged) {
+          return previous;
+        }
+
+        const fitted = fitTextAnnotationWithinCanvas({
+          ...dragged,
+          x: point.x - offset.x,
+          y: point.y - offset.y,
+        });
+
+        return previous.map((annotation) =>
           annotation.id === draggingTextId
             ? {
                 ...annotation,
-                x: nextX,
-                y: nextY,
+                x: fitted.x,
+                y: fitted.y,
               }
             : annotation,
-        ),
-      );
+        );
+      });
       return;
     }
 
@@ -410,14 +564,14 @@ export const FreeDrawDiagram = ({
 
       setTextAnnotations((current) => [
         ...current,
-        {
+        fitTextAnnotationWithinCanvas({
           ...previousDraft,
           text: normalizedText,
-        },
+        }),
       ]);
       return null;
     });
-  }, []);
+  }, [fitTextAnnotationWithinCanvas]);
 
   const discardDraftTextAnnotation = useCallback(() => {
     setDraftTextAnnotation(null);
@@ -498,6 +652,8 @@ export const FreeDrawDiagram = ({
   const draftTopPercent = draftTextAnnotation
     ? (draftTextAnnotation.y / canvasSize.height) * 100
     : 0;
+  const activeLegendColor = normalizeColor(strokeColor);
+  const activeLegendLabel = legendLabelsByColor[activeLegendColor] || "";
 
   return (
     <div className="space-y-4">
@@ -533,7 +689,7 @@ export const FreeDrawDiagram = ({
             aria-label="Drawing color"
             type="color"
             value={strokeColor}
-            onChange={(event) => setStrokeColor(event.target.value)}
+            onChange={(event) => setStrokeColor(normalizeColor(event.target.value))}
             className="h-8 w-12 p-1"
           />
         </div>
@@ -611,9 +767,46 @@ export const FreeDrawDiagram = ({
           </Button>
         </div>
       </div>
+      {enableDrawColorLegend && mode === "draw" ? (
+        <div className="rounded-md border border-gray-200 bg-gray-50/60 p-3 space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-700">
+              Legend label for selected color
+            </Label>
+            <Input
+              value={activeLegendLabel}
+              onChange={(event) => {
+                const nextLabel = event.target.value;
+                setLegendLabelsByColor((previous) => ({
+                  ...previous,
+                  [activeLegendColor]: nextLabel,
+                }));
+              }}
+              placeholder='e.g. "Mass"'
+              className="h-9"
+            />
+          </div>
+          {normalizedLegendItems.length > 0 ? (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-700">Generated legend</Label>
+              <div className="space-y-1">
+                {normalizedLegendItems.map((item) => (
+                  <div key={`${item.color}-${item.label}`} className="flex items-center gap-2 text-xs text-gray-700">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm border border-gray-300"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div
-        className="relative mx-auto w-fit max-w-full overflow-hidden rounded border bg-white"
+        className="relative mx-auto w-fit max-w-full rounded border bg-white"
         style={{ maxWidth: `min(100%, ${maxWidth}px)` }}
       >
         <img
@@ -650,11 +843,12 @@ export const FreeDrawDiagram = ({
                 discardDraftTextAnnotation();
               }
             }}
-            className="absolute z-20 min-w-[140px] max-w-[220px] resize-none overflow-hidden rounded border border-gray-300 bg-white px-2 text-xs shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
+            className="absolute z-20 min-w-[180px] max-w-none resize-none overflow-hidden rounded border border-gray-300 bg-white px-2 text-xs shadow-sm outline-none focus:ring-2 focus:ring-gray-400"
             style={{
               left: `${draftLeftPercent}%`,
               top: `${draftTopPercent}%`,
               transform: "translate(-2px, -2px)",
+              width: `${Math.max(180, Math.min(460, Math.max(10, String(draftTextAnnotation.text || "").length + 2) * Math.max(9, draftTextAnnotation.size * 0.52)))}px`,
               color: draftTextAnnotation.color,
               height: `${Math.max(32, Math.round(draftTextAnnotation.size * 1.35))}px`,
               fontSize: `${draftTextAnnotation.size}px`,

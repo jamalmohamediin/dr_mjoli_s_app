@@ -28,6 +28,7 @@ export const initialInguinalHerniaState = {
     additionalPathology: "",
   },
   procedure: {
+    dateOfOperation: "",
     description: "",
     technique: [] as string[],
     techniqueOther: "",

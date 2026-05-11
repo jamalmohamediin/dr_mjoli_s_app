@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateDDMMYYYYInput, Time24HourInput } from "@/components/Time24HourInput";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import { Save, Edit } from "lucide-react";
 
 interface ProcedureInfoFormProps {
@@ -16,6 +17,7 @@ interface ProcedureInfoFormProps {
 export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormProps) => {
   const [formData, setFormData] = useState({
     procedure: "",
+    dateOfOperation: "",
     date: new Date().toISOString().split('T')[0],
     preparation: "",
     anesthesia: "",
@@ -55,6 +57,7 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
     if (initialData) {
       setFormData({
         procedure: initialData.procedure || "",
+        dateOfOperation: initialData.dateOfOperation || "",
         date: initialData.date || new Date().toISOString().split('T')[0],
         preparation: initialData.preparation || "",
         anesthesia: initialData.sedation || "",
@@ -246,6 +249,12 @@ export const ProcedureInfoForm = ({ onUpdate, initialData }: ProcedureInfoFormPr
       {/* Row 3: Procedure Date and Duration in one row */}
       <div className="mt-2 grid grid-cols-1 gap-2">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+          <div className="space-y-0.5">
+            <DateOfOperationField
+              value={formData.dateOfOperation}
+              onChange={(value) => handleChange('dateOfOperation', value)}
+            />
+          </div>
           <div className="space-y-0.5">
             <Label htmlFor="date" className="text-xs font-medium">Procedure Date:</Label>
             <DateDDMMYYYYInput

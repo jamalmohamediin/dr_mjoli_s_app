@@ -29,6 +29,7 @@ export const initialTransanalMinimallyInvasiveSurgeryState = {
     circumferentialInvolvement: "",
   },
   procedure: {
+    dateOfOperation: "",
     equipmentUsed: [] as string[],
     equipmentOther: "",
     insufflationPressure: "",
@@ -55,7 +56,8 @@ export const initialTransanalMinimallyInvasiveSurgeryState = {
   },
   specimen: {
     specimenRetrieved: "",
-    laboratorySentTo: "",
+    laboratorySentTo: [] as string[],
+    laboratorySentToOther: "",
     orientationMarked: "",
   },
   additionalInfo: {

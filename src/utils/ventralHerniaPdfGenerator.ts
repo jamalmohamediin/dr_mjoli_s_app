@@ -4,6 +4,7 @@ import {
   formatDateDDMMYYYYWithDashes,
   formatDateTimeDDMMYYYYWithDashes,
 } from "./dateFormatter";
+import { formatDateOfOperationForDisplay } from "./operationDate";
 import { drawRectalStylePortsAndIncisions } from "./pdfPortsAndIncisionsLayout";
 import { drawStandardPatientInformation } from "./pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "./surgicalDiagramMarkings";
@@ -143,6 +144,7 @@ export const generateVentralHerniaPDF = async (
     const footerReserve = 24;
     const firstPageBottom = pageHeight - margin;
     const laterPageBottom = pageHeight - footerReserve;
+    const showSectionDividers = false;
     let currentPage = 1;
     let y = margin;
 
@@ -165,9 +167,11 @@ export const generateVentralHerniaPDF = async (
 
     const drawSeparator = () => {
       ensureSpace(4);
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.15);
-      pdf.line(margin, y, pageWidth - margin, y);
+      if (showSectionDividers) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.15);
+        pdf.line(margin, y, pageWidth - margin, y);
+      }
       y += 6;
     };
 
@@ -520,6 +524,10 @@ export const generateVentralHerniaPDF = async (
     }
 
     const leftColumnItems: Array<[string, string]> = [
+      [
+        "Date of Operation",
+        formatDateOfOperationForDisplay(procedure.dateOfOperation) || "________________",
+      ],
       ["Operation Description", operationDescription],
       ["Surgical Approach", approachText],
       ["Reason for Conversion", showConversionReason ? conversionReasonText : ""],

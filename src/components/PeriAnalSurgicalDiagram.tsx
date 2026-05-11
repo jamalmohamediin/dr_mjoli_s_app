@@ -6,6 +6,10 @@ import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarking
 
 type DiagramTool = "draw" | "text" | "erase";
 type TextFontStyle = "regular" | "bold" | "italic";
+type DrawLegendEntry = {
+  color: string;
+  label: string;
+};
 
 type Point = {
   x: number;
@@ -44,8 +48,10 @@ type TextEditorState = {
 
 interface PeriAnalSurgicalDiagramProps {
   diagramImage: string;
-  onUpdate: (markings: PeriAnalMarking[]) => void;
+  onUpdate: (markings: PeriAnalMarking[], drawLegendEntries?: DrawLegendEntry[]) => void;
+  onDrawLegendChange?: (entries: DrawLegendEntry[]) => void;
   initialMarkings?: PeriAnalMarking[];
+  initialDrawLegendEntries?: DrawLegendEntry[];
   markingScale?: number;
 }
 
@@ -80,11 +86,38 @@ const createMarkingId = () =>
     : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const TEXT_FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 56, 64, 72];
+const DIAGRAM_CANVAS_PADDING = 60;
+
+const normalizeHexColor = (value: unknown) => {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+  const prefixed = raw.startsWith("#") ? raw : `#${raw}`;
+  const normalized = prefixed.toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(normalized) ? normalized : "";
+};
+
+const normalizeDrawLegendEntries = (entries: unknown): DrawLegendEntry[] => {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalizedEntries: DrawLegendEntry[] = [];
+  entries.forEach((entry) => {
+    const color = normalizeHexColor((entry as any)?.color);
+    const label = typeof (entry as any)?.label === "string" ? (entry as any).label.trim() : "";
+    if (!color || !label || seen.has(color)) return;
+    seen.add(color);
+    normalizedEntries.push({ color, label });
+  });
+  return normalizedEntries;
+};
 
 export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = ({
   diagramImage,
   onUpdate,
+  onDrawLegendChange,
   initialMarkings = [],
+  initialDrawLegendEntries = [],
   markingScale = 1,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,10 +132,15 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   const currentMarkingsRef = useRef<PeriAnalMarking[]>(initialMarkings || []);
   const textInputRef = useRef<HTMLInputElement>(null);
   const serializedInitialMarkings = JSON.stringify(initialMarkings || []);
+  const normalizedInitialLegendEntries = normalizeDrawLegendEntries(initialDrawLegendEntries);
+  const serializedInitialLegendEntries = JSON.stringify(normalizedInitialLegendEntries);
   const lastCommittedMarkingsRef = useRef(serializedInitialMarkings);
   const previousDiagramImageRef = useRef(diagramImage);
 
   const [markings, setMarkings] = useState<PeriAnalMarking[]>(initialMarkings || []);
+  const [drawLegendEntries, setDrawLegendEntries] = useState<DrawLegendEntry[]>(
+    normalizedInitialLegendEntries,
+  );
   const [draftStroke, setDraftStroke] = useState<DrawStrokeMarking | null>(null);
   const [activeTool, setActiveTool] = useState<DiagramTool>("draw");
   const [strokeColor, setStrokeColor] = useState("#111111");
@@ -121,31 +159,45 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX - DIAGRAM_CANVAS_PADDING,
+      y: (clientY - rect.top) * scaleY - DIAGRAM_CANVAS_PADDING,
     };
   }, []);
 
-  const drawLegacyPort = (ctx: CanvasRenderingContext2D, mark: any) => {
+  const drawLegacyPort = (
+    ctx: CanvasRenderingContext2D,
+    mark: any,
+    xOffset = DIAGRAM_CANVAS_PADDING,
+    yOffset = DIAGRAM_CANVAS_PADDING,
+  ) => {
+    const x = Number(mark?.x) + xOffset;
+    const y = Number(mark?.y) + yOffset;
     ctx.save();
     ctx.font = `bold ${drawingMetrics.portFontSize}px Arial`;
     ctx.fillStyle = "black";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(mark.size, mark.x, mark.y - drawingMetrics.portLabelOffset);
+    ctx.fillText(mark.size, x, y - drawingMetrics.portLabelOffset);
     ctx.beginPath();
-    ctx.moveTo(mark.x - drawingMetrics.portHalfLength, mark.y);
-    ctx.lineTo(mark.x + drawingMetrics.portHalfLength, mark.y);
+    ctx.moveTo(x - drawingMetrics.portHalfLength, y);
+    ctx.lineTo(x + drawingMetrics.portHalfLength, y);
     ctx.strokeStyle = "black";
     ctx.lineWidth = drawingMetrics.portLineWidth;
     ctx.stroke();
     ctx.restore();
   };
 
-  const drawLegacyStoma = (ctx: CanvasRenderingContext2D, mark: any) => {
+  const drawLegacyStoma = (
+    ctx: CanvasRenderingContext2D,
+    mark: any,
+    xOffset = DIAGRAM_CANVAS_PADDING,
+    yOffset = DIAGRAM_CANVAS_PADDING,
+  ) => {
+    const x = Number(mark?.x) + xOffset;
+    const y = Number(mark?.y) + yOffset;
     ctx.save();
     ctx.beginPath();
-    ctx.arc(mark.x, mark.y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
+    ctx.arc(x, y, drawingMetrics.stomaRadius, 0, 2 * Math.PI);
     ctx.strokeStyle = mark.stomaType === "ileostomy" ? "#f59e0b" : "#16a34a";
     ctx.lineWidth =
       mark.stomaType === "ileostomy"
@@ -156,12 +208,17 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     ctx.restore();
   };
 
-  const drawLegacyIncision = (ctx: CanvasRenderingContext2D, mark: any) => {
+  const drawLegacyIncision = (
+    ctx: CanvasRenderingContext2D,
+    mark: any,
+    xOffset = DIAGRAM_CANVAS_PADDING,
+    yOffset = DIAGRAM_CANVAS_PADDING,
+  ) => {
     if (!mark?.start || !mark?.end) return;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(mark.start.x, mark.start.y);
-    ctx.lineTo(mark.end.x, mark.end.y);
+    ctx.moveTo(mark.start.x + xOffset, mark.start.y + yOffset);
+    ctx.lineTo(mark.end.x + xOffset, mark.end.y + yOffset);
     ctx.strokeStyle = "#8B0000";
     ctx.lineWidth = drawingMetrics.incisionLineWidth;
     ctx.setLineDash(drawingMetrics.incisionDash);
@@ -169,7 +226,12 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     ctx.restore();
   };
 
-  const drawStrokeMarking = (ctx: CanvasRenderingContext2D, mark: DrawStrokeMarking) => {
+  const drawStrokeMarking = (
+    ctx: CanvasRenderingContext2D,
+    mark: DrawStrokeMarking,
+    xOffset = DIAGRAM_CANVAS_PADDING,
+    yOffset = DIAGRAM_CANVAS_PADDING,
+  ) => {
     if (!Array.isArray(mark.points) || mark.points.length === 0) return;
     ctx.save();
     ctx.strokeStyle = mark.color || "#111111";
@@ -177,38 +239,45 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.moveTo(mark.points[0].x, mark.points[0].y);
+    ctx.moveTo(mark.points[0].x + xOffset, mark.points[0].y + yOffset);
     for (let index = 1; index < mark.points.length; index += 1) {
-      ctx.lineTo(mark.points[index].x, mark.points[index].y);
+      ctx.lineTo(mark.points[index].x + xOffset, mark.points[index].y + yOffset);
     }
     if (mark.points.length === 1) {
-      ctx.lineTo(mark.points[0].x + 0.01, mark.points[0].y + 0.01);
+      ctx.lineTo(mark.points[0].x + xOffset + 0.01, mark.points[0].y + yOffset + 0.01);
     }
     ctx.stroke();
     ctx.restore();
   };
 
-  const drawTextBoxMarking = (ctx: CanvasRenderingContext2D, mark: TextBoxMarking) => {
+  const drawTextBoxMarking = (
+    ctx: CanvasRenderingContext2D,
+    mark: TextBoxMarking,
+    xOffset = DIAGRAM_CANVAS_PADDING,
+    yOffset = DIAGRAM_CANVAS_PADDING,
+  ) => {
     if (!mark?.text?.trim()) return;
 
     const size = Number(mark.size) > 0 ? Number(mark.size) : 16;
     const fontWeight = mark.fontWeight || (mark.fontStyle === "bold" ? "700" : "400");
     const fontStyle = mark.fontStyle === "italic" ? "italic" : "normal";
+    const x = Number(mark.x) + xOffset;
+    const y = Number(mark.y) + yOffset;
 
     ctx.save();
     ctx.fillStyle = mark.color || "#111111";
     ctx.font = `${fontStyle} ${fontWeight} ${size}px Arial`;
     ctx.textBaseline = "top";
-    ctx.fillText(mark.text, mark.x, mark.y);
+    ctx.fillText(mark.text, x, y);
 
     if (mark.underline) {
       const measuredTextWidth = ctx.measureText(mark.text).width;
-      const underlineY = mark.y + size + 1;
+      const underlineY = y + size + 1;
       ctx.strokeStyle = mark.color || "#111111";
       ctx.lineWidth = Math.max(1, size / 14);
       ctx.beginPath();
-      ctx.moveTo(mark.x, underlineY);
-      ctx.lineTo(mark.x + measuredTextWidth, underlineY);
+      ctx.moveTo(x, underlineY);
+      ctx.lineTo(x + measuredTextWidth, underlineY);
       ctx.stroke();
     }
 
@@ -249,7 +318,13 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+      image,
+      DIAGRAM_CANVAS_PADDING,
+      DIAGRAM_CANVAS_PADDING,
+      image.naturalWidth,
+      image.naturalHeight,
+    );
     markings.forEach((mark) => drawMarking(ctx, mark));
     if (draftStroke) {
       drawStrokeMarking(ctx, draftStroke);
@@ -293,19 +368,23 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
   }, [cloneMarkings, diagramImage, initialMarkings, serializedInitialMarkings]);
 
   useEffect(() => {
+    setDrawLegendEntries(normalizedInitialLegendEntries);
+  }, [serializedInitialLegendEntries]);
+
+  useEffect(() => {
     const image = imageRef.current;
     const canvas = canvasRef.current;
     if (!image || !canvas) return;
 
     image.onload = () => {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = image.naturalWidth + DIAGRAM_CANVAS_PADDING * 2;
+      canvas.height = image.naturalHeight + DIAGRAM_CANVAS_PADDING * 2;
       redrawCanvas();
     };
 
     if (image.complete && image.naturalHeight > 0) {
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
+      canvas.width = image.naturalWidth + DIAGRAM_CANVAS_PADDING * 2;
+      canvas.height = image.naturalHeight + DIAGRAM_CANVAS_PADDING * 2;
       redrawCanvas();
     } else {
       image.src = diagramImage;
@@ -320,7 +399,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     const clonedMarkings = setLocalMarkings(nextMarkings);
     const serialized = JSON.stringify(clonedMarkings);
     lastCommittedMarkingsRef.current = serialized;
-    onUpdate(clonedMarkings);
+    onUpdate(clonedMarkings, drawLegendEntries);
   };
 
   const isMarkingHit = (mark: PeriAnalMarking, point: Point) => {
@@ -459,7 +538,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
       {
         id: createMarkingId(),
         type: "textBox",
-        color: strokeColor,
+        color: normalizeHexColor(strokeColor) || "#111111",
         size: Math.max(10, textFontSize),
         text: trimmedText,
         x: textEditor.canvasX,
@@ -496,8 +575,8 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     setTextEditor({
       canvasX: point.x,
       canvasY: point.y,
-      xPercent: (point.x / canvas.width) * 100,
-      yPercent: (point.y / canvas.height) * 100,
+      xPercent: ((point.x + DIAGRAM_CANVAS_PADDING) / canvas.width) * 100,
+      yPercent: ((point.y + DIAGRAM_CANVAS_PADDING) / canvas.height) * 100,
     });
     setTextDraft("");
 
@@ -519,6 +598,32 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
     }
   };
 
+  const updateDrawLegendEntries = useCallback(
+    (updater: (current: DrawLegendEntry[]) => DrawLegendEntry[]) => {
+      setDrawLegendEntries((current) => {
+        const next = normalizeDrawLegendEntries(updater(current));
+        onDrawLegendChange?.(next);
+        return next;
+      });
+    },
+    [onDrawLegendChange],
+  );
+
+  const selectedLegendColor = normalizeHexColor(strokeColor) || "#111111";
+  const selectedLegendLabel =
+    drawLegendEntries.find((entry) => entry.color === selectedLegendColor)?.label || "";
+
+  const handleSelectedLegendLabelChange = (value: string) => {
+    const trimmedLabel = value.trim();
+    updateDrawLegendEntries((current) => {
+      const withoutCurrentColor = current.filter((entry) => entry.color !== selectedLegendColor);
+      if (!trimmedLabel) {
+        return withoutCurrentColor;
+      }
+      return [...withoutCurrentColor, { color: selectedLegendColor, label: trimmedLabel }];
+    });
+  };
+
   const finishStroke = useCallback(() => {
     if (!drawingStrokeRef.current || drawingStrokeRef.current.length === 0) {
       isDrawingRef.current = false;
@@ -532,7 +637,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
       {
         id: createMarkingId(),
         type: "drawStroke",
-        color: strokeColor,
+        color: normalizeHexColor(strokeColor) || "#111111",
         width: strokeWidth,
         points: drawingStrokeRef.current,
       } as DrawStrokeMarking,
@@ -735,7 +840,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
             <input
               type="color"
               value={strokeColor}
-              onChange={(event) => setStrokeColor(event.target.value)}
+              onChange={(event) => setStrokeColor(normalizeHexColor(event.target.value) || "#111111")}
               className="h-8 w-10 cursor-pointer rounded border border-gray-300 bg-white p-1"
             />
           </div>
@@ -753,6 +858,34 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
           />
           <span className="text-xs text-gray-600">{strokeWidth}px</span>
         </div>
+
+        {activeTool === "draw" ? (
+          <div className="w-full space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
+            <label className="block text-xs font-medium text-gray-700">
+              Meaning For Selected Color ({selectedLegendColor})
+            </label>
+            <input
+              type="text"
+              value={selectedLegendLabel}
+              onChange={(event) => handleSelectedLegendLabelChange(event.target.value)}
+              placeholder="e.g. Mass"
+              className="h-9 w-full rounded border border-gray-300 bg-white px-2 text-sm text-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+            />
+            {drawLegendEntries.length > 0 ? (
+              <div className="space-y-1 text-xs text-gray-700">
+                {drawLegendEntries.map((entry) => (
+                  <div key={entry.color} className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm border border-gray-400"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span>{entry.label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {activeTool === "text" ? (
           <>
@@ -810,7 +943,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
       </Card>
 
       <div className="relative mx-auto flex w-full justify-center rounded-lg border bg-white p-2 sm:p-4">
-        <div className="relative w-full max-w-[520px]">
+        <div className="relative w-full max-w-[620px]">
           <img ref={imageRef} alt="Peri-Anal surgical diagram" className="hidden" />
           <canvas
             ref={canvasRef}
@@ -819,7 +952,7 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
             onPointerLeave={handlePointerLeave}
-            className="mx-auto block h-auto w-full max-w-[520px] select-none"
+            className="mx-auto block h-auto w-full max-w-[620px] select-none"
             style={{
               cursor: activeTool === "text" ? "text" : "crosshair",
               touchAction: "none",

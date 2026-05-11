@@ -2,10 +2,12 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import {
   CheckboxGrid,
+  DateOfOperationField,
   LabeledInput,
   LabeledTextarea,
   MultiValueTextField,
@@ -83,6 +85,7 @@ const complicationOptions = [
   "CO2 Embolism",
   "Other",
 ];
+const laboratorySentToOptions = ["Pathcare", "Ampath", "NHLS", "Lancet", "Other"];
 
 export const TransanalMinimallyInvasiveSurgeryForm = ({
   currentReport,
@@ -104,6 +107,12 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
   const operativeEvents = template.operativeEvents;
   const specimen = template.specimen;
   const additionalInfo = template.additionalInfo;
+
+  React.useEffect(() => {
+    if (!String(additionalInfo.dateTime || "").trim()) {
+      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
+    }
+  }, [additionalInfo.dateTime, updateTemplate]);
 
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
@@ -237,7 +246,13 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             onChange={(value) => updateTemplate("preoperative", "imagingOther", value)}
           />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <LabeledInput label="cT" value={preoperative.cT || ""} onChange={(value) => updateTemplate("preoperative", "cT", value)} />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">cT</Label>
+              <Input
+                value={preoperative.cT || ""}
+                onChange={(event) => updateTemplate("preoperative", "cT", event.target.value)}
+              />
+            </div>
             <LabeledInput label="cN" value={preoperative.cN || ""} onChange={(value) => updateTemplate("preoperative", "cN", value)} />
           </div>
           <RadioGrid
@@ -311,6 +326,10 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Procedure Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <DateOfOperationField
+            value={procedure.dateOfOperation || ""}
+            onChange={(value) => updateTemplate("procedure", "dateOfOperation", value)}
+          />
           <CheckboxGrid
             label="Equipment Used"
             options={equipmentOptions}
@@ -468,18 +487,28 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
             onChange={(value) => {
               updateTemplate("specimen", "specimenRetrieved", value);
               if (value !== "Yes") {
-                updateTemplate("specimen", "laboratorySentTo", "");
+                updateTemplate("specimen", "laboratorySentTo", []);
+                updateTemplate("specimen", "laboratorySentToOther", "");
               }
             }}
             columns="grid-cols-2"
           />
           {specimen.specimenRetrieved === "Yes" ? (
-            <LabeledInput
-              label="Specify Laboratory Sent to"
-              value={specimen.laboratorySentTo || ""}
-              onChange={(value) => updateTemplate("specimen", "laboratorySentTo", value)}
-              placeholder="Enter laboratory name"
-            />
+            <>
+              <CheckboxGrid
+                label="Specify Laboratory Sent to"
+                options={laboratorySentToOptions}
+                values={specimen.laboratorySentTo}
+                onChange={(value) => updateTemplate("specimen", "laboratorySentTo", value)}
+                columns="grid-cols-1 md:grid-cols-2 xl:grid-cols-5"
+              />
+              <OptionalOtherInput
+                enabled={toArray(specimen.laboratorySentTo).includes("Other")}
+                value={specimen.laboratorySentToOther || ""}
+                placeholder="Specify other laboratory"
+                onChange={(value) => updateTemplate("specimen", "laboratorySentToOther", value)}
+              />
+            </>
           ) : null}
           <RadioGrid
             label="Orientation marked"

@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { getSurgicalDiagramMarkingMetrics } from "@/utils/surgicalDiagramMarkings";
@@ -117,6 +118,7 @@ export const generateCholecystectomyPDF = async (
     const margin = 15;
     const lineHeight = 4.5;
     let y = margin;
+    const showSectionDividers = false;
 
     const preop = cholecystectomyData?.preoperative || {};
     const intra = cholecystectomyData?.intraoperative || {};
@@ -128,6 +130,7 @@ export const generateCholecystectomyPDF = async (
     const col2X = margin + 63;
     const col3X = margin + 126;
     const twoCol2X = margin + 95;
+    const firstColumnAnswerOffset = Math.min(34, Math.max(20, 58 * 0.42)) + 2;
 
     const ensureSpace = (h = 10) => {
       if (y + h > pageHeight - 20) {
@@ -137,9 +140,11 @@ export const generateCholecystectomyPDF = async (
     };
 
     const drawRule = () => {
-      pdf.setDrawColor(0, 0, 0);
-      pdf.setLineWidth(0.2);
-      pdf.line(margin, y, pageWidth - margin, y);
+      if (showSectionDividers) {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.setLineWidth(0.2);
+        pdf.line(margin, y, pageWidth - margin, y);
+      }
       y += 5;
     };
 
@@ -363,7 +368,11 @@ export const generateCholecystectomyPDF = async (
       pdf.setFont("helvetica", "normal");
     };
 
-    const rowAlignedToUrgencyColumn = (text: string, widthOverride = 58) => {
+    const rowAlignedToUrgencyColumn = (
+      text: string,
+      widthOverride = 58,
+      answerOffsetOverride?: number
+    ) => {
       const normalized = text || "";
       if (!shouldRenderCell(normalized)) {
         return;
@@ -388,13 +397,22 @@ export const generateCholecystectomyPDF = async (
 
       const label = `${normalized.slice(0, separatorIndex).trim()}:`;
       const value = normalized.slice(separatorIndex + 1).trim();
-      pdf.setFont("helvetica", "bold");
-      const measuredLabelWidth = pdf.getTextWidth(label);
+      let labelWidth = 0;
+      if (typeof answerOffsetOverride === "number") {
+        labelWidth = Math.min(
+          Math.max(answerOffsetOverride - 2, 12),
+          Math.max(12, width - 10)
+        );
+      } else {
+        pdf.setFont("helvetica", "bold");
+        const measuredLabelWidth = pdf.getTextWidth(label);
+        pdf.setFont("helvetica", "normal");
+        labelWidth = Math.min(
+          Math.max(measuredLabelWidth + 1.5, 12),
+          Math.max(12, width - 10)
+        );
+      }
       pdf.setFont("helvetica", "normal");
-      const labelWidth = Math.min(
-        Math.max(measuredLabelWidth + 1.5, 12),
-        Math.max(12, width - 10)
-      );
       const valueWidth = Math.max(10, width - labelWidth - 2);
       const labelLines = pdf.splitTextToSize(label, labelWidth);
       const valueLines = pdf.splitTextToSize(value, valueWidth);
@@ -523,6 +541,12 @@ export const generateCholecystectomyPDF = async (
     );
     const hasStonesPresent =
       intra?.stonesPresent === "Solitary Stones" || intra?.stonesPresent === "Multiple Stones";
+    const isSubtotalCholecystectomyRequired = toArray(
+      proc?.extentOfCholecystectomy
+    ).includes("Subtotal Cholecystectomy Required");
+    const histologyLaboratoryText =
+      joinSelections(toArray(closure?.laboratorySentTo), closure?.laboratorySentToOther) ||
+      txt(closure?.laboratoryName);
 
     y += 2;
     drawRule();
@@ -553,7 +577,8 @@ export const generateCholecystectomyPDF = async (
     );
     rowAlignedToUrgencyColumn(
       `Indication: ${joinSelections(toArray(preop?.indication), preop?.indicationOther)}`,
-      pageWidth - margin * 2
+      pageWidth - margin * 2,
+      firstColumnAnswerOffset
     );
     rowAlignedToUrgencyColumn(
       `Operation Description: ${txt(preop?.operationDescription)}`,
@@ -618,14 +643,22 @@ export const generateCholecystectomyPDF = async (
       }
     };
 
+    addLeftCh(
+      "Date of Operation",
+      formatDateOfOperationForDisplay(proc?.dateOfOperation) || "________________",
+    );
     addLeftCh("Surgical Approach", toArray(proc?.approach).join(", "));
     addLeftCh("Reason for Conversion", joinSelections(toArray(proc?.reasonForConversion), proc?.reasonForConversionOther));
     addLeftCh("Number of Ports Inserted", txt(proc?.numberOfPortsInserted));
-    addLeftCh("Subtotal Cholecystectomy", txt(proc?.subtotalCholecystectomy));
-    addLeftCh("Reason for Subtotal Cholecystectomy", joinSelections(toArray(proc?.subtotalReason), proc?.subtotalReasonOther));
-    addLeftCh("Adhesiolysis", txt(proc?.adhesiolysis));
     addLeftCh("Extent of Cholecystectomy", extentOfCholecystectomyText);
-    addLeftCh("Method of Subtotal Cholecystectomy Control", subtotalControlText);
+    if (isSubtotalCholecystectomyRequired) {
+      addLeftCh(
+        "Reason for Subtotal Cholecystectomy",
+        joinSelections(toArray(proc?.subtotalReason), proc?.subtotalReasonOther)
+      );
+      addLeftCh("Method of Subtotal Cholecystectomy Control", subtotalControlText);
+    }
+    addLeftCh("Adhesiolysis", txt(proc?.adhesiolysis));
     addLeftCh("Gall Bladder Decompression Required", txt(proc?.gallbladderDecompressionRequired));
     if (txt(proc?.gallbladderDecompressionRequired) === "Yes") {
       addLeftCh("Type of Fluid Drained from Gall Bladder", decompressionFluidTypeText);
@@ -650,11 +683,11 @@ export const generateCholecystectomyPDF = async (
     y = margin;
 
     sec("PROCEDURE DETAILS");
-    rowQuestionAnswer("Critical View of Safety Confirmation", criticalViewSafetyConfirmationText);
-    rowQuestionAnswer("Critical View of Safety - Calot's Triangle Dissected", txt(proc?.calotsTriangleDissected));
-    rowQuestionAnswer("Critical View of Safety - Cystic Duct Identified", txt(proc?.cysticDuctIdentified));
-    rowQuestionAnswer("Critical View of Safety - Cystic Artery Identified", txt(proc?.cysticArteryIdentified));
-    rowQuestionAnswer("Critical View of Safety - Two Structures Entering", txt(proc?.twoStructuresConfirmed));
+    rowQuestionAnswer(
+      "Date of Operation",
+      formatDateOfOperationForDisplay(proc?.dateOfOperation) || "________________",
+    );
+    rowFull(`Critical View of Safety Confirmation: ${criticalViewSafetyConfirmationText}`);
     rowFull(`Cystic Duct Control: ${joinSelections(toArray(proc?.cysticDuctControl), proc?.cysticDuctControlOther)}`);
     rowFull(`Cystic Artery Control: ${joinSelections(toArray(proc?.cysticArteryControl), proc?.cysticArteryControlOther)}`);
     rowFull(
@@ -713,7 +746,9 @@ export const generateCholecystectomyPDF = async (
     rowFull("Specimen: Gallbladder");
     rowFull(`Use Of Specimen Bag: ${txt(closure?.useOfSpecimenBag)}`);
     rowFull(`Gallbladder Sent For Histology: ${txt(closure?.gallbladderSentForHistology)}`);
-    rowFull(`Specify Laboratory Sent to: ${txt(closure?.laboratoryName)}`);
+    if (txt(closure?.gallbladderSentForHistology) === "Yes") {
+      rowFull(`Laboratory Sent to: ${histologyLaboratoryText}`);
+    }
 
     sec("ADDITIONAL NOTES");
     rowFull(`Additional Notes: ${txt(addInfo?.additionalInformation)}`);

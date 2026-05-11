@@ -2,6 +2,7 @@ import {
   createInitialPatientInfoState,
   createPatientStickerSyncSnapshot,
 } from "@/utils/patientSticker";
+import { getTemplateDateOfOperationIso } from "@/utils/operationDate";
 
 export type TemplateType =
   | "procedure"
@@ -478,6 +479,11 @@ export const getTemplateRecordDate = (
   templateType: TemplateType,
   fallbackIso: string,
 ) => {
+  const dateOfOperation = getTemplateDateOfOperationIso(reportSnapshot, templateType);
+  if (dateOfOperation) {
+    return dateOfOperation;
+  }
+
   const patientInfo = createInitialPatientInfoState(
     getTemplatePatientInfo(reportSnapshot, templateType),
   );
@@ -486,12 +492,16 @@ export const getTemplateRecordDate = (
 
 const sortRecords = (records: PatientRecord[]) =>
   [...records].sort((left, right) =>
-    (right.updatedAt || "").localeCompare(left.updatedAt || ""),
+    (right.recordDate || right.updatedAt || "").localeCompare(
+      left.recordDate || left.updatedAt || "",
+    ) || (right.updatedAt || "").localeCompare(left.updatedAt || ""),
   );
 
 const sortPatients = (patients: PatientSummary[]) =>
   [...patients].sort((left, right) =>
-    (right.updatedAt || "").localeCompare(left.updatedAt || ""),
+    (right.latestRecordDate || right.updatedAt || "").localeCompare(
+      left.latestRecordDate || left.updatedAt || "",
+    ) || (right.updatedAt || "").localeCompare(left.updatedAt || ""),
   );
 
 const parseIsoTimestamp = (value: string) => {

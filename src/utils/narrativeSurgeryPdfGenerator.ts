@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import { createSurgicalDiagramCanvas } from "@/utils/createSurgicalDiagramCanvas";
 import { formatDateTimeDDMMYYYYWithDashes } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLayout";
 import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { hasText, joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
@@ -69,6 +70,7 @@ const generateOpenGeneralSurgeryPdf = async (
   const pageHeight = 297;
   const margin = 15;
   const lineHeight = 4.5;
+  const showSectionDividers = false;
   let y = margin;
 
   const preoperative = narrativeData?.preoperative || {};
@@ -91,9 +93,11 @@ const generateOpenGeneralSurgeryPdf = async (
   };
 
   const drawRule = () => {
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 5;
   };
 
@@ -295,11 +299,22 @@ const generateOpenGeneralSurgeryPdf = async (
   drawRule();
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
-  pdf.text("Preoperative Information", margin, y);
+  pdf.text("Procedure Details", margin, y);
   y += 7;
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
 
+  drawMultiColumnRow(
+    [
+      {
+        label: "Date of Operation",
+        value: formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________",
+      },
+      { label: "", value: "" },
+      { label: "", value: "" },
+    ],
+    3,
+  );
   drawMultiColumnRow(
     [
       { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },
@@ -404,6 +419,7 @@ const drawPromptLineSection = (
   yRef: { value: number },
   options: { drawBottomLine?: boolean } = {},
 ) => {
+  const showSectionDividers = false;
   const ensureSpace = (height = 10, bottomPadding = 20) => {
     if (yRef.value + height > pageHeight - bottomPadding) {
       pdf.addPage();
@@ -412,9 +428,11 @@ const drawPromptLineSection = (
   };
 
   const drawRule = () => {
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, yRef.value, pageWidth - margin, yRef.value);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, yRef.value, pageWidth - margin, yRef.value);
+    }
     yRef.value += 5;
   };
 
@@ -456,9 +474,11 @@ const drawPromptLineSection = (
   }
 
   if (options.drawBottomLine ?? true) {
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, yRef.value + 0.5, pageWidth - margin, yRef.value + 0.5);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, yRef.value + 0.5, pageWidth - margin, yRef.value + 0.5);
+    }
     yRef.value += 7;
   } else {
     yRef.value += 4;
@@ -478,6 +498,7 @@ const generateOpenAbdominalSurgeryPdf = async (
   const lineHeight = 4.5;
   const rightColumnX = 114;
   const leftColumnWidth = rightColumnX - margin - 4;
+  const showSectionDividers = false;
   let y = margin;
 
   const preoperative = narrativeData?.preoperative || {};
@@ -502,9 +523,11 @@ const generateOpenAbdominalSurgeryPdf = async (
   };
 
   const drawRule = () => {
-    pdf.setDrawColor(0, 0, 0);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, y, pageWidth - margin, y);
+    if (showSectionDividers) {
+      pdf.setDrawColor(0, 0, 0);
+      pdf.setLineWidth(0.2);
+      pdf.line(margin, y, pageWidth - margin, y);
+    }
     y += 5;
   };
 
@@ -709,11 +732,22 @@ const generateOpenAbdominalSurgeryPdf = async (
   drawRule();
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(11);
-  pdf.text("Preoperative Information", margin, y);
+  pdf.text("Procedure Details", margin, y);
   y += 7;
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
 
+  drawMultiColumnRow(
+    [
+      {
+        label: "Date of Operation",
+        value: formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________",
+      },
+      { label: "", value: "" },
+      { label: "", value: "" },
+    ],
+    3,
+  );
   drawMultiColumnRow(
     [
       { label: "Surgeon", value: toArray(preoperative.surgeons).join(", ") },

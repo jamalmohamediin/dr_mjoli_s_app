@@ -1,6 +1,7 @@
 import appendectomyImage from "@/assets/appendectomy.jpg";
 import { createSurgicalDiagramCanvas } from "@/utils/createSurgicalDiagramCanvas";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import {
   StructuredTemplatePdfSection,
   generateStructuredTemplatePdf,
@@ -76,8 +77,13 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
     complications.complications,
     complications.complicationOther,
   );
+  const dateOfOperationEntry: StructuredTemplatePdfSection["entries"][number] = {
+    label: "Date of Operation",
+    value: formatDateOfOperationForDisplay(procedure.dateOfOperation) || "________________",
+  };
 
   const generalProcedureEntries: StructuredTemplatePdfSection["entries"] = [
+    dateOfOperationEntry,
     { label: "General Procedure", subheading: true },
     { label: "Description Of Procedure", value: procedure.description || "" },
     {
@@ -333,7 +339,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
             startOnNewPage: true,
             fixedLabelWidth: 76,
             labelGap: 3,
-            entries: laparoscopicContinuationEntries,
+            entries: [dateOfOperationEntry, ...laparoscopicContinuationEntries],
           },
         ]
       : []),
@@ -358,6 +364,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
     title: "INGUINAL HERNIA REPAIR REPORT",
     patientInfo: patientInfo || data?.patientInfo,
     patientInfoAsaLabel: "ASA Score",
+    showSectionDividers: false,
     sections,
     diagram: diagramImageData
       ? {

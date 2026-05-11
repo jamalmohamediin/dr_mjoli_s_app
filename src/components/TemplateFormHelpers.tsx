@@ -1,9 +1,11 @@
 import React from "react";
+import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DateDDMMYYYYInput } from "@/components/Time24HourInput";
 import { hasText, toArray, toUiTitleCase, toggleArrayValue } from "@/utils/templateDataHelpers";
 
 interface MultiValueTextFieldProps {
@@ -210,6 +212,85 @@ export const LabeledInput = ({
     />
   </div>
 );
+
+interface DateOfOperationFieldProps {
+  value?: string;
+  onChange: (value: string) => void;
+}
+
+const getTodayIsoDate = () => {
+  const today = new Date();
+  const year = today.getFullYear().toString().padStart(4, "0");
+  const month = (today.getMonth() + 1).toString().padStart(2, "0");
+  const day = today.getDate().toString().padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export const DateOfOperationField = ({
+  value = "",
+  onChange,
+}: DateOfOperationFieldProps) => {
+  const nativeDateInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const openDatePicker = () => {
+    const pickerInput = nativeDateInputRef.current as
+      | (HTMLInputElement & { showPicker?: () => void })
+      | null;
+    if (!pickerInput) {
+      return;
+    }
+
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker();
+      return;
+    }
+
+    pickerInput.focus();
+    pickerInput.click();
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-gray-700">Date of Operation:</Label>
+      <DateDDMMYYYYInput
+        ariaLabel="Date of Operation"
+        className="w-full"
+        value={value}
+        onChange={onChange}
+      />
+      <input
+        ref={nativeDateInputRef}
+        aria-hidden
+        className="sr-only"
+        tabIndex={-1}
+        type="date"
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-xs px-2 py-1"
+          onClick={openDatePicker}
+        >
+          <Calendar className="mr-1 h-3.5 w-3.5" />
+          Calendar
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-xs px-2 py-1"
+          onClick={() => onChange(getTodayIsoDate())}
+        >
+          Use Today's Date
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 interface SavedValueHintProps {
   label: string;

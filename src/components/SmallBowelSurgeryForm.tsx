@@ -23,6 +23,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import {
   DateTimeDDMMYYYY24HourInput,
   Time24HourInput,
@@ -820,6 +821,10 @@ export const SmallBowelSurgeryForm = ({
           </CardHeader>
           <CollapsibleContent>
             <CardContent className="space-y-6">
+              <DateOfOperationField
+                value={smallBowel.procedure?.dateOfOperation || ""}
+                onChange={(value) => updateSmallBowel("procedure", "dateOfOperation", value)}
+              />
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Operation Done:

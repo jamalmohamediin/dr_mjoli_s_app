@@ -157,6 +157,116 @@ export const joinSelections = (value: unknown, otherValue?: unknown) =>
     .filter(Boolean)
     .join(", ");
 
+export const PATHOLOGY_LAB_OPTIONS = [
+  "Pathcare",
+  "Ampath",
+  "NHLS",
+  "Lancet",
+  "Other",
+] as const;
+
+type PathologyLabOption = (typeof PATHOLOGY_LAB_OPTIONS)[number];
+
+const PATHOLOGY_LAB_SET = new Set<string>(PATHOLOGY_LAB_OPTIONS);
+
+export const normalizePathologyLabSelections = (
+  selections: unknown,
+  legacyLaboratorySentTo?: unknown,
+): PathologyLabOption[] => {
+  const selected = toArray(selections).filter((value): value is PathologyLabOption =>
+    PATHOLOGY_LAB_SET.has(value),
+  );
+
+  if (selected.length > 0) {
+    return selected;
+  }
+
+  const legacyValue = String(legacyLaboratorySentTo || "").trim();
+  if (!legacyValue) {
+    return [];
+  }
+
+  return PATHOLOGY_LAB_SET.has(legacyValue)
+    ? [legacyValue as PathologyLabOption]
+    : [];
+};
+
+export const formatPathologyLaboratorySelection = (
+  selections: unknown,
+  otherLaboratory?: unknown,
+  legacyLaboratorySentTo?: unknown,
+) => {
+  const normalizedSelections = normalizePathologyLabSelections(
+    selections,
+    legacyLaboratorySentTo,
+  );
+
+  if (normalizedSelections.length > 0) {
+    return normalizedSelections
+      .map((selection) => {
+        if (selection === "Other") {
+          const otherText = String(otherLaboratory || "").trim();
+          return otherText ? `Other: ${otherText}` : "Other";
+        }
+
+        return selection;
+      })
+      .join(", ");
+  }
+
+  return String(legacyLaboratorySentTo || "").trim();
+};
+
+export interface DiagramLegendItem {
+  color: string;
+  label: string;
+}
+
+const DEFAULT_LEGEND_COLOR = "#6b7280";
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+const normalizeLegendColor = (value: unknown) => {
+  const normalized = String(value || "").trim();
+  return HEX_COLOR_PATTERN.test(normalized) ? normalized : DEFAULT_LEGEND_COLOR;
+};
+
+export const normalizeDiagramLegendItems = (value: unknown): DiagramLegendItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const label = entry.trim();
+        if (!label) {
+          return null;
+        }
+
+        return {
+          color: DEFAULT_LEGEND_COLOR,
+          label,
+        };
+      }
+
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const label = String((entry as { label?: unknown }).label || "").trim();
+      if (!label) {
+        return null;
+      }
+
+      const color = normalizeLegendColor((entry as { color?: unknown }).color);
+      return {
+        color,
+        label,
+      };
+    })
+    .filter((entry): entry is DiagramLegendItem => Boolean(entry));
+};
+
 export const filterFilledEntries = <T extends { value?: unknown }>(entries: T[]) =>
   entries.filter((entry) => {
     if (Array.isArray(entry.value)) {

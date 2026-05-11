@@ -16,6 +16,7 @@ export const initialPeriAnalState = {
     procedureUrgency: "",
     imaging: [] as string[],
     imagingOther: "",
+    dateOfOperation: "",
     duration: "",
     startTime: "",
     endTime: "",
@@ -242,8 +243,12 @@ export const initialPeriAnalState = {
   specimen: {
     sentForHistology: "",
     histologyLaboratorySentTo: "",
+    histologyLaboratories: [] as string[],
+    histologyLaboratoryOther: "",
     sentForMicrobiology: "",
     microbiologyLaboratorySentTo: "",
+    microbiologyLaboratories: [] as string[],
+    microbiologyLaboratoryOther: "",
   },
   additionalInfo: {
     additionalInformation: "",
@@ -258,6 +263,7 @@ export const initialPeriAnalState = {
     activeDiagramVariant: DEFAULT_PERI_ANAL_DIAGRAM_VARIANT,
     diagramMarkingsByVariant: createInitialPeriAnalDiagramMarkings(),
     visibleDiagramVariants: [] as string[],
+    drawLegendEntries: [] as { color: string; label: string }[],
   },
 };
 

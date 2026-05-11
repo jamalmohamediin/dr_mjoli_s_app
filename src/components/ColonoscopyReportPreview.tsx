@@ -4,6 +4,7 @@ import {
   StructuredTemplatePreviewSection,
 } from "@/components/StructuredTemplateReportPreview";
 import { buildColonoscopyReportSections } from "@/utils/colonoscopyReportSections";
+import { getLocalDateTimeValue } from "@/utils/dateFormatter";
 
 interface ColonoscopyReportPreviewProps {
   report: any;
@@ -26,11 +27,13 @@ export const ColonoscopyReportPreview = ({ report }: ColonoscopyReportPreviewPro
         imageData: diagram.canvasImageData,
         alt: "Colonoscopy anatomy diagram",
         maxHeightPx: 220,
+        legendTitle: "Legend",
+        legendItems: diagram.legendItems,
       }}
       signature={{
         label: "Surgeon's Signature",
         text: additionalInfo.surgeonSignatureText || additionalInfo.endoscopistName,
-        dateTime: additionalInfo.dateTime,
+        dateTime: additionalInfo.dateTime || getLocalDateTimeValue(),
       }}
       emptyMessage="Start filling out the colonoscopy form to see findings appear here."
     />

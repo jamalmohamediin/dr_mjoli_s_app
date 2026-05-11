@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import appendectomyImage from '@/assets/appendectomy.jpg';
 import { formatDateDDMMYYYYWithDashes, formatDateTimeDDMMYYYYWithDashes } from './dateFormatter';
+import { formatDateOfOperationForDisplay } from './operationDate';
 import { drawRectalStylePortsAndIncisions } from './pdfPortsAndIncisionsLayout';
 import { drawStandardPatientInformation } from './pdfPatientInfoLayout';
 import { getSurgicalDiagramMarkingMetrics } from './surgicalDiagramMarkings';
@@ -629,6 +630,11 @@ export const generateAppendectomyPDF = async (
     };
     
     // PROCEDURE DETAILS Content
+    addContentLine(
+      `Date of Operation: ${
+        formatDateOfOperationForDisplay(procedure.dateOfOperation) || "________________"
+      }`,
+    );
     
     // Operation Description
     const operationDescription = getTextValue(procedure.operationDescription);

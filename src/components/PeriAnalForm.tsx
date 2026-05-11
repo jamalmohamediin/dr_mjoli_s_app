@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ASAClassificationSection } from "@/components/ASAClassificationSection";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
+import { DateOfOperationField } from "@/components/TemplateFormHelpers";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
 import { formatDateTimeDDMMYYYYWithDashes, getLocalDateTimeValue } from "@/utils/dateFormatter";
 import { initialPeriAnalState } from "@/utils/periAnal";
@@ -284,6 +285,7 @@ const intraoperativeComplicationOptions = [
   "Urethral Injury",
   "Other",
 ];
+const specimenLaboratoryOptions = ["Pathcare", "Ampath", "NHLS", "Lancet", "Other"];
 
 const toArray = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -608,6 +610,10 @@ export const PeriAnalForm = ({
                 {renderTeamField("Assistant:", "assistants", "Enter Assistant Name")}
                 {renderTeamField("Anaesthetist:", "anaesthetists", "Enter Anaesthetist Name")}
                 {renderChoiceRow("Procedure Urgency:", periAnal.preoperative?.procedureUrgency || "", urgencyOptions, (value) => updatePeriAnal("preoperative", "procedureUrgency", value))}
+                <DateOfOperationField
+                  value={periAnal.preoperative?.dateOfOperation || ""}
+                  onChange={(value) => updatePeriAnal("preoperative", "dateOfOperation", value)}
+                />
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Preoperative Imaging:</p>
                   {renderCheckboxGroup(imagingOptions, periAnal.preoperative?.imaging, (option) => toggleArrayValue("preoperative", "imaging", option, periAnal.preoperative?.imaging))}
@@ -686,33 +692,7 @@ export const PeriAnalForm = ({
               )}
             </div>
 
-            <div>
-              <h3 className="text-md font-medium text-gray-800 mb-3">Diagrams</h3>
-              <div className="mb-4 sm:ml-4">
-                <div className="bg-gray-50 p-3 rounded border">
-                  <h4 className="font-medium text-gray-700 text-sm mb-2">Legend:</h4>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-0.5 bg-black"></div>
-                      <span>Ports (With Size Label)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 border-2 border-amber-500 rounded-full" style={{ borderStyle: "dashed" }}></div>
-                      <span>Ileostomy (Dashed Yellow Circle)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-green-600 rounded-full"></div>
-                      <span>Colostomy (Solid Green Circle)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-0.5 bg-red-900" style={{ backgroundImage: "repeating-linear-gradient(90deg, #7f1d1d 0, #7f1d1d 4px, transparent 4px, transparent 8px)" }}></div>
-                      <span>Incisions (Dashed Dark Red Line)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 sm:ml-4">{diagramElement}</div>
-            </div>
+            <div className="mt-4 sm:ml-4">{diagramElement}</div>
 
             {isFindingSelected("Perianal Abscess") && (
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
@@ -1352,21 +1332,77 @@ export const PeriAnalForm = ({
             {renderChoiceRow("Sent for Histology:", periAnal.specimen?.sentForHistology || "", ["Yes", "No"], (value) => updatePeriAnal("specimen", "sentForHistology", value))}
             {periAnal.specimen?.sentForHistology === "Yes" && (
               <FieldRow label="Specify Laboratory Sent To:">
-                <Input
-                  placeholder="Enter Histology Laboratory"
-                  value={periAnal.specimen?.histologyLaboratorySentTo || ""}
-                  onChange={(e) => updatePeriAnal("specimen", "histologyLaboratorySentTo", e.target.value)}
-                />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {specimenLaboratoryOptions.map((option) => {
+                      const inputId = `histology-lab-${option.toLowerCase()}`;
+                      return (
+                        <div className="flex items-center" key={inputId}>
+                          <Checkbox
+                            id={inputId}
+                            checked={toArray(periAnal.specimen?.histologyLaboratories).includes(option)}
+                            onCheckedChange={() =>
+                              toggleArrayValue(
+                                "specimen",
+                                "histologyLaboratories",
+                                option,
+                                periAnal.specimen?.histologyLaboratories,
+                              )
+                            }
+                          />
+                          <label htmlFor={inputId} className="ml-2 block text-sm text-gray-700">
+                            {option}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {toArray(periAnal.specimen?.histologyLaboratories).includes("Other") && (
+                    <Input
+                      placeholder="Specify Other Histology Laboratory"
+                      value={periAnal.specimen?.histologyLaboratoryOther || ""}
+                      onChange={(e) => updatePeriAnal("specimen", "histologyLaboratoryOther", e.target.value)}
+                    />
+                  )}
+                </div>
               </FieldRow>
             )}
             {renderChoiceRow("Sent for Microbiology:", periAnal.specimen?.sentForMicrobiology || "", ["Yes", "No"], (value) => updatePeriAnal("specimen", "sentForMicrobiology", value))}
             {periAnal.specimen?.sentForMicrobiology === "Yes" && (
               <FieldRow label="Specify Laboratory Sent To:">
-                <Input
-                  placeholder="Enter Microbiology Laboratory"
-                  value={periAnal.specimen?.microbiologyLaboratorySentTo || ""}
-                  onChange={(e) => updatePeriAnal("specimen", "microbiologyLaboratorySentTo", e.target.value)}
-                />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {specimenLaboratoryOptions.map((option) => {
+                      const inputId = `microbiology-lab-${option.toLowerCase()}`;
+                      return (
+                        <div className="flex items-center" key={inputId}>
+                          <Checkbox
+                            id={inputId}
+                            checked={toArray(periAnal.specimen?.microbiologyLaboratories).includes(option)}
+                            onCheckedChange={() =>
+                              toggleArrayValue(
+                                "specimen",
+                                "microbiologyLaboratories",
+                                option,
+                                periAnal.specimen?.microbiologyLaboratories,
+                              )
+                            }
+                          />
+                          <label htmlFor={inputId} className="ml-2 block text-sm text-gray-700">
+                            {option}
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {toArray(periAnal.specimen?.microbiologyLaboratories).includes("Other") && (
+                    <Input
+                      placeholder="Specify Other Microbiology Laboratory"
+                      value={periAnal.specimen?.microbiologyLaboratoryOther || ""}
+                      onChange={(e) => updatePeriAnal("specimen", "microbiologyLaboratoryOther", e.target.value)}
+                    />
+                  )}
+                </div>
               </FieldRow>
             )}
           </CardContent>

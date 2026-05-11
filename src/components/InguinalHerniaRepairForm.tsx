@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import {
   CheckboxGrid,
+  DateOfOperationField,
   LabeledInput,
   LabeledTextarea,
   OptionalOtherInput,
@@ -389,6 +390,10 @@ export const InguinalHerniaRepairForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Procedure Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <DateOfOperationField
+            value={procedure.dateOfOperation || ""}
+            onChange={(value) => updateTemplate("procedure", "dateOfOperation", value)}
+          />
           <LabeledTextarea label="Description of procedure" value={procedure.description || ""} onChange={(value) => updateTemplate("procedure", "description", value)} rows={4} />
           <CheckboxGrid label="Technique used" options={techniqueOptions} values={procedure.technique} onChange={(value) => updateTemplate("procedure", "technique", value)} />
           <OptionalOtherInput

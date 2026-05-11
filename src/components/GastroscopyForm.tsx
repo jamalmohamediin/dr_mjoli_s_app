@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PatientInfoFields } from "@/components/PatientInfoFields";
 import { DateTimeDDMMYYYY24HourInput, Time24HourInput } from "@/components/Time24HourInput";
-import { GastroscopyDiagramCanvas } from "@/components/GastroscopyDiagramCanvas";
+import { FreeDrawDiagram } from "@/components/FreeDrawDiagram";
 import {
   CheckboxGrid,
+  DateOfOperationField,
   LabeledInput,
   LabeledTextarea,
   MultiValueTextField,
@@ -17,7 +18,12 @@ import {
 } from "@/components/TemplateFormHelpers";
 import { createInitialGastroscopyState } from "@/utils/gastroscopy";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
-import { toArray } from "@/utils/templateDataHelpers";
+import {
+  formatPathologyLaboratorySelection,
+  normalizePathologyLabSelections,
+  PATHOLOGY_LAB_OPTIONS,
+  toArray,
+} from "@/utils/templateDataHelpers";
 import gastroscopyTemplateImage from "@/assets/gastroscopy-template-replacement.png";
 
 interface GastroscopyFormProps {
@@ -199,6 +205,16 @@ export const GastroscopyForm = ({
   const interventions = template.interventions;
   const diagnosis = template.diagnosis;
   const additionalInfo = template.additionalInfo;
+  const selectedPathologyLaboratories = normalizePathologyLabSelections(
+    additionalInfo.laboratorySentToSelections,
+    additionalInfo.laboratorySentTo,
+  );
+
+  React.useEffect(() => {
+    if (!String(additionalInfo.dateTime || "").trim()) {
+      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
+    }
+  }, [additionalInfo.dateTime, updateTemplate]);
 
   const [expandedSections, setExpandedSections] = React.useState<Record<FindingSectionKey, boolean>>({
     pharynxLarynx: true,
@@ -294,7 +310,7 @@ export const GastroscopyForm = ({
             const subsection = isSelected && renderSubsection ? renderSubsection(option) : null;
 
             return (
-              <div key={option} className="rounded border border-gray-200">
+              <div key={option} className="rounded border border-gray-200 bg-gray-100/70">
                 <label className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700">
                   <Checkbox
                     checked={isSelected}
@@ -303,7 +319,7 @@ export const GastroscopyForm = ({
                   <span>{option}</span>
                 </label>
                 {subsection ? (
-                  <div className="space-y-3 border-t border-gray-200 px-3 pb-3 pt-3">
+                  <div className="space-y-3 border-t border-gray-200 bg-white px-3 pb-3 pt-3">
                     {subsection}
                   </div>
                 ) : null}
@@ -320,7 +336,7 @@ export const GastroscopyForm = ({
     title: string,
     content: React.ReactNode,
   ) => (
-    <div className="rounded-md border border-gray-200">
+    <div className="rounded-md border border-gray-200 bg-gray-100/80">
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 text-left"
@@ -384,9 +400,8 @@ export const GastroscopyForm = ({
         <CardContent className="space-y-4">
           <div className="space-y-4 rounded-md border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-800">Clinical Team</h3>
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <MultiValueTextField label="Endoscopist" values={preoperative.endoscopists || [""]} placeholder="Enter endoscopist name" onChange={(value) => updateTemplate("preoperative", "endoscopists", value)} />
-              <MultiValueTextField label="Surgeon Name" values={preoperative.surgeons || [""]} placeholder="Enter surgeon name" onChange={(value) => updateTemplate("preoperative", "surgeons", value)} />
               <MultiValueTextField label="Anesthetist" values={preoperative.anaesthetists || [""]} placeholder="Enter anesthetist name" onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)} />
             </div>
           </div>
@@ -394,6 +409,10 @@ export const GastroscopyForm = ({
           <div className="space-y-4 rounded-md border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-800">Procedure Planning</h3>
             <RadioGrid label="Procedure Urgency" options={procedureUrgencyOptions} value={preoperative.procedureUrgency || ""} onChange={(value) => updateTemplate("preoperative", "procedureUrgency", value)} columns="grid-cols-2 md:grid-cols-4" />
+            <DateOfOperationField
+              value={preoperative.dateOfOperation || ""}
+              onChange={(value) => updateTemplate("preoperative", "dateOfOperation", value)}
+            />
             <CheckboxGrid label="Preoperative Imaging" options={preoperativeImagingOptions} values={preoperative.preoperativeImaging} onChange={(value) => updateTemplate("preoperative", "preoperativeImaging", value)} columns="grid-cols-2 md:grid-cols-5" />
             <OptionalOtherInput enabled={toArray(preoperative.preoperativeImaging).includes("Other")} value={preoperative.preoperativeImagingOther || ""} placeholder="Specify other imaging" onChange={(value) => updateTemplate("preoperative", "preoperativeImagingOther", value)} />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -649,24 +668,24 @@ export const GastroscopyForm = ({
           <CardTitle className="text-base font-semibold text-gray-800">Gastroscopy Diagram</CardTitle>
         </CardHeader>
         <CardContent>
-          <GastroscopyDiagramCanvas
+          <FreeDrawDiagram
             key={`gastroscopy-diagram-${diagramResetCounter}`}
-            imageSrc={gastroscopyTemplateImage}
+            backgroundImage={gastroscopyTemplateImage}
             initialCanvasImageData={
               template.diagram?.canvasImageData ||
               currentReport.gastroscopyCanvasData ||
               currentReport.gastroscopyFindings?.canvasImageData ||
               ""
             }
-            initialDrawingImageData={
-              template.diagram?.drawingImageData ||
-              currentReport.gastroscopyFindings?.drawingImageData ||
-              ""
-            }
+            initialLegendItems={template.diagram?.legendItems || []}
+            maxWidth={300}
+            enableDrawColorLegend
+            allowTextOutsideDiagram
             onUpdate={(data) => {
               updateTemplate("diagram", "findings", data.findings || []);
-              updateTemplate("diagram", "drawingImageData", data.drawingImageData || "");
-              updateTemplate("diagram", "textAnnotations", data.textAnnotations || []);
+              updateTemplate("diagram", "legendItems", data.legendItems || []);
+              updateTemplate("diagram", "drawingImageData", "");
+              updateTemplate("diagram", "textAnnotations", []);
               updateTemplate("diagram", "canvasImageData", data.canvasImageData || "");
             }}
           />
@@ -735,14 +754,73 @@ export const GastroscopyForm = ({
         <CardContent className="space-y-6">
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-800">Specimen</h3>
-            <RadioGrid label="Specimen Sent for Pathology" options={["Yes", "No"]} value={additionalInfo.specimenSentForPathology || ""} onChange={(value) => updateTemplate("additionalInfo", "specimenSentForPathology", value)} columns="grid-cols-2" />
+            <RadioGrid
+              label="Specimen Sent for Pathology"
+              options={["Yes", "No"]}
+              value={additionalInfo.specimenSentForPathology || ""}
+              onChange={(value) => {
+                updateTemplate("additionalInfo", "specimenSentForPathology", value);
+                if (value !== "Yes") {
+                  updateTemplate("additionalInfo", "laboratorySentToSelections", []);
+                  updateTemplate("additionalInfo", "laboratorySentToOther", "");
+                  updateTemplate("additionalInfo", "laboratorySentTo", "");
+                }
+              }}
+              columns="grid-cols-2"
+            />
             {additionalInfo.specimenSentForPathology === "Yes" ? (
-              <LabeledInput
-                label="Specify Laboratory Sent To"
-                value={additionalInfo.laboratorySentTo || ""}
-                onChange={(value) => updateTemplate("additionalInfo", "laboratorySentTo", value)}
-                placeholder="Enter laboratory name"
-              />
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-700">
+                  Specify Laboratory Sent To
+                </Label>
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-gray-200 bg-white p-3 md:grid-cols-5">
+                  {PATHOLOGY_LAB_OPTIONS.map((option) => (
+                    <label key={`gastro-lab-${option}`} className="flex items-center gap-2 text-sm text-gray-700">
+                      <Checkbox
+                        checked={selectedPathologyLaboratories.includes(option)}
+                        onCheckedChange={() => {
+                          const nextSelections = selectedPathologyLaboratories.includes(option)
+                            ? selectedPathologyLaboratories.filter((entry) => entry !== option)
+                            : [...selectedPathologyLaboratories, option];
+                          const otherText = nextSelections.includes("Other")
+                            ? additionalInfo.laboratorySentToOther || ""
+                            : "";
+
+                          updateTemplate("additionalInfo", "laboratorySentToSelections", nextSelections);
+                          updateTemplate(
+                            "additionalInfo",
+                            "laboratorySentTo",
+                            formatPathologyLaboratorySelection(nextSelections, otherText),
+                          );
+
+                          if (!nextSelections.includes("Other")) {
+                            updateTemplate("additionalInfo", "laboratorySentToOther", "");
+                          }
+                        }}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+                {selectedPathologyLaboratories.includes("Other") ? (
+                  <LabeledInput
+                    label="Other Laboratory"
+                    value={additionalInfo.laboratorySentToOther || ""}
+                    onChange={(value) => {
+                      updateTemplate("additionalInfo", "laboratorySentToOther", value);
+                      updateTemplate(
+                        "additionalInfo",
+                        "laboratorySentTo",
+                        formatPathologyLaboratorySelection(
+                          selectedPathologyLaboratories,
+                          value,
+                        ),
+                      );
+                    }}
+                    placeholder="Specify laboratory"
+                  />
+                ) : null}
+              </div>
             ) : null}
             <RadioGrid label="Other Specimens Taken" options={["No", "Yes"]} value={additionalInfo.otherSpecimensTaken || ""} onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensTaken", value)} columns="grid-cols-2" />
             <OptionalOtherInput enabled={additionalInfo.otherSpecimensTaken === "Yes"} value={additionalInfo.otherSpecimensDetails || ""} placeholder="Specify e.g. Biopsies" onChange={(value) => updateTemplate("additionalInfo", "otherSpecimensDetails", value)} />

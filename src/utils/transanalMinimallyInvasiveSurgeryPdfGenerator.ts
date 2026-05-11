@@ -6,6 +6,7 @@ import {
   formatDateTimeDDMMYYYYWithDashes,
   getLocalDateTimeValue,
 } from "@/utils/dateFormatter";
+import { formatDateOfOperationForDisplay } from "@/utils/operationDate";
 import { joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
 
 const titleCase = (value: unknown) =>
@@ -115,6 +116,10 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
       layout: "label-value-table",
       entries: [
         {
+          label: "Date of Operation",
+          value: formatDateOfOperationForDisplay(procedure.dateOfOperation) || "________________",
+        },
+        {
           label: "Equipment Used",
           value: formatSelectionListWithOther(procedure.equipmentUsed, procedure.equipmentOther),
         },
@@ -176,7 +181,10 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
           label: "Specify Laboratory Sent To",
           value: asSingleLineEntry(
             specimen.specimenRetrieved === "Yes"
-              ? titleCase(specimen.laboratorySentTo)
+              ? formatSelectionListWithOther(
+                  specimen.laboratorySentTo,
+                  specimen.laboratorySentToOther,
+                )
               : "",
           ),
         },
@@ -207,6 +215,7 @@ export const generateTransanalMinimallyInvasiveSurgeryPDF = async (
   return generateStructuredTemplatePdf({
     title: "TRANSANAL MINIMALLY INVASIVE SURGERY REPORT",
     patientInfo: patientInfo || data?.patientInfo,
+    showSectionDividers: false,
     sections,
     signatureLayout: "appendectomy",
     signature: {
