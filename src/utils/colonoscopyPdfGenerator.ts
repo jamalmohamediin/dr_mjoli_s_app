@@ -127,7 +127,10 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     });
 
   const sections: StructuredTemplatePdfSection[] = normalizedSections.map((section) => ({
-    title: section.title,
+    title:
+      section.title === "Bowel Preparation and Procedure Details"
+        ? "Bowel Preparation"
+        : section.title,
     layout:
       section.title === "Preoperative Information"
         ? "label-value-table"
