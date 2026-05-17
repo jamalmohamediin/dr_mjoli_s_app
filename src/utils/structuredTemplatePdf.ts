@@ -17,6 +17,7 @@ export interface StructuredTemplatePdfEntry {
   fullWidth?: boolean;
   subheading?: boolean;
   keepWhenEmpty?: boolean;
+  valueOnly?: boolean;
 }
 
 export interface StructuredTemplatePdfSection {
@@ -33,6 +34,38 @@ export interface StructuredTemplatePdfSection {
   fixedLabelWidth?: number;
   labelGap?: number;
 }
+
+const VALUE_ONLY_SECTION_TITLES = new Set([
+  "conclusion",
+  "additional notes",
+  "post operative management",
+]);
+
+const VALUE_ONLY_ENTRY_LABELS = new Set([
+  "conclusion",
+  "additional notes",
+  "post operative management",
+]);
+
+const normalizeSectionEntryKey = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const shouldRenderEntryValueOnly = (sectionTitle: string, entryLabel: string) => {
+  const normalizedSectionTitle = normalizeSectionEntryKey(sectionTitle);
+  const normalizedEntryLabel = normalizeSectionEntryKey(entryLabel);
+  if (VALUE_ONLY_ENTRY_LABELS.has(normalizedEntryLabel)) {
+    return true;
+  }
+
+  if (!VALUE_ONLY_SECTION_TITLES.has(normalizedSectionTitle)) {
+    return false;
+  }
+
+  return normalizedSectionTitle === normalizedEntryLabel;
+};
 
 interface StructuredTemplatePdfOptions {
   title: string;
@@ -158,7 +191,11 @@ export const generateStructuredTemplatePdf = async ({
           const keepWhenEmpty =
             isAfterPreoperativeSection &&
             isPostPreoperativeAlwaysVisibleField(entry.label);
-          return { ...entry, keepWhenEmpty };
+          return {
+            ...entry,
+            keepWhenEmpty,
+            valueOnly: shouldRenderEntryValueOnly(section.title, entry.label),
+          };
         })
         .filter((entry) =>
           entry.subheading
@@ -527,11 +564,13 @@ export const generateStructuredTemplatePdf = async ({
     drawThreeColRow(
       formatEntry("Start Time"),
       formatEntry("End Time"),
-      formatEntry("Total Duration (Min)"),
+      formatEntry("Total Duration") || formatEntry("Total Duration (Min)"),
     );
     drawSingleRow(formatEntry("Caecal Intubation Time"));
     drawSingleRow(formatEntry("Start of Withdrawal Time"));
-    drawSingleRow(formatEntry("Duration of Withdrawal (Min)"));
+    drawSingleRow(
+      formatEntry("Withdrawal Duration") || formatEntry("Duration of Withdrawal (Min)"),
+    );
     drawSingleRow(formatEntry("Urgency") || formatEntry("Procedure Urgency"));
     drawSingleRow(formatEntry("Preoperative Imaging"));
     drawSingleRow(formatEntry("Signs & Symptoms"));
@@ -1003,6 +1042,26 @@ export const generateStructuredTemplatePdf = async ({
             continue;
           }
 
+          if (leftEntry.valueOnly) {
+            drawSingleRow(toEntryValue(leftEntry));
+            if (rightEntry?.valueOnly) {
+              drawSingleRow(toEntryValue(rightEntry));
+            }
+            continue;
+          }
+          if (rightEntry?.valueOnly) {
+            drawTwoColLabelValueRow(
+              {
+                label: leftEntry.label,
+                value: toEntryValue(leftEntry),
+                keepWhenEmpty: leftEntry.keepWhenEmpty,
+              },
+              undefined,
+            );
+            drawSingleRow(toEntryValue(rightEntry));
+            continue;
+          }
+
           drawTwoColLabelValueRow(
             {
               label: leftEntry.label,
@@ -1038,6 +1097,11 @@ export const generateStructuredTemplatePdf = async ({
       const effectiveLabelWidth = section.fixedLabelWidth || sectionLabelWidth;
       const effectiveLabelGap = section.labelGap || 2;
       section.entries.forEach((entry) => {
+        if (entry.valueOnly) {
+          drawSingleRow(toEntryValue(entry));
+          return;
+        }
+
         drawLabelValueRow(
           entry.label,
           toEntryValue(entry),
@@ -1061,20 +1125,28 @@ export const generateStructuredTemplatePdf = async ({
       const leftEntry = section.entries[index];
 
       if (leftEntry.fullWidth) {
-        drawSingleRow(toEntryText(leftEntry));
+        if (leftEntry.valueOnly) {
+          drawSingleRow(toEntryValue(leftEntry));
+        } else {
+          drawSingleRow(toEntryText(leftEntry));
+        }
         index += 1;
         continue;
       }
 
       const rightEntry = section.entries[index + 1];
       if (!rightEntry || rightEntry.fullWidth) {
-        drawTwoColRow(toEntryText(leftEntry), "");
+        if (leftEntry.valueOnly) {
+          drawSingleRow(toEntryValue(leftEntry));
+        } else {
+          drawTwoColRow(toEntryText(leftEntry), "");
+        }
         index += 1;
         continue;
       }
 
-      const leftValue = toEntryText(leftEntry);
-      const rightValue = toEntryText(rightEntry);
+      const leftValue = leftEntry.valueOnly ? toEntryValue(leftEntry) : toEntryText(leftEntry);
+      const rightValue = rightEntry.valueOnly ? toEntryValue(rightEntry) : toEntryText(rightEntry);
       const useSingleRow = leftValue.length > 110 || rightValue.length > 110;
 
       if (useSingleRow) {

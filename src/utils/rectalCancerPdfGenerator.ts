@@ -1397,7 +1397,7 @@ export const generateRectalCancerPDF = async (
     // ADDITIONAL NOTES Section
     const additionalNotes = rectalCancerData?.additionalInfo?.additionalInformation?.trim() || '';
     const additionalNotesLines = pdf.splitTextToSize(
-      `Additional Notes: ${additionalNotes}`,
+      additionalNotes,
       pageWidth - (margin * 2)
     );
     checkPageBreak(additionalNotesLines.length * lineSpacing + 14); // Header + content + spacing
@@ -1410,7 +1410,7 @@ export const generateRectalCancerPDF = async (
     pdf.setFont('helvetica', 'normal');
     
     y = drawInlineLabelValue(
-      `Additional Notes: ${additionalNotes}`,
+      additionalNotes,
       margin,
       y,
       pageWidth - margin * 2,
@@ -1435,13 +1435,12 @@ export const generateRectalCancerPDF = async (
     pdf.setFont('helvetica', 'normal');
     
     const postOpManagement = rectalCancerData?.additionalInfo?.postOperativeManagement?.trim() || '';
-    drawQuestionAnswerRows([
-      {
-        label: 'Post Operative Management',
-        value: postOpManagement,
-        alwaysVisible: true,
-      },
-    ]);
+    y = drawInlineLabelValue(
+      postOpManagement,
+      margin,
+      y,
+      pageWidth - margin * 2,
+    );
     y += 2;
     drawSectionDivider(15);
     checkPageBreak(32);

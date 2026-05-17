@@ -432,6 +432,17 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     pdf.setFont("helvetica", "normal");
   };
 
+  const drawSingleRow = (value: string) => {
+    if (!value) return;
+    const lines = pdf.splitTextToSize(value, contentWidth);
+    ensureSpace(lines.length * lineHeight + 1);
+    pdf.setFont("helvetica", "normal");
+    lines.forEach((line: string) => {
+      pdf.text(line, margin, y);
+      y += lineHeight;
+    });
+  };
+
   const drawEntryRow = (
     label: string,
     value: unknown,
@@ -523,39 +534,28 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   });
 
   drawSectionTitle("Procedure Details");
-  const preopCell = (label: string, value: unknown, titleCaseValue = true) => {
-    const normalized = formatValue(value, titleCaseValue);
-    return normalized ? `${label}: ${normalized}` : "";
-  };
-
-  drawThreeColRow(
-    `Date of Operation: ${
-      formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________"
-    }`,
-    "",
-    "",
+  drawEntryRow(
+    "Date of Operation",
+    formatDateOfOperationForDisplay(preoperative.dateOfOperation) || "________________",
+    true,
+    false,
   );
-  drawThreeColRow(
-    preopCell("Endoscopist", toArray(preoperative.endoscopists).join(", "), false),
-    preopCell("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false),
-    "",
+  drawEntryRow("Endoscopist", toArray(preoperative.endoscopists).join(", "), false, false);
+  drawEntryRow("Anesthetist", toArray(preoperative.anaesthetists).join(", "), false, false);
+  drawEntryRow("Urgency", preoperative.procedureUrgency, false, true);
+  drawEntryRow(
+    "Imaging",
+    joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
+    false,
+    true,
   );
-  drawThreeColRow(
-    preopCell("Urgency", preoperative.procedureUrgency),
-    preopCell(
-      "Imaging",
-      joinSelections(preoperative.preoperativeImaging, preoperative.preoperativeImagingOther),
-    ),
-    "",
-  );
-  drawThreeColRow(
-    preopCell("Start Time", preoperative.startTime, false),
-    preopCell("End Time", preoperative.endTime, false),
-    preopCell(
-      "Total Duration",
-      preoperative.duration ? `${preoperative.duration} minutes` : "",
-      false,
-    ),
+  drawEntryRow("Start Time", preoperative.startTime, false, false);
+  drawEntryRow("End Time", preoperative.endTime, false, false);
+  drawEntryRow(
+    "Total Duration",
+    preoperative.duration ? `${preoperative.duration} minutes` : "",
+    false,
+    false,
   );
   drawEntryRow(
     "Signs & Symptoms",
@@ -891,13 +891,13 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
   );
 
   drawSectionTitle("CONCLUSION");
-  drawEntryRow("Conclusion", additionalInfo.conclusion, false, false);
+  drawSingleRow(formatValue(additionalInfo.conclusion, false));
 
   drawSectionTitle("ADDITIONAL NOTES");
-  drawEntryRow("Additional Notes", additionalInfo.additionalNotes, true, false);
+  drawSingleRow(formatValue(additionalInfo.additionalNotes, false));
 
   drawSectionTitle("POST OPERATIVE MANAGEMENT");
-  drawEntryRow("Post Operative Management", additionalInfo.postOperativeManagement, true, false);
+  drawSingleRow(formatValue(additionalInfo.postOperativeManagement, false));
 
   ensureSpace(24, 18);
   drawSectionTitle("Signature");

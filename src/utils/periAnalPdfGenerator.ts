@@ -21,6 +21,11 @@ import {
 
 const PERI_ANAL_DIAGRAM_MARKING_SCALE = 1.8;
 const DIAGRAM_CANVAS_PADDING = 60;
+const VALUE_ONLY_FIELD_LABELS = new Set([
+  "conclusion",
+  "additional notes",
+  "post operative management",
+]);
 
 const hexColorToRgb = (value: string): [number, number, number] => {
   const normalized = String(value || "").trim().replace(/^#/, "");
@@ -33,6 +38,12 @@ const hexColorToRgb = (value: string): [number, number, number] => {
     parseInt(normalized.slice(4, 6), 16),
   ];
 };
+
+const normalizeFieldLabel = (value: string) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
 const calculateSignatureDimensions = (imageDataUrl: string): Promise<{ width: number; height: number }> =>
   new Promise((resolve) => {
@@ -468,6 +479,22 @@ export const generatePeriAnalPDF = async (
         if (!shouldRenderField(entry.label, entry.value)) {
           return;
         }
+
+        if (VALUE_ONLY_FIELD_LABELS.has(normalizeFieldLabel(entry.label))) {
+          const valueLines = pdf.splitTextToSize(entry.value || "", pageWidth - margin * 2);
+          const lines = Math.max(valueLines.length, 1);
+          ensureSpace(lines * lineHeight + 1);
+
+          for (let index = 0; index < lines; index += 1) {
+            if (valueLines[index]) {
+              pdf.setFont("helvetica", "normal");
+              pdf.text(valueLines[index], margin, y);
+            }
+            y += lineHeight;
+          }
+          return;
+        }
+
         const labelLines = pdf.splitTextToSize(`${entry.label}:`, labelColumnWidth);
         const valueLines = pdf.splitTextToSize(entry.value || "", valueColumnWidth);
         const lines = Math.max(labelLines.length, valueLines.length, 1);

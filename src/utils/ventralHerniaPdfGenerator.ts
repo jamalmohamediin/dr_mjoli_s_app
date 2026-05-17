@@ -14,6 +14,17 @@ const VENTRAL_HERNIA_DIAGRAM_MARKING_SCALE = 1.5;
 const txt = (value: any) => String(value || "").trim();
 
 const hasText = (value: any) => txt(value).length > 0;
+const VALUE_ONLY_FIELD_LABELS = new Set([
+  "conclusion",
+  "additional notes",
+  "post operative management",
+]);
+
+const normalizeFieldLabel = (value: string) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
 const hasCellValue = (cell: string) =>
   txt(String(cell || "").replace(/^[^:]+:\s*/, "")).length > 0;
@@ -325,8 +336,30 @@ export const generateVentralHerniaPDF = async (
       const x = options.x ?? margin;
       const width = options.width ?? contentWidth;
       const indent = options.indent ?? 0;
-      const labelText = `${label}:`;
       const availableWidth = width - indent;
+
+      if (VALUE_ONLY_FIELD_LABELS.has(normalizeFieldLabel(label))) {
+        const valueLines = pdf.splitTextToSize(value, Math.max(20, availableWidth)) as string[];
+        const lineCount = Math.max(valueLines.length, 1);
+        const lineHeight = 4.4;
+        ensureSpace(Math.max(lineCount, 1) * lineHeight + 1.2);
+
+        for (let index = 0; index < lineCount; index += 1) {
+          if (y + lineHeight > getBottomLimit()) {
+            startNewPage();
+          }
+          if (valueLines[index]) {
+            pdf.setFont("helvetica", "normal");
+            pdf.text(valueLines[index], x + indent, y);
+          }
+          y += lineHeight;
+        }
+
+        y += 1.2;
+        return;
+      }
+
+      const labelText = `${label}:`;
       const labelWidth = Math.min(70, Math.max(24, availableWidth * 0.4));
       const valueWidth = Math.max(20, availableWidth - labelWidth - 2);
       const labelLines = pdf.splitTextToSize(labelText, labelWidth) as string[];

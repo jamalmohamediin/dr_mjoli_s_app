@@ -130,10 +130,16 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     title: section.title,
     layout:
       section.title === "Preoperative Information"
-        ? "aligned-preoperative-grid"
+        ? "label-value-table"
         : section.layout || "label-value-table",
+    columns:
+      section.title === "Preoperative Information"
+        ? 1
+        : undefined,
     fixedLabelWidth:
-      section.title === "Bowel Preparation and Procedure Details"
+      section.title === "Preoperative Information"
+        ? 52
+        : section.title === "Bowel Preparation and Procedure Details"
         ? 44
         : FINDINGS_DETAIL_SECTION_TITLES.has(section.title)
           ? 78
@@ -144,6 +150,12 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
         section.title === "Preoperative Information" &&
         entry.label === "Preoperative Imaging"
           ? "Imaging"
+          : section.title === "Preoperative Information" &&
+              entry.label === "Total Duration (Min)"
+            ? "Total Duration"
+          : section.title === "Preoperative Information" &&
+              entry.label === "Duration of Withdrawal (Min)"
+            ? "Withdrawal Duration"
           : entry.label,
       value: formatExportValue(entry.value),
       fullWidth: entry.fullWidth,

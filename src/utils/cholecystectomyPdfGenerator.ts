@@ -751,10 +751,10 @@ export const generateCholecystectomyPDF = async (
     }
 
     sec("ADDITIONAL NOTES");
-    rowFull(`Additional Notes: ${txt(addInfo?.additionalInformation)}`);
+    rowFull(`${txt(addInfo?.additionalInformation)}`);
 
     sec("POST OPERATIVE MANAGEMENT");
-    rowFull(`Post Operative Management: ${txt(addInfo?.postOperativeManagement)}`);
+    rowFull(`${txt(addInfo?.postOperativeManagement)}`);
 
     sec("SURGEON'S SIGNATURE");
     ensureSpace(24);

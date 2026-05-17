@@ -7,6 +7,18 @@ import { drawRectalStylePortsAndIncisions } from "@/utils/pdfPortsAndIncisionsLa
 import { drawStandardPatientInformation } from "@/utils/pdfPatientInfoLayout";
 import { hasText, joinSelections, toArray, toUiTitleCase } from "@/utils/templateDataHelpers";
 
+const VALUE_ONLY_FIELD_LABELS = new Set([
+  "conclusion",
+  "additional notes",
+  "post operative management",
+]);
+
+const normalizeFieldLabel = (value: string) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
 const parseMarkings = (value: unknown) => {
   if (Array.isArray(value)) {
     return value;
@@ -117,8 +129,10 @@ const generateOpenGeneralSurgeryPdf = async (
   ): LabeledCell => {
     const label = toUiTitleCase(String(entry?.label || "").trim());
     const value = formatAnswerValue(entry?.value);
+    const isValueOnlyField = VALUE_ONLY_FIELD_LABELS.has(normalizeFieldLabel(label));
+    const effectiveLabel = isValueOnlyField ? "" : label;
 
-    if (!label && !hasText(value)) {
+    if (!effectiveLabel && !hasText(value)) {
       return {
         labelLines: [],
         valueLines: [],
@@ -128,7 +142,7 @@ const generateOpenGeneralSurgeryPdf = async (
       };
     }
 
-    if (!label) {
+    if (!effectiveLabel) {
       const valueLines = hasText(value) ? pdf.splitTextToSize(value, width) : [];
       return {
         labelLines: [],
@@ -139,7 +153,7 @@ const generateOpenGeneralSurgeryPdf = async (
       };
     }
 
-    const labelText = `${label}:`;
+    const labelText = `${effectiveLabel}:`;
     const labelColumnWidth = Math.min(36, Math.max(24, width * labelRatio));
     const valueColumnWidth = Math.max(10, width - labelColumnWidth - 1.5);
     const labelLines = pdf.splitTextToSize(labelText, labelColumnWidth);
@@ -451,10 +465,17 @@ const drawPromptLineSection = (
   const labelColumnWidth = Math.min(46, Math.max(34, sectionWidth * 0.32));
   const valueColumnWidth = Math.max(10, sectionWidth - labelColumnWidth - 2);
   const normalizedValue = formatAnswerValue(value);
-  const labelText = `${toUiTitleCase(label)}:`;
-  const labelLines = pdf.splitTextToSize(labelText, labelColumnWidth);
+  const normalizedLabel = toUiTitleCase(label);
+  const renderValueOnly = VALUE_ONLY_FIELD_LABELS.has(
+    normalizeFieldLabel(normalizedLabel),
+  );
+  const labelText = renderValueOnly ? "" : `${normalizedLabel}:`;
+  const labelLines = labelText ? pdf.splitTextToSize(labelText, labelColumnWidth) : [];
   const valueLines = hasText(normalizedValue)
-    ? pdf.splitTextToSize(normalizedValue, valueColumnWidth)
+    ? pdf.splitTextToSize(
+        normalizedValue,
+        renderValueOnly ? sectionWidth : valueColumnWidth,
+      )
     : [];
   const lineCount = Math.max(labelLines.length, valueLines.length, 1);
   ensureSpace(lineCount * lineHeight + 1, 22);
@@ -468,7 +489,11 @@ const drawPromptLineSection = (
     }
     if (answerLine) {
       pdf.setFont("helvetica", "normal");
-      pdf.text(answerLine, margin + labelColumnWidth + 2, yRef.value);
+      pdf.text(
+        answerLine,
+        renderValueOnly ? margin : margin + labelColumnWidth + 2,
+        yRef.value,
+      );
     }
     yRef.value += lineHeight;
   }

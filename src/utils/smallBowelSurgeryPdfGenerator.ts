@@ -739,10 +739,10 @@ export const generateSmallBowelSurgeryPDF = async (
     specimenRows.forEach((row) => row1(row, specimenBottomPadding));
 
     sec("ADDITIONAL NOTES");
-    row1(cell("Additional Notes", txt(addInfo?.additionalInformation), true));
+    row1(txt(addInfo?.additionalInformation));
 
     sec("POST OPERATIVE MANAGEMENT");
-    row1(cell("Post Operative Management", txt(addInfo?.postOperativeManagement), true));
+    row1(txt(addInfo?.postOperativeManagement));
 
     ensureSpace(42);
     sec("SURGEON'S SIGNATURE");

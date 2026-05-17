@@ -856,7 +856,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const additionalNotes = closure.additionalNotes || '';
-    drawWrappedTextBlock(`Additional Notes: ${additionalNotes}`, margin, fullWidth, 4, 6);
+    drawWrappedTextBlock(`${additionalNotes}`, margin, fullWidth, 4, 6);
     
     // Add separator line after NOTES
     pdf.setDrawColor(0, 0, 0);
@@ -874,7 +874,7 @@ export const generateAppendectomyPDF = async (
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'normal');
     const postOpManagement = closure.postOperativeManagement || '';
-    drawWrappedTextBlock(`Post Operative Management: ${postOpManagement}`, margin, fullWidth, 4, 6);
+    drawWrappedTextBlock(`${postOpManagement}`, margin, fullWidth, 4, 6);
     
     // Add separator line after POST OPERATIVE MANAGEMENT
     pdf.setDrawColor(0, 0, 0);

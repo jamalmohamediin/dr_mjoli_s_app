@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -93,6 +93,28 @@ const toLegendItemsMap = (items?: DiagramLegendItem[]) => {
   return next;
 };
 
+const serializeLegendItems = (items?: DiagramLegendItem[]) =>
+  JSON.stringify(
+    (items || [])
+      .map((item) => ({
+        color: normalizeColor(item?.color || ""),
+        label: String(item?.label || "").trim(),
+      }))
+      .filter((item) => item.color && item.label)
+      .sort(
+        (left, right) =>
+          left.color.localeCompare(right.color) || left.label.localeCompare(right.label),
+      ),
+  );
+
+const serializeLegendMap = (legendMap: Record<string, string>) =>
+  serializeLegendItems(
+    Object.entries(legendMap).map(([color, label]) => ({
+      color,
+      label,
+    })),
+  );
+
 export const FreeDrawDiagram = ({
   backgroundImage,
   initialCanvasImageData,
@@ -106,9 +128,24 @@ export const FreeDrawDiagram = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
   const lastEmittedImageRef = useRef<string>("");
+  const lastEmittedLegendSerializedRef = useRef<string>(
+    serializeLegendItems(initialLegendItems || []),
+  );
+  const onUpdateRef = useRef(onUpdate);
   const initializedFromSavedMarkupRef = useRef(
     Boolean(String(initialCanvasImageData || "").trim()),
   );
+  const initialLegendItemsSerialized = useMemo(
+    () => serializeLegendItems(initialLegendItems || []),
+    [initialLegendItems],
+  );
+  const initialLegendItemsMap = useMemo(() => {
+    try {
+      return toLegendItemsMap(JSON.parse(initialLegendItemsSerialized) as DiagramLegendItem[]);
+    } catch (_error) {
+      return {};
+    }
+  }, [initialLegendItemsSerialized]);
 
   const [mode, setMode] = useState<DiagramMode>("draw");
   const [strokeColor, setStrokeColor] = useState("#e11d48");
@@ -132,11 +169,15 @@ export const FreeDrawDiagram = ({
   const [isPaddedBaseImage, setIsPaddedBaseImage] = useState(false);
   const [legendLabelsByColor, setLegendLabelsByColor] = useState<
     Record<string, string>
-  >(() => toLegendItemsMap(initialLegendItems));
+  >(() => initialLegendItemsMap);
   const [baseImageSource, setBaseImageSource] = useState(() => {
     const initial = String(initialCanvasImageData || "").trim();
     return initial || backgroundImage;
   });
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   useEffect(() => {
     const incoming = String(initialCanvasImageData || "").trim();
@@ -149,14 +190,23 @@ export const FreeDrawDiagram = ({
     const nextSource = incoming || backgroundImage;
     setBaseImageSource((prev) => (prev === nextSource ? prev : nextSource));
     setIsPaddedBaseImage(false);
-    setLegendLabelsByColor(toLegendItemsMap(initialLegendItems));
+    setLegendLabelsByColor((previous) =>
+      serializeLegendMap(previous) === initialLegendItemsSerialized
+        ? previous
+        : initialLegendItemsMap,
+    );
     setPaths([]);
     setCurrentPath(null);
     setTextAnnotations([]);
     setDraftTextAnnotation(null);
     setDraggingTextId(null);
     setIsDrawing(false);
-  }, [backgroundImage, initialCanvasImageData, initialLegendItems]);
+  }, [
+    backgroundImage,
+    initialCanvasImageData,
+    initialLegendItemsMap,
+    initialLegendItemsSerialized,
+  ]);
 
   useEffect(() => {
     setImageReady(false);
@@ -199,12 +249,24 @@ export const FreeDrawDiagram = ({
     image.src = baseImageSource;
   }, [allowTextOutsideDiagram, backgroundImage, baseImageSource, isPaddedBaseImage]);
 
-  const normalizedLegendItems = Object.entries(legendLabelsByColor)
-    .map(([color, label]) => ({
-      color: normalizeColor(color),
-      label: String(label || "").trim(),
-    }))
-    .filter((item) => item.color && item.label);
+  const normalizedLegendItems = useMemo(
+    () =>
+      Object.entries(legendLabelsByColor)
+        .map(([color, label]) => ({
+          color: normalizeColor(color),
+          label: String(label || "").trim(),
+        }))
+        .filter((item) => item.color && item.label)
+        .sort(
+          (left, right) =>
+            left.color.localeCompare(right.color) || left.label.localeCompare(right.label),
+        ),
+    [legendLabelsByColor],
+  );
+  const normalizedLegendItemsSerialized = useMemo(
+    () => serializeLegendItems(normalizedLegendItems),
+    [normalizedLegendItems],
+  );
 
   const getCanvasCoordinates = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -409,18 +471,26 @@ export const FreeDrawDiagram = ({
     exportCtx.drawImage(overlayCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
 
     const canvasImageData = exportCanvas.toDataURL("image/png");
-    onUpdate({
+    const hasImageChanged = canvasImageData !== lastEmittedImageRef.current;
+    const hasLegendChanged =
+      normalizedLegendItemsSerialized !== lastEmittedLegendSerializedRef.current;
+    if (!hasImageChanged && !hasLegendChanged) {
+      return;
+    }
+
+    onUpdateRef.current({
       findings: [{ type: "diagramMarkup" }],
       canvasImageData,
       legendItems: normalizedLegendItems,
     });
     lastEmittedImageRef.current = canvasImageData;
+    lastEmittedLegendSerializedRef.current = normalizedLegendItemsSerialized;
   }, [
     canvasSize.height,
     canvasSize.width,
     imageReady,
     normalizedLegendItems,
-    onUpdate,
+    normalizedLegendItemsSerialized,
   ]);
 
   useEffect(() => {
@@ -434,12 +504,13 @@ export const FreeDrawDiagram = ({
 
     const incoming = String(initialCanvasImageData || "").trim();
     if (incoming && incoming !== lastEmittedImageRef.current) {
-      onUpdate({
+      onUpdateRef.current({
         findings: [{ type: "diagramMarkup" }],
         canvasImageData: incoming,
         legendItems: normalizedLegendItems,
       });
       lastEmittedImageRef.current = incoming;
+      lastEmittedLegendSerializedRef.current = normalizedLegendItemsSerialized;
       return;
     }
 
@@ -457,7 +528,7 @@ export const FreeDrawDiagram = ({
     imageReady,
     initialCanvasImageData,
     normalizedLegendItems,
-    onUpdate,
+    normalizedLegendItemsSerialized,
     paths,
     textAnnotations,
   ]);
