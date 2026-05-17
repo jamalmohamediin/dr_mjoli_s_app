@@ -461,7 +461,15 @@ export const PeriAnalSurgicalDiagram: React.FC<PeriAnalSurgicalDiagramProps> = (
 
   const eraseAtPoint = (point: Point) => {
     const sourceMarkings = currentMarkingsRef.current;
-    const targetIndex = findTopMostMarkIndexAtPoint(point, () => true, sourceMarkings);
+    const textTargetIndex = findTopMostMarkIndexAtPoint(
+      point,
+      (mark) => mark?.type === "textBox",
+      sourceMarkings,
+    );
+    const targetIndex =
+      textTargetIndex >= 0
+        ? textTargetIndex
+        : findTopMostMarkIndexAtPoint(point, () => true, sourceMarkings);
     if (targetIndex < 0) return;
 
     const nextMarkings = sourceMarkings.filter((_, markIndex) => markIndex !== targetIndex);

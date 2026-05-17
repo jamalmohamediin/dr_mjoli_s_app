@@ -252,27 +252,18 @@ export const DateOfOperationField = ({
   return (
     <div className="space-y-2">
       <Label className="text-sm font-medium text-gray-700">Date of Operation:</Label>
-      <DateDDMMYYYYInput
-        ariaLabel="Date of Operation"
-        className="w-full"
-        value={value}
-        onChange={onChange}
-      />
-      <input
-        ref={nativeDateInputRef}
-        aria-hidden
-        className="sr-only"
-        tabIndex={-1}
-        type="date"
-        value={value || ""}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-center gap-2">
+        <DateDDMMYYYYInput
+          ariaLabel="Date of Operation"
+          className="w-[11rem]"
+          value={value}
+          onChange={onChange}
+        />
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="text-xs px-2 py-1"
+          className="shrink-0 text-xs px-2 py-1"
           onClick={openDatePicker}
         >
           <Calendar className="mr-1 h-3.5 w-3.5" />
@@ -282,12 +273,21 @@ export const DateOfOperationField = ({
           type="button"
           variant="outline"
           size="sm"
-          className="text-xs px-2 py-1"
+          className="shrink-0 text-xs px-2 py-1"
           onClick={() => onChange(getTodayIsoDate())}
         >
           Use Today's Date
         </Button>
       </div>
+      <input
+        ref={nativeDateInputRef}
+        aria-hidden
+        className="sr-only"
+        tabIndex={-1}
+        type="date"
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </div>
   );
 };

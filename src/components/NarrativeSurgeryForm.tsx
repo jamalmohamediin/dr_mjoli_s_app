@@ -195,18 +195,20 @@ export const NarrativeSurgeryForm = ({
             placeholder="Enter anesthetist name"
             onChange={(value) => updateTemplate("preoperative", "anaesthetists", value)}
           />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <DateOfOperationField
-              value={preoperative.dateOfOperation || ""}
-              onChange={(value) => updateTemplate("preoperative", "dateOfOperation", value)}
-            />
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">Start Time</Label>
-              <Time24HourInput value={preoperative.startTime || ""} onChange={(value) => handleTimeChange("startTime", value)} />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">End Time</Label>
-              <Time24HourInput value={preoperative.endTime || ""} onChange={(value) => handleTimeChange("endTime", value)} />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <DateOfOperationField
+                value={preoperative.dateOfOperation || ""}
+                onChange={(value) => updateTemplate("preoperative", "dateOfOperation", value)}
+              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">Start Time</Label>
+                <Time24HourInput value={preoperative.startTime || ""} onChange={(value) => handleTimeChange("startTime", value)} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-700">End Time</Label>
+                <Time24HourInput value={preoperative.endTime || ""} onChange={(value) => handleTimeChange("endTime", value)} />
+              </div>
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-gray-700">Duration of Procedure (min)</Label>

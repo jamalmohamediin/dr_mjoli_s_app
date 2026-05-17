@@ -4,33 +4,6 @@
 
 **URL**: https://lovable.dev/projects/f0c34c55-08c1-4f58-b117-a06843312d32
 
-## Firebase setup
-
-This repo does not include a default Firebase project on purpose.
-
-Before running the app against Firestore or Firebase Storage, create a local `.env` file and set:
-
-```sh
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-```
-
-Before using the Firebase CLI in this repo, explicitly select the target project:
-
-```sh
-firebase use --add
-```
-
-The app will stay disconnected from Firebase until those values are provided.
-
-## Handover
-
-The client handover checklist for this exact app is in [docs/client-handover.md](docs/client-handover.md).
-
 ## How can I edit this code?
 
 There are several ways of editing your application.

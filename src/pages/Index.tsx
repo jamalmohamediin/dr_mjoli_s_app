@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -1358,6 +1366,31 @@ const sanitizeWorkingSessionState = (value: any): WorkingSessionState | null => 
   return nextState;
 };
 
+type SaveTemplateActionOptions = {
+  templateTypeOverride?: TemplateType;
+  currentTabOverride?: string;
+  skipDateOfOperationValidation?: boolean;
+};
+
+type PendingDateOfOperationAction =
+  | {
+      type: "save";
+      templateType: TemplateType;
+      options?: SaveTemplateActionOptions;
+    }
+  | {
+      type: "export";
+      templateType: TemplateType;
+      section?: string;
+    };
+
+type DateOfOperationPromptState = {
+  isOpen: boolean;
+  templateType: TemplateType | null;
+  actionLabel: "saving" | "exporting" | null;
+  pendingAction: PendingDateOfOperationAction | null;
+};
+
 const Index = () => {
   
   
@@ -1770,6 +1803,14 @@ const Index = () => {
     recordId: string;
   } | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [dateOfOperationPrompt, setDateOfOperationPrompt] = useState<DateOfOperationPromptState>({
+    isOpen: false,
+    templateType: null,
+    actionLabel: null,
+    pendingAction: null,
+  });
+  const [pendingDateOfOperationAction, setPendingDateOfOperationAction] =
+    useState<PendingDateOfOperationAction | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [diagramUpdateTrigger, setDiagramUpdateTrigger] = useState(0);
   type TemplateDiagramResetKey =
@@ -1983,20 +2024,173 @@ const Index = () => {
   };
   const activeTemplateType = getTemplateTypeFromTab(currentTab);
   const activeTemplateLabel = getTemplateLabel(activeTemplateType);
+  const getTodayOperationDateIso = () => {
+    const now = new Date();
+    const year = now.getFullYear().toString().padStart(4, "0");
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const applyDateOfOperationToReport = (
+    reportSnapshot: any,
+    templateType: TemplateType,
+    dateOfOperation: string,
+  ) => {
+    const nextReport = { ...(reportSnapshot || {}) };
+    const dateValue = String(dateOfOperation || "").trim();
+
+    switch (templateType) {
+      case "gastroscopy":
+        nextReport.gastroscopy = {
+          ...(nextReport.gastroscopy || {}),
+          preoperative: {
+            ...(nextReport.gastroscopy?.preoperative || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "colonoscopy":
+        nextReport.colonoscopy = {
+          ...(nextReport.colonoscopy || {}),
+          procedureDetails: {
+            ...(nextReport.colonoscopy?.procedureDetails || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "rectalCancer":
+        nextReport.rectalCancer = {
+          ...(nextReport.rectalCancer || {}),
+          procedureDetails: {
+            ...(nextReport.rectalCancer?.procedureDetails || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "periAnal":
+        nextReport.periAnal = {
+          ...(nextReport.periAnal || {}),
+          preoperative: {
+            ...(nextReport.periAnal?.preoperative || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "openGeneralSurgery":
+        nextReport.openGeneralSurgery = {
+          ...(nextReport.openGeneralSurgery || {}),
+          preoperative: {
+            ...(nextReport.openGeneralSurgery?.preoperative || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "openAbdominalSurgery":
+        nextReport.openAbdominalSurgery = {
+          ...(nextReport.openAbdominalSurgery || {}),
+          preoperative: {
+            ...(nextReport.openAbdominalSurgery?.preoperative || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "appendectomy":
+        nextReport.appendectomy = {
+          ...(nextReport.appendectomy || {}),
+          procedure: {
+            ...(nextReport.appendectomy?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "ventralHernia":
+        nextReport.ventralHernia = {
+          ...(nextReport.ventralHernia || {}),
+          procedure: {
+            ...(nextReport.ventralHernia?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "smallBowel":
+        nextReport.smallBowel = {
+          ...(nextReport.smallBowel || {}),
+          procedure: {
+            ...(nextReport.smallBowel?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "cholecystectomy":
+        nextReport.cholecystectomy = {
+          ...(nextReport.cholecystectomy || {}),
+          procedure: {
+            ...(nextReport.cholecystectomy?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "inguinalHernia":
+        nextReport.inguinalHernia = {
+          ...(nextReport.inguinalHernia || {}),
+          procedure: {
+            ...(nextReport.inguinalHernia?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "transanalMinimallyInvasiveSurgery":
+        nextReport.transanalMinimallyInvasiveSurgery = {
+          ...(nextReport.transanalMinimallyInvasiveSurgery || {}),
+          procedure: {
+            ...(nextReport.transanalMinimallyInvasiveSurgery?.procedure || {}),
+            dateOfOperation: dateValue,
+          },
+        };
+        break;
+      case "procedure":
+      default:
+        nextReport.patientInfo = {
+          ...(nextReport.patientInfo || {}),
+          dateOfOperation: dateValue,
+        };
+        nextReport.procedure = {
+          ...(nextReport.procedure || {}),
+          dateOfOperation: dateValue,
+        };
+        break;
+    }
+
+    return nextReport;
+  };
   const getDateOfOperationForTemplate = (
     templateType: TemplateType,
     reportSnapshot: any = currentReport,
   ) => getTemplateDateOfOperation(reportSnapshot, templateType);
+  const closeDateOfOperationPrompt = () => {
+    setDateOfOperationPrompt({
+      isOpen: false,
+      templateType: null,
+      actionLabel: null,
+      pendingAction: null,
+    });
+  };
   const validateDateOfOperation = (
     templateType: TemplateType,
     actionLabel: "saving" | "exporting",
     reportSnapshot: any = currentReport,
+    pendingAction?: PendingDateOfOperationAction,
   ) => {
     if (getDateOfOperationForTemplate(templateType, reportSnapshot)) {
       return true;
     }
 
-    toast.error(`Please fill in Date of Operation before ${actionLabel} this template.`);
+    setDateOfOperationPrompt({
+      isOpen: true,
+      templateType,
+      actionLabel,
+      pendingAction: pendingAction || null,
+    });
     return false;
   };
   const activeTemplatePatientInfo = createInitialPatientInfoState(
@@ -4787,20 +4981,16 @@ const Index = () => {
 
   const handleSaveCurrentTemplateRecord = (
     options?:
-      | {
-          templateTypeOverride?: typeof activeTemplateType;
-          currentTabOverride?: string;
-        }
+      | SaveTemplateActionOptions
       | React.MouseEvent,
   ) => {
     const overrides =
       options &&
       typeof options === "object" &&
-      ("templateTypeOverride" in options || "currentTabOverride" in options)
-        ? (options as {
-            templateTypeOverride?: typeof activeTemplateType;
-            currentTabOverride?: string;
-          })
+      ("templateTypeOverride" in options ||
+        "currentTabOverride" in options ||
+        "skipDateOfOperationValidation" in options)
+        ? (options as SaveTemplateActionOptions)
         : undefined;
 
     const inferredOverrides =
@@ -4818,7 +5008,17 @@ const Index = () => {
           : undefined);
 
     const templateTypeForSave = inferredOverrides?.templateTypeOverride || activeTemplateType;
-    if (!validateDateOfOperation(templateTypeForSave, "saving")) {
+    const shouldSkipDateOfOperationValidation = Boolean(
+      inferredOverrides?.skipDateOfOperationValidation,
+    );
+    if (
+      !shouldSkipDateOfOperationValidation &&
+      !validateDateOfOperation(templateTypeForSave, "saving", currentReport, {
+        type: "save",
+        templateType: templateTypeForSave,
+        options: inferredOverrides,
+      })
+    ) {
       return;
     }
 
@@ -5889,7 +6089,12 @@ const Index = () => {
     toast.success("Template data cleared.");
   };
 
-  const handleExportPDF = async (section?: string) => {
+  const handleExportPDF = async (
+    section?: string,
+    options?: {
+      skipDateOfOperationValidation?: boolean;
+    },
+  ) => {
     console.log("=== EXPORT PDF CLICKED - NETLIFY PRODUCTION VERSION ===");
     console.log("Environment:", window.location.origin);
     console.log("User agent:", navigator.userAgent);
@@ -5907,7 +6112,14 @@ const Index = () => {
     try {
       const exportSection = section || currentTab;
       const exportTemplateType = getTemplateTypeFromTab(exportSection);
-      if (!validateDateOfOperation(exportTemplateType, "exporting")) {
+      if (
+        !options?.skipDateOfOperationValidation &&
+        !validateDateOfOperation(exportTemplateType, "exporting", currentReport, {
+          type: "export",
+          templateType: exportTemplateType,
+          section: exportSection,
+        })
+      ) {
         return;
       }
 
@@ -6810,6 +7022,59 @@ const Index = () => {
     }
     window.location.reload();
   };
+
+  const handleDateOfOperationPromptClose = () => {
+    closeDateOfOperationPrompt();
+    setPendingDateOfOperationAction(null);
+  };
+
+  const handleDateOfOperationPromptUseToday = () => {
+    const templateType = dateOfOperationPrompt.templateType;
+    if (!templateType) {
+      handleDateOfOperationPromptClose();
+      return;
+    }
+
+    const pendingAction = dateOfOperationPrompt.pendingAction;
+    const todayDate = getTodayOperationDateIso();
+    setCurrentReport((previousReport) =>
+      applyDateOfOperationToReport(previousReport, templateType, todayDate),
+    );
+    closeDateOfOperationPrompt();
+    setPendingDateOfOperationAction(pendingAction);
+  };
+
+  useEffect(() => {
+    if (!pendingDateOfOperationAction) {
+      return;
+    }
+
+    if (
+      !getDateOfOperationForTemplate(
+        pendingDateOfOperationAction.templateType,
+        currentReport,
+      )
+    ) {
+      return;
+    }
+
+    const actionToResume = pendingDateOfOperationAction;
+    setPendingDateOfOperationAction(null);
+
+    if (actionToResume.type === "save") {
+      handleSaveCurrentTemplateRecord({
+        ...(actionToResume.options || {}),
+        templateTypeOverride:
+          actionToResume.options?.templateTypeOverride || actionToResume.templateType,
+        skipDateOfOperationValidation: true,
+      });
+      return;
+    }
+
+    handleExportPDF(actionToResume.section, {
+      skipDateOfOperationValidation: true,
+    });
+  }, [currentReport, pendingDateOfOperationAction]);
 
   // Development helpers: Keyboard shortcuts
   useEffect(() => {
@@ -12579,6 +12844,33 @@ const Index = () => {
 
         </div>
       </GlassContainer>
+      <Dialog
+        open={dateOfOperationPrompt.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleDateOfOperationPromptClose();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Date of Operation Required</DialogTitle>
+            <DialogDescription>
+              Please fill in Date of Operation before{" "}
+              {dateOfOperationPrompt.actionLabel || "continuing"} this template.
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-gray-700">
+            Do you want to use today&apos;s date?
+          </p>
+          <DialogFooter>
+            <Button onClick={handleDateOfOperationPromptUseToday}>Yes</Button>
+            <Button variant="outline" onClick={handleDateOfOperationPromptClose}>
+              No
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

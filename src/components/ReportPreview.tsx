@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateDDMMYYYYInput } from "@/components/Time24HourInput";
-import { Edit, Trash2, Redo2, X, Save } from "lucide-react";
+import { Edit, Trash2, Redo2, X, Save, Calendar } from "lucide-react";
 import { getFullASAText } from '@/utils/asaDescriptions';
 import {
   formatDateDDMMYYYYWithDashes,
@@ -194,6 +194,7 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
   // State for editing patient info
   const [editingPatientField, setEditingPatientField] = useState<string | null>(null);
   const [patientFieldValue, setPatientFieldValue] = useState('');
+  const dobDatePickerRef = useRef<HTMLInputElement>(null);
   
   // State for editing conclusion
   const [editingConclusion, setEditingConclusion] = useState(false);
@@ -880,6 +881,37 @@ export const ReportPreview = ({ report, onEditFinding, onRemoveFinding, onRedoFi
                     onChange={setPatientFieldValue}
                     value={patientFieldValue}
                   />
+                  <input
+                    ref={dobDatePickerRef}
+                    aria-hidden
+                    className="sr-only"
+                    tabIndex={-1}
+                    type="date"
+                    value={patientFieldValue || ""}
+                    onChange={(event) => setPatientFieldValue(event.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={() => {
+                      const pickerInput = dobDatePickerRef.current as
+                        | (HTMLInputElement & { showPicker?: () => void })
+                        | null;
+                      if (!pickerInput) {
+                        return;
+                      }
+                      if (typeof pickerInput.showPicker === "function") {
+                        pickerInput.showPicker();
+                        return;
+                      }
+                      pickerInput.focus();
+                      pickerInput.click();
+                    }}
+                    title="Open calendar"
+                  >
+                    <Calendar className="h-3 w-3" />
+                  </Button>
                   <Button variant="outline" size="sm" onClick={cancelPatientEdit} className="h-6 w-6 p-0">
                     <X className="h-3 w-3" />
                   </Button>

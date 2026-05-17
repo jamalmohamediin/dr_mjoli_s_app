@@ -300,6 +300,31 @@ export const FreeDrawDiagram = ({
     [getTextAnnotationBounds, textAnnotations],
   );
 
+  const eraseTextAnnotationAtPoint = useCallback(
+    (point: { x: number; y: number }) => {
+      setTextAnnotations((previous) => {
+        for (let index = previous.length - 1; index >= 0; index -= 1) {
+          const annotation = previous[index];
+          const bounds = getTextAnnotationBounds(annotation);
+          const isHit =
+            point.x >= bounds.left &&
+            point.x <= bounds.right &&
+            point.y >= bounds.top &&
+            point.y <= bounds.bottom;
+
+          if (!isHit) {
+            continue;
+          }
+
+          return previous.filter((_, annotationIndex) => annotationIndex !== index);
+        }
+
+        return previous;
+      });
+    },
+    [getTextAnnotationBounds],
+  );
+
   const redrawOverlay = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -481,6 +506,10 @@ export const FreeDrawDiagram = ({
       commitDraftTextAnnotation();
     }
 
+    if (mode === "erase") {
+      eraseTextAnnotationAtPoint(point);
+    }
+
     canvas.setPointerCapture(event.pointerId);
     setIsDrawing(true);
     setCurrentPath({
@@ -528,6 +557,9 @@ export const FreeDrawDiagram = ({
     event.preventDefault();
 
     const point = getCanvasCoordinates(event);
+    if (mode === "erase") {
+      eraseTextAnnotationAtPoint(point);
+    }
     setCurrentPath((prev) => {
       if (!prev) {
         return prev;

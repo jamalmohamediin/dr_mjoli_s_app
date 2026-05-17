@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useRef } from "react";
-import { Upload, Camera, Loader2, RotateCcw, RefreshCw } from "lucide-react";
+import { Upload, Camera, Loader2, RotateCcw, RefreshCw, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,76 @@ interface PatientInfoFieldsProps {
   stackFieldRows?: boolean;
   forceSectionedLayout?: boolean;
 }
+
+interface DateOfBirthInputWithCalendarButtonProps {
+  value?: string;
+  onChange: (value: string) => void;
+  useDashDateInputs?: boolean;
+  ariaLabel?: string;
+}
+
+const DateOfBirthInputWithCalendarButton = ({
+  value = "",
+  onChange,
+  useDashDateInputs = false,
+  ariaLabel = "Date of birth",
+}: DateOfBirthInputWithCalendarButtonProps) => {
+  const nativeDateInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openDatePicker = () => {
+    const pickerInput = nativeDateInputRef.current as
+      | (HTMLInputElement & { showPicker?: () => void })
+      | null;
+    if (!pickerInput) {
+      return;
+    }
+
+    if (typeof pickerInput.showPicker === "function") {
+      pickerInput.showPicker();
+      return;
+    }
+
+    pickerInput.focus();
+    pickerInput.click();
+  };
+
+  return (
+    <div className="w-full space-y-2">
+      {useDashDateInputs ? (
+        <DateDDMMYYYYInput
+          ariaLabel={ariaLabel}
+          onChange={onChange}
+          value={value}
+        />
+      ) : (
+        <Input
+          type="date"
+          lang="en-GB"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+      <input
+        ref={nativeDateInputRef}
+        aria-hidden
+        className="sr-only"
+        tabIndex={-1}
+        type="date"
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="text-xs px-2 py-1"
+        onClick={openDatePicker}
+      >
+        <Calendar className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+};
 
 const createThumbnailDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -476,20 +546,12 @@ export const PatientInfoFields = ({
           "Date Of Birth:",
           "dateOfBirth",
           <div className="w-full">
-            {useDashDateInputs ? (
-              <DateDDMMYYYYInput
-                ariaLabel="Date of birth"
-                onChange={(value) => handleBaseChange("dateOfBirth", value)}
-                value={normalizedInfo.dateOfBirth}
-              />
-            ) : (
-              <Input
-                type="date"
-                lang="en-GB"
-                value={normalizedInfo.dateOfBirth}
-                onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
-              />
-            )}
+            <DateOfBirthInputWithCalendarButton
+              ariaLabel="Date of birth"
+              useDashDateInputs={useDashDateInputs}
+              onChange={(value) => handleBaseChange("dateOfBirth", value)}
+              value={normalizedInfo.dateOfBirth}
+            />
             {normalizedInfo.dateOfBirth && (
               <p className="text-xs text-gray-500 mt-1">
                 Display format: {formatPatientStickerDate(normalizedInfo.dateOfBirth)}
@@ -825,20 +887,12 @@ export const PatientInfoFields = ({
             `Date Of Birth (${useDashDateInputs ? "dd-mm-yyyy" : "dd/mm/yyyy"}):`,
             "dateOfBirth",
             <div className="w-full">
-              {useDashDateInputs ? (
-                <DateDDMMYYYYInput
-                  ariaLabel="Date of birth"
-                  onChange={(value) => handleBaseChange("dateOfBirth", value)}
-                  value={normalizedInfo.dateOfBirth}
-                />
-              ) : (
-                <Input
-                  type="date"
-                  lang="en-GB"
-                  value={normalizedInfo.dateOfBirth}
-                  onChange={(event) => handleBaseChange("dateOfBirth", event.target.value)}
-                />
-              )}
+              <DateOfBirthInputWithCalendarButton
+                ariaLabel="Date of birth"
+                useDashDateInputs={useDashDateInputs}
+                onChange={(value) => handleBaseChange("dateOfBirth", value)}
+                value={normalizedInfo.dateOfBirth}
+              />
               {normalizedInfo.dateOfBirth && (
                 <p className="text-xs text-gray-500 mt-1">
                   Display format: {formatPatientStickerDate(normalizedInfo.dateOfBirth)}
