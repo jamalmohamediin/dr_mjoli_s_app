@@ -3,6 +3,7 @@ import {
   createPatientStickerSyncSnapshot,
 } from "@/utils/patientSticker";
 import { getTemplateDateOfOperationIso } from "@/utils/operationDate";
+import { compactEndoscopyReportSnapshot } from "@/utils/templateDataHelpers";
 
 export type TemplateType =
   | "procedure"
@@ -249,8 +250,10 @@ const restoreEndoscopyDiagramSnapshot = (
 ) => {
   const canvasImageData =
     text(sourceSnapshot?.[templateKey]?.diagram?.canvasImageData) ||
+    text(sourceSnapshot?.[templateKey]?.diagram?.drawingImageData) ||
     text(sourceSnapshot?.[legacyCanvasKey]) ||
-    text(sourceSnapshot?.[legacyFindingsKey]?.canvasImageData);
+    text(sourceSnapshot?.[legacyFindingsKey]?.canvasImageData) ||
+    text(sourceSnapshot?.[legacyFindingsKey]?.drawingImageData);
 
   if (!canvasImageData) {
     return sanitizedSnapshot;
@@ -298,14 +301,18 @@ export const sanitizeReportSnapshotForStorage = (reportSnapshot: any) => {
   const sourceSnapshot = reportSnapshot || {};
   try {
     const clonedSnapshot = JSON.parse(JSON.stringify(sourceSnapshot));
-    return restoreEndoscopyDiagramSnapshots(
-      sanitizeReportSnapshotValue(clonedSnapshot),
-      sourceSnapshot,
+    return compactEndoscopyReportSnapshot(
+      restoreEndoscopyDiagramSnapshots(
+        sanitizeReportSnapshotValue(clonedSnapshot),
+        sourceSnapshot,
+      ),
     );
   } catch {
-    return restoreEndoscopyDiagramSnapshots(
-      sanitizeReportSnapshotValue(sourceSnapshot),
-      sourceSnapshot,
+    return compactEndoscopyReportSnapshot(
+      restoreEndoscopyDiagramSnapshots(
+        sanitizeReportSnapshotValue(sourceSnapshot),
+        sourceSnapshot,
+      ),
     );
   }
 };

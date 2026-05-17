@@ -14,6 +14,7 @@ import {
   sanitizePatientRecordForStorage,
   upsertPatientRecordInCache,
 } from "@/utils/patientRecords";
+import { stripEndoscopyReportDiagramImages } from "@/utils/templateDataHelpers";
 
 const PATIENTS_CACHE_KEY = "patients_cache_v1";
 const PATIENT_RECORDS_CACHE_KEY = "patient_records_cache_v1";
@@ -772,12 +773,27 @@ const syncUpsertPatientRecord = async (patient: PatientSummary, record: PatientR
 
     const compactRecord = {
       ...normalizedRecord,
-      reportSnapshot: null,
+      reportSnapshot: stripEndoscopyReportDiagramImages(normalizedRecord?.reportSnapshot),
     };
 
-    await setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(compactRecord), {
-      merge: true,
-    });
+    try {
+      await setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(compactRecord), {
+        merge: true,
+      });
+    } catch (compactError) {
+      const minimalRecord = {
+        ...normalizedRecord,
+        reportSnapshot: null,
+      };
+
+      await setDoc(doc(firestoreDb, "patient_records", safeRecordId), toSerializable(minimalRecord), {
+        merge: true,
+      });
+      console.error(
+        "Stored minimal patient record after compact snapshot sync failed",
+        compactError,
+      );
+    }
   }
 };
 

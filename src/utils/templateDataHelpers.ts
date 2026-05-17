@@ -16,6 +16,174 @@ export const hasText = (value: unknown): boolean =>
 export const text = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value).trim();
 
+type EndoscopyTemplateKey = "gastroscopy" | "colonoscopy";
+type EndoscopyLegacyCanvasKey = "gastroscopyCanvasData" | "colonoscopyCanvasData";
+type EndoscopyLegacyFindingsKey = "gastroscopyFindings" | "colonoscopyFindings";
+
+const cloneSerializable = <T,>(value: T): T => {
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch {
+    if (Array.isArray(value)) {
+      return [...value] as T;
+    }
+
+    if (value && typeof value === "object") {
+      return { ...(value as Record<string, any>) } as T;
+    }
+
+    return value;
+  }
+};
+
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+
+const compactEndoscopySnapshotSection = (
+  snapshot: Record<string, any>,
+  templateKey: EndoscopyTemplateKey,
+  legacyCanvasKey: EndoscopyLegacyCanvasKey,
+  legacyFindingsKey: EndoscopyLegacyFindingsKey,
+) => {
+  const hasTemplateKey = Object.prototype.hasOwnProperty.call(snapshot, templateKey);
+  const hasLegacyCanvasKey = Object.prototype.hasOwnProperty.call(snapshot, legacyCanvasKey);
+  const hasLegacyFindingsKey = Object.prototype.hasOwnProperty.call(snapshot, legacyFindingsKey);
+  const templateState = asRecord(snapshot[templateKey]);
+  const templateDiagram = asRecord(templateState.diagram);
+  const legacyFindings = asRecord(snapshot[legacyFindingsKey]);
+
+  const resolvedCanvasImage =
+    text(templateDiagram.canvasImageData) ||
+    text(templateDiagram.drawingImageData) ||
+    text(snapshot[legacyCanvasKey]) ||
+    text(legacyFindings.canvasImageData) ||
+    text(legacyFindings.drawingImageData);
+
+  const nextTemplateState: Record<string, any> = {
+    ...templateState,
+    diagram: {
+      ...templateDiagram,
+      ...(resolvedCanvasImage ? { canvasImageData: resolvedCanvasImage } : {}),
+    },
+  };
+
+  if (
+    text(nextTemplateState.diagram?.drawingImageData) &&
+    (text(nextTemplateState.diagram?.drawingImageData) === resolvedCanvasImage ||
+      String(nextTemplateState.diagram?.drawingImageData).trim().startsWith("data:"))
+  ) {
+    nextTemplateState.diagram = {
+      ...nextTemplateState.diagram,
+      drawingImageData: "",
+    };
+  }
+
+  const templateLegacyCanvasKey = `${templateKey}CanvasData`;
+  if (text(nextTemplateState[templateLegacyCanvasKey])) {
+    nextTemplateState[templateLegacyCanvasKey] = "";
+  }
+
+  if (hasTemplateKey || resolvedCanvasImage || Object.keys(templateState).length > 0) {
+    snapshot[templateKey] = nextTemplateState;
+  }
+
+  if (hasLegacyCanvasKey) {
+    snapshot[legacyCanvasKey] = "";
+  }
+
+  if (hasLegacyFindingsKey && Object.keys(legacyFindings).length > 0) {
+    const nextLegacyFindings: Record<string, any> = {
+      ...legacyFindings,
+      canvasImageData: "",
+    };
+
+    if ("drawingImageData" in nextLegacyFindings) {
+      nextLegacyFindings.drawingImageData = "";
+    }
+
+    if (!Array.isArray(nextLegacyFindings.findings)) {
+      nextLegacyFindings.findings = [];
+    }
+
+    snapshot[legacyFindingsKey] = nextLegacyFindings;
+  }
+};
+
+export const compactEndoscopyReportSnapshot = (reportSnapshot: any) => {
+  if (!reportSnapshot || typeof reportSnapshot !== "object" || Array.isArray(reportSnapshot)) {
+    return reportSnapshot;
+  }
+
+  const clonedSnapshot = cloneSerializable(reportSnapshot) as Record<string, any>;
+
+  compactEndoscopySnapshotSection(
+    clonedSnapshot,
+    "gastroscopy",
+    "gastroscopyCanvasData",
+    "gastroscopyFindings",
+  );
+  compactEndoscopySnapshotSection(
+    clonedSnapshot,
+    "colonoscopy",
+    "colonoscopyCanvasData",
+    "colonoscopyFindings",
+  );
+
+  return clonedSnapshot;
+};
+
+export const stripEndoscopyReportDiagramImages = (reportSnapshot: any) => {
+  if (!reportSnapshot || typeof reportSnapshot !== "object" || Array.isArray(reportSnapshot)) {
+    return reportSnapshot;
+  }
+
+  const clonedSnapshot = cloneSerializable(reportSnapshot) as Record<string, any>;
+
+  (
+    [
+      ["gastroscopy", "gastroscopyCanvasData", "gastroscopyFindings"],
+      ["colonoscopy", "colonoscopyCanvasData", "colonoscopyFindings"],
+    ] as Array<[EndoscopyTemplateKey, EndoscopyLegacyCanvasKey, EndoscopyLegacyFindingsKey]>
+  ).forEach(([templateKey, legacyCanvasKey, legacyFindingsKey]) => {
+    const hasTemplateKey = Object.prototype.hasOwnProperty.call(clonedSnapshot, templateKey);
+    const hasLegacyCanvasKey = Object.prototype.hasOwnProperty.call(clonedSnapshot, legacyCanvasKey);
+    const hasLegacyFindingsKey = Object.prototype.hasOwnProperty.call(clonedSnapshot, legacyFindingsKey);
+    const templateState = asRecord(clonedSnapshot[templateKey]);
+    const templateDiagram = asRecord(templateState.diagram);
+    const templateLegacyCanvasKey = `${templateKey}CanvasData`;
+    const legacyFindings = asRecord(clonedSnapshot[legacyFindingsKey]);
+
+    if (hasTemplateKey || Object.keys(templateState).length > 0) {
+      clonedSnapshot[templateKey] = {
+        ...templateState,
+        ...(templateLegacyCanvasKey in templateState ? { [templateLegacyCanvasKey]: "" } : {}),
+        diagram: {
+          ...templateDiagram,
+          canvasImageData: "",
+          ...(templateDiagram.drawingImageData !== undefined ? { drawingImageData: "" } : {}),
+        },
+      };
+    }
+
+    if (hasLegacyCanvasKey) {
+      clonedSnapshot[legacyCanvasKey] = "";
+    }
+
+    if (hasLegacyFindingsKey && Object.keys(legacyFindings).length > 0) {
+      clonedSnapshot[legacyFindingsKey] = {
+        ...legacyFindings,
+        canvasImageData: "",
+        ...(legacyFindings.drawingImageData !== undefined ? { drawingImageData: "" } : {}),
+        findings: Array.isArray(legacyFindings.findings) ? legacyFindings.findings : [],
+      };
+    }
+  });
+
+  return clonedSnapshot;
+};
+
 const UI_LOWERCASE_WORDS = new Set([
   "a",
   "an",

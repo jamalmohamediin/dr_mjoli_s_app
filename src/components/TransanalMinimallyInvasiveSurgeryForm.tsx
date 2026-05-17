@@ -108,12 +108,6 @@ export const TransanalMinimallyInvasiveSurgeryForm = ({
   const specimen = template.specimen;
   const additionalInfo = template.additionalInfo;
 
-  React.useEffect(() => {
-    if (!String(additionalInfo.dateTime || "").trim()) {
-      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
-    }
-  }, [additionalInfo.dateTime, updateTemplate]);
-
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {
       onBulkPatientInfoUpdate(updates);

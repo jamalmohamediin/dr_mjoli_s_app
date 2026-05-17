@@ -170,12 +170,6 @@ export const ColonoscopyForm = ({
     additionalInfo.laboratorySentTo,
   );
 
-  React.useEffect(() => {
-    if (!String(additionalInfo.dateTime || "").trim()) {
-      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
-    }
-  }, [additionalInfo.dateTime, updateTemplate]);
-
   const selectedDepth = toArray(procedureDetails.depthOfExamination);
   const selectedCaecalLandmarks = toArray(procedureDetails.caecalLandmarks);
   const reachedTerminalOrCaecum =

@@ -1,5 +1,6 @@
 // Data persistence utility for saving and loading form data
 import { toast } from 'sonner';
+import { compactEndoscopyReportSnapshot } from "@/utils/templateDataHelpers";
 
 const STORAGE_PREFIX = 'endoscopy_app_';
 const LARGE_DATA_URL_THRESHOLD = 2048;
@@ -71,66 +72,7 @@ const compactKnownReportPayload = (key: string, value: any) => {
     return value;
   }
 
-  let clonedValue: any = value;
-  try {
-    clonedValue = JSON.parse(JSON.stringify(value));
-  } catch {
-    return value;
-  }
-
-  const compactTemplateDiagramDuplicates = (
-    templateKey: "gastroscopy" | "colonoscopy",
-    legacyCanvasKey: "gastroscopyCanvasData" | "colonoscopyCanvasData",
-    legacyFindingsKey: "gastroscopyFindings" | "colonoscopyFindings",
-  ) => {
-    const templateCanvasImage = String(
-      clonedValue?.[templateKey]?.diagram?.canvasImageData || "",
-    ).trim();
-
-    if (!templateCanvasImage) {
-      return;
-    }
-
-    if (
-      String(clonedValue?.[legacyCanvasKey] || "").trim() === templateCanvasImage
-    ) {
-      clonedValue[legacyCanvasKey] = "";
-    }
-
-    const legacyFindings = clonedValue?.[legacyFindingsKey];
-    if (!legacyFindings || typeof legacyFindings !== "object") {
-      return;
-    }
-
-    const nextLegacyFindings = {
-      ...legacyFindings,
-    };
-
-    if (
-      String(nextLegacyFindings.canvasImageData || "").trim() === templateCanvasImage
-    ) {
-      nextLegacyFindings.canvasImageData = "";
-    }
-
-    if (!Array.isArray(nextLegacyFindings.findings)) {
-      nextLegacyFindings.findings = [];
-    }
-
-    clonedValue[legacyFindingsKey] = nextLegacyFindings;
-  };
-
-  compactTemplateDiagramDuplicates(
-    "gastroscopy",
-    "gastroscopyCanvasData",
-    "gastroscopyFindings",
-  );
-  compactTemplateDiagramDuplicates(
-    "colonoscopy",
-    "colonoscopyCanvasData",
-    "colonoscopyFindings",
-  );
-
-  return clonedValue;
+  return compactEndoscopyReportSnapshot(value);
 };
 
 const showQuotaWarningOnce = (key: string) => {

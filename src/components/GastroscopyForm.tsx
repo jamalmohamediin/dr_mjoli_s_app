@@ -210,12 +210,6 @@ export const GastroscopyForm = ({
     additionalInfo.laboratorySentTo,
   );
 
-  React.useEffect(() => {
-    if (!String(additionalInfo.dateTime || "").trim()) {
-      updateTemplate("additionalInfo", "dateTime", getLocalDateTimeValue());
-    }
-  }, [additionalInfo.dateTime, updateTemplate]);
-
   const [expandedSections, setExpandedSections] = React.useState<Record<FindingSectionKey, boolean>>({
     pharynxLarynx: true,
     oesophagus: true,

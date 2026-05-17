@@ -6,6 +6,10 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { firestoreDb } from "@/lib/firebase";
+import {
+  compactEndoscopyReportSnapshot,
+  stripEndoscopyReportDiagramImages,
+} from "@/utils/templateDataHelpers";
 
 const LIVE_TEMPLATE_DRAFT_COLLECTION = "development_state";
 const LIVE_TEMPLATE_DRAFT_DOCUMENT = "live_template_draft";
@@ -28,6 +32,26 @@ export interface LiveTemplateDraftSnapshot {
   updatedBySessionId: string;
 }
 
+const isFirestoreDocumentTooLargeError = (error: unknown) => {
+  const errorCode =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: string }).code || "").toLowerCase()
+      : "";
+  const message = String(
+    (typeof error === "object" && error && "message" in error
+      ? (error as { message?: string }).message
+      : "") || "",
+  ).toLowerCase();
+
+  return (
+    (errorCode.includes("invalid-argument") &&
+      (message.includes("maximum allowed size") ||
+        message.includes("exceeds the maximum allowed size") ||
+        message.includes("1,048,576"))) ||
+    (message.includes("document") && message.includes("exceeds the maximum allowed size"))
+  );
+};
+
 export const createLiveTemplateDraftSignature = (payload: Record<string, any>) => {
   const serializedPayload = JSON.stringify(payload || {});
   let hash = 2166136261;
@@ -38,6 +62,35 @@ export const createLiveTemplateDraftSignature = (payload: Record<string, any>) =
   }
 
   return `${serializedPayload.length}:${(hash >>> 0).toString(16)}`;
+};
+
+const normalizeLiveTemplateDraftSnapshot = (
+  snapshot: LiveTemplateDraftSnapshot | null,
+  options: { stripEndoscopyDiagramImages?: boolean } = {},
+) => {
+  if (!snapshot?.payload || typeof snapshot.payload !== "object") {
+    return snapshot;
+  }
+
+  const nextPayload = JSON.parse(JSON.stringify(snapshot.payload || {})) as Record<string, any>;
+  const currentReport = nextPayload.currentReport;
+  if (currentReport && typeof currentReport === "object") {
+    nextPayload.currentReport = options.stripEndoscopyDiagramImages
+      ? stripEndoscopyReportDiagramImages(currentReport)
+      : compactEndoscopyReportSnapshot(currentReport);
+  }
+
+  const payloadSignature = createLiveTemplateDraftSignature(nextPayload);
+  if (payloadSignature === snapshot.payloadSignature) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    payload: nextPayload,
+    payloadSignature,
+    updatedAtIso: snapshot.updatedAtIso || new Date().toISOString(),
+  } satisfies LiveTemplateDraftSnapshot;
 };
 
 const getLiveTemplateDraftRef = () =>
@@ -138,21 +191,30 @@ export const getLiveTemplateDraftSessionId = () => {
 export const createLiveTemplateDraftSnapshot = (
   payload: Record<string, any>,
   payloadSignature: string,
-): LiveTemplateDraftSnapshot => ({
-  schemaVersion: 1,
-  payload: JSON.parse(JSON.stringify(payload || {})),
-  payloadSignature,
-  updatedAtIso: new Date().toISOString(),
-  updatedBySessionId: getLiveTemplateDraftSessionId(),
-});
+): LiveTemplateDraftSnapshot =>
+  normalizeLiveTemplateDraftSnapshot({
+    schemaVersion: 1,
+    payload: JSON.parse(JSON.stringify(payload || {})),
+    payloadSignature,
+    updatedAtIso: new Date().toISOString(),
+    updatedBySessionId: getLiveTemplateDraftSessionId(),
+  }) as LiveTemplateDraftSnapshot;
 
 export const loadQueuedLiveTemplateDraftSync = () => {
   if (typeof window === "undefined") {
-    return inMemoryQueuedLiveTemplateDraft;
+    const normalizedInMemoryDraft = normalizeLiveTemplateDraftSnapshot(
+      inMemoryQueuedLiveTemplateDraft,
+    );
+    inMemoryQueuedLiveTemplateDraft = normalizedInMemoryDraft;
+    return normalizedInMemoryDraft;
   }
 
   if (liveDraftQueueLocalStorageUnavailable) {
-    return inMemoryQueuedLiveTemplateDraft;
+    const normalizedInMemoryDraft = normalizeLiveTemplateDraftSnapshot(
+      inMemoryQueuedLiveTemplateDraft,
+    );
+    inMemoryQueuedLiveTemplateDraft = normalizedInMemoryDraft;
+    return normalizedInMemoryDraft;
   }
 
   try {
@@ -161,19 +223,29 @@ export const loadQueuedLiveTemplateDraftSync = () => {
     );
 
     if (storedDraft) {
-      inMemoryQueuedLiveTemplateDraft = storedDraft;
-      return storedDraft;
+      const normalizedStoredDraft = normalizeLiveTemplateDraftSnapshot(storedDraft);
+      inMemoryQueuedLiveTemplateDraft = normalizedStoredDraft;
+      if (normalizedStoredDraft !== storedDraft) {
+        saveStoredDraft(normalizedStoredDraft);
+      }
+      return normalizedStoredDraft;
     }
   } catch (error) {
     console.warn("Failed to load queued live template draft from localStorage", error);
   }
 
-  return inMemoryQueuedLiveTemplateDraft;
+  const normalizedInMemoryDraft = normalizeLiveTemplateDraftSnapshot(
+    inMemoryQueuedLiveTemplateDraft,
+  );
+  inMemoryQueuedLiveTemplateDraft = normalizedInMemoryDraft;
+  return normalizedInMemoryDraft;
 };
 
 export const queueLiveTemplateDraftSync = (snapshot: LiveTemplateDraftSnapshot) => {
-  saveStoredDraft(snapshot);
-  return snapshot;
+  const normalizedSnapshot =
+    normalizeLiveTemplateDraftSnapshot(snapshot) || snapshot;
+  saveStoredDraft(normalizedSnapshot);
+  return normalizedSnapshot;
 };
 
 export const clearQueuedLiveTemplateDraftSync = () => {
@@ -213,6 +285,32 @@ export const processQueuedLiveTemplateDraftSync = async () => {
     clearQueuedLiveTemplateDraftSync();
     return { processed: true, pending: false };
   } catch (error) {
+    if (isFirestoreDocumentTooLargeError(error)) {
+      const strippedSnapshot = normalizeLiveTemplateDraftSnapshot(snapshot, {
+        stripEndoscopyDiagramImages: true,
+      });
+      if (strippedSnapshot) {
+        try {
+          await setDoc(
+            draftRef,
+            {
+              ...strippedSnapshot,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+          nextLiveTemplateDraftSyncAttemptAt = 0;
+          clearQueuedLiveTemplateDraftSync();
+          return { processed: true, pending: false };
+        } catch (fallbackError) {
+          console.error(
+            "Failed to sync compacted live template draft after size fallback",
+            fallbackError,
+          );
+        }
+      }
+    }
+
     nextLiveTemplateDraftSyncAttemptAt = Date.now() + LIVE_TEMPLATE_DRAFT_SYNC_RETRY_MS;
     console.error("Failed to sync queued live template draft", error);
     return { processed: false, pending: true };

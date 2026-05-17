@@ -64,6 +64,7 @@ import {
   getTemplateDateOfOperation,
 } from "@/utils/operationDate";
 import { saveToStorage, loadFromStorage, createAutoSave, clearAllStorage } from "@/utils/dataStorage";
+import { compactEndoscopyReportSnapshot } from "@/utils/templateDataHelpers";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { exportSavedRecordPdf } from "@/utils/exportSavedRecord";
 import {
@@ -164,6 +165,7 @@ const AUTOSAVE_POST_PREOPERATIVE_IGNORED_KEYS = new Set([
   "surgicalTeam",
   "procedureDetails",
   "section1",
+  "dateTime",
   "surgeonSignatureText",
   "endoscopistName",
   "doctorSignature",
@@ -631,7 +633,34 @@ const isPreoperativeProgressSection = (
   return false;
 };
 
-const LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS = 8000;
+const shouldMarkPostPreoperativeProgressForUpdate = (
+  templateType: TemplateType,
+  section: string | undefined,
+  updateValue?: unknown,
+) => {
+  if (isPreoperativeProgressSection(templateType, section)) {
+    return false;
+  }
+
+  if (
+    section === templateType &&
+    updateValue &&
+    typeof updateValue === "object" &&
+    !Array.isArray(updateValue)
+  ) {
+    const changedSections = Object.keys(updateValue as Record<string, unknown>);
+    if (changedSections.length === 0) {
+      return false;
+    }
+
+    return changedSections.some(
+      (changedSection) =>
+        !isPreoperativeProgressSection(templateType, changedSection),
+    );
+  }
+
+  return true;
+};
 
 const cloneStringArray = (value: any, fallback: string[] = []) => {
   if (Array.isArray(value)) {
@@ -1249,11 +1278,15 @@ const isEndoscopyDiagramDataPath = (path: string[]) => {
   const joinedPath = path.join(".");
   return (
     joinedPath === "gastroscopy.diagram.canvasImageData" ||
+    joinedPath === "gastroscopy.diagram.drawingImageData" ||
     joinedPath === "gastroscopyCanvasData" ||
     joinedPath === "gastroscopyFindings.canvasImageData" ||
+    joinedPath === "gastroscopyFindings.drawingImageData" ||
     joinedPath === "colonoscopy.diagram.canvasImageData" ||
+    joinedPath === "colonoscopy.diagram.drawingImageData" ||
     joinedPath === "colonoscopyCanvasData" ||
-    joinedPath === "colonoscopyFindings.canvasImageData"
+    joinedPath === "colonoscopyFindings.canvasImageData" ||
+    joinedPath === "colonoscopyFindings.drawingImageData"
   );
 };
 
@@ -1263,12 +1296,16 @@ const sanitizeLiveTemplateDraftValue = (value: any, path: string[] = []): any =>
   }
 
   if (value && typeof value === "object") {
-    return Object.fromEntries(
+    const sanitizedObject = Object.fromEntries(
       Object.entries(value).map(([key, nestedValue]) => [
         key,
         sanitizeLiveTemplateDraftValue(nestedValue, [...path, key]),
       ]),
     );
+
+    return path.length === 0
+      ? compactEndoscopyReportSnapshot(sanitizedObject)
+      : sanitizedObject;
   }
 
   if (typeof value === "string") {
@@ -2293,38 +2330,31 @@ const Index = () => {
     currentReport: sanitizeLiveTemplateDraftValue(currentReport),
   });
 
-  const hasRecentLocalLiveTemplateEdit = () => {
-    if (!latestLocalLiveTemplateEditAtRef.current) {
-      return false;
-    }
-
-    const lastEditAt = Date.parse(latestLocalLiveTemplateEditAtRef.current);
-    if (Number.isNaN(lastEditAt)) {
-      return false;
-    }
-
-    return Date.now() - lastEditAt < LIVE_TEMPLATE_LOCAL_EDIT_PROTECTION_MS;
-  };
-
-  const applyLiveTemplateDraftPayload = (payload: Record<string, any>) => {
+  const applyLiveTemplateDraftPayload = (
+    payload: Record<string, any>,
+    options: { preserveCurrentNavigation?: boolean } = {},
+  ) => {
     const restoredReport = normalizeReportPatientInfos(payload?.currentReport || currentReport);
+    const shouldPreserveCurrentNavigation = Boolean(options.preserveCurrentNavigation);
 
     applyingLiveTemplateDraftRef.current = true;
     hasPendingLocalLiveTemplateChangesRef.current = false;
 
     setCurrentReport(restoredReport);
-    setAppSection(
-      payload?.appSection && VALID_APP_SECTIONS.has(payload.appSection)
-        ? payload.appSection
-        : "templates",
-    );
-    const nextTab =
-      payload?.currentTab && VALID_TEMPLATE_TABS.has(payload.currentTab)
-        ? payload.currentTab
-        : "gastroscopy";
-    setCurrentTab(nextTab === "procedure" ? "gastroscopy" : nextTab);
-    setForcedPatientsProcedureFilter(payload?.forcedPatientsProcedureFilter ?? null);
-    setEditingPatientContext(payload?.editingPatientContext ?? null);
+    if (!shouldPreserveCurrentNavigation) {
+      setAppSection(
+        payload?.appSection && VALID_APP_SECTIONS.has(payload.appSection)
+          ? payload.appSection
+          : "templates",
+      );
+      const nextTab =
+        payload?.currentTab && VALID_TEMPLATE_TABS.has(payload.currentTab)
+          ? payload.currentTab
+          : "gastroscopy";
+      setCurrentTab(nextTab === "procedure" ? "gastroscopy" : nextTab);
+      setForcedPatientsProcedureFilter(payload?.forcedPatientsProcedureFilter ?? null);
+      setEditingPatientContext(payload?.editingPatientContext ?? null);
+    }
     setCurrentExtractedPatientInfo(
       createInitialPatientInfoState(payload?.currentExtractedPatientInfo),
     );
@@ -3234,14 +3264,7 @@ const Index = () => {
       }
 
       if (
-        hasRecentLocalLiveTemplateEdit() &&
-        typeof document !== "undefined" &&
-        document.hasFocus()
-      ) {
-        return;
-      }
-
-      if (
+        appSection === "templates" &&
         hasPendingLocalLiveTemplateChangesRef.current &&
         latestLocalLiveTemplateEditAtRef.current &&
         (!remoteDraft.updatedAtIso ||
@@ -3251,6 +3274,7 @@ const Index = () => {
       }
 
       if (
+        appSection === "templates" &&
         workingSessionUpdatedAtRef.current &&
         remoteDraft.payloadSignature !== liveTemplateDraftSignatureRef.current &&
         workingSessionUpdatedAtRef.current > remoteDraft.updatedAtIso
@@ -3266,13 +3290,15 @@ const Index = () => {
         remoteDraft.updatedBySessionId || lastLiveTemplateDraftAuthorSessionIdRef.current;
       liveTemplateDraftSignatureRef.current = remoteDraft.payloadSignature;
       workingSessionUpdatedAtRef.current = remoteDraft.updatedAtIso || workingSessionUpdatedAtRef.current;
-      applyLiveTemplateDraftPayload(remoteDraft.payload);
+      applyLiveTemplateDraftPayload(remoteDraft.payload, {
+        preserveCurrentNavigation: appSection !== "templates",
+      });
     });
 
     return () => {
       unsubscribe();
     };
-  }, [enablePersistence, liveTemplateDraftSessionId]);
+  }, [appSection, enablePersistence, liveTemplateDraftSessionId]);
 
   useEffect(() => {
     if (
@@ -3530,7 +3556,15 @@ const Index = () => {
   };
 
   const updateReport = (section: keyof typeof currentReport, data: any) => {
-    markManualPostPreoperativeProgress(activeTemplateType, String(section));
+    if (
+      shouldMarkPostPreoperativeProgressForUpdate(
+        activeTemplateType,
+        String(section),
+        data,
+      )
+    ) {
+      markManualPostPreoperativeProgress(activeTemplateType, String(section));
+    }
 
     // Handle findings data
     if (section === 'gastroscopyFindings') {
@@ -4517,7 +4551,8 @@ const Index = () => {
 
     setHistory([]);
     setHistoryIndex(-1);
-    setCurrentTab("gastroscopy");
+    const tabToPreserve = currentTab === "procedure" ? "gastroscopy" : currentTab;
+    setCurrentTab(tabToPreserve);
     setActiveSection("section1");
     setExpanded({
       section1: true,
