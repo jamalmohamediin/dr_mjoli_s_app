@@ -33,7 +33,7 @@ const mapSelectionValues = (values: any[] = [], otherValue = "") =>
   (Array.isArray(values) ? values : [])
     .map((value) => {
       if (value === "Other" && hasText(otherValue)) {
-        return `Other: ${txt(otherValue)}`;
+        return txt(otherValue);
       }
 
       return txt(value);

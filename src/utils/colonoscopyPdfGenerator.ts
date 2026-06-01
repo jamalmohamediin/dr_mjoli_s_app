@@ -130,6 +130,8 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     title:
       section.title === "Bowel Preparation and Procedure Details"
         ? "Bowel Preparation"
+        : section.title === "Post Operative Management"
+          ? "MANAGEMENT AND RECOMMENDATIONS"
         : section.title,
     layout:
       section.title === "Preoperative Information"
@@ -159,6 +161,8 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
           : section.title === "Preoperative Information" &&
               entry.label === "Duration of Withdrawal (Min)"
             ? "Withdrawal Duration"
+          : section.title === "Procedure Details" && entry.label === "Diagnosis"
+            ? "Endoscopic Diagnosis"
           : entry.label,
       value: formatExportValue(entry.value),
       fullWidth: entry.fullWidth,

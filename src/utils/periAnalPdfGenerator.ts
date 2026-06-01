@@ -579,52 +579,9 @@ export const generatePeriAnalPDF = async (
       pdf.setFontSize(9);
     };
 
-    drawRule();
-    y = drawStandardPatientInformation({
-      pdf,
-      patientInfo: patientInfo || periAnalData?.patientInfo,
-      y,
-      margin,
-      pageWidth,
-      pageHeight,
-      lineHeight,
-      patientNameFallback: patientName,
-      patientIdFallback: patientId,
-      asaLabel: "ASA Score",
-    });
-    startSection("Procedure Details");
-    row3(
-      `Date of Operation: ${formatDateOfOperationForDisplay(preop?.dateOfOperation) || "________________"}`,
-      "",
-      ""
-    );
-    row3(
-      `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
-      `Assistant: ${(preop?.assistants || []).filter((x: string) => x?.trim()).join(", ")}`,
-      `Anaesthetist: ${(preop?.anaesthetists || []).filter((x: string) => x?.trim()).join(", ")}`
-    );
-    row3(
-      `Start Time: ${txt(preop?.startTime)}`,
-      `End Time: ${txt(preop?.endTime)}`,
-      `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`
-    );
-    row3(
-      `Urgency: ${txt(preop?.procedureUrgency)}`,
-      `Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
-      ""
-    );
-    row1(`Indication For Surgery: ${txt(preop?.indication)}`);
-    row1(`Operation Description: ${txt(preop?.operationDescription)}`);
-    if (txt(preop?.positionInTheatre) || txt(preop?.positionOther)) {
-      row1(
-        `Position In Theatre: ${
-          preop?.positionInTheatre === "Other" ? txt(preop?.positionOther) : txt(preop?.positionInTheatre)
-        }`
-      );
-    }
-    postPreoperativeSectionActive = true;
+    const renderPeriAnalDiagramsSection = () => {
+      if (diagramCanvasEntries.length === 0) return;
 
-    if (diagramCanvasEntries.length > 0) {
       const cellGap = 8;
       const cellWidth = (pageWidth - margin * 2 - cellGap) / 2;
       const isFourDiagramLayout = diagramCanvasEntries.length >= 4;
@@ -641,7 +598,6 @@ export const generatePeriAnalPDF = async (
       if (!Number.isFinite(cellHeight) || cellHeight <= 0) {
         cellHeight = isFourDiagramLayout ? 34 : 40;
       }
-      const diagramGridHeight = rowCount * (cellHeight + rowGap + titleOffset);
 
       y += 2;
       drawRule();
@@ -701,7 +657,52 @@ export const generatePeriAnalPDF = async (
       if (diagramCanvasEntries.length <= 2) {
         startNewPage();
       }
+    };
+
+    drawRule();
+    y = drawStandardPatientInformation({
+      pdf,
+      patientInfo: patientInfo || periAnalData?.patientInfo,
+      y,
+      margin,
+      pageWidth,
+      pageHeight,
+      lineHeight,
+      patientNameFallback: patientName,
+      patientIdFallback: patientId,
+      asaLabel: "ASA Score",
+    });
+    startSection("Procedure Details");
+    row3(
+      `Date of Operation: ${formatDateOfOperationForDisplay(preop?.dateOfOperation) || "________________"}`,
+      "",
+      ""
+    );
+    row3(
+      `Surgeon: ${(preop?.surgeons || []).filter((x: string) => x?.trim()).join(", ")}`,
+      `Assistant: ${(preop?.assistants || []).filter((x: string) => x?.trim()).join(", ")}`,
+      `Anaesthetist: ${(preop?.anaesthetists || []).filter((x: string) => x?.trim()).join(", ")}`
+    );
+    row3(
+      `Start Time: ${txt(preop?.startTime)}`,
+      `End Time: ${txt(preop?.endTime)}`,
+      `Total Duration: ${preop?.duration ? `${preop.duration} minutes` : ""}`
+    );
+    row3(
+      `Urgency: ${txt(preop?.procedureUrgency)}`,
+      `Imaging: ${joinSelections(preop?.imaging, preop?.imagingOther)}`,
+      ""
+    );
+    row1(`Indication For Surgery: ${txt(preop?.indication)}`);
+    row1(`Operation Description: ${txt(preop?.operationDescription)}`);
+    if (txt(preop?.positionInTheatre) || txt(preop?.positionOther)) {
+      row1(
+        `Position In Theatre: ${
+          preop?.positionInTheatre === "Other" ? txt(preop?.positionOther) : txt(preop?.positionInTheatre)
+        }`
+      );
     }
+    postPreoperativeSectionActive = true;
 
     if (findingsSummary?.entries?.length) {
       startSection("Findings Summary");
@@ -718,12 +719,6 @@ export const generatePeriAnalPDF = async (
     writeEntries(
       [
         { label: "Irrigation Solution", value: joinSelections(woundManagement?.irrigationSolution, woundManagement?.irrigationSolutionOther) },
-      ].filter((entry) => entry.value)
-    );
-
-    startSection("Closure");
-    writeEntries(
-      [
         { label: "Wound Closure", value: txt(woundManagement?.woundClosure) },
         { label: "Dressing Applied", value: joinSelections(woundManagement?.dressingApplied, woundManagement?.dressingAppliedOther) },
         { label: "Anal Pack Inserted", value: txt(woundManagement?.analPackInserted) },
@@ -785,6 +780,8 @@ export const generatePeriAnalPDF = async (
       { label: "Plan For Further Surgery", value: txt(postOperativePlan?.planForFurtherSurgery) },
       { label: "Post Operative Management", value: txt(addInfo?.postOperativeManagement) },
     ]);
+
+    renderPeriAnalDiagramsSection();
 
     startSection("Surgeon's Signature");
     if (addInfo?.surgeonSignature && String(addInfo.surgeonSignature).startsWith("data:image")) {

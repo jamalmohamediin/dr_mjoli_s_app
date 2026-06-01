@@ -37,7 +37,7 @@ export const toArray = (value: unknown): string[] => {
 
 export const joinSelections = (values: unknown, otherValue?: string) =>
   toArray(values)
-    .map((value) => (value === "Other" && otherValue?.trim() ? `Other: ${otherValue}` : value))
+    .map((value) => (value === "Other" && otherValue?.trim() ? otherValue : value))
     .filter(Boolean)
     .join(", ");
 
@@ -92,7 +92,7 @@ const selectedFindings = (data: any) => {
   const findings = toArray(data?.findings?.selectedFindings);
   return findings.map((finding) =>
     finding === "Other" && data?.findings?.otherFindingText
-      ? `Other: ${data.findings.otherFindingText}`
+      ? data.findings.otherFindingText
       : finding
   );
 };

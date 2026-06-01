@@ -27,25 +27,6 @@ const hasSelection = (values: unknown, option: string) => toArray(values).includ
 
 const toCsv = (values: unknown) => toArray(values).join(", ");
 
-const appendCsvLine = (lines: string[], label: string, values: unknown) => {
-  const csv = toCsv(values);
-  if (csv) {
-    lines.push(`${label}: ${csv}`);
-  }
-};
-
-const appendTextLine = (
-  lines: string[],
-  label: string,
-  value: unknown,
-  suffix = "",
-) => {
-  const text = String(value || "").trim();
-  if (text) {
-    lines.push(`${label}: ${text}${suffix}`);
-  }
-};
-
 export const buildColonoscopyReportSections = (
   template: any,
   options: BuildColonoscopyReportSectionsOptions = {},
@@ -98,7 +79,7 @@ export const buildColonoscopyReportSections = (
       ? `Propofol ${preoperative.medications.propofolDose} mg`
       : "",
     preoperative.medications?.otherMedication
-      ? `Other: ${preoperative.medications.otherMedication}`
+      ? `${preoperative.medications.otherMedication}`
       : "",
   ].filter(Boolean);
 
@@ -114,13 +95,13 @@ export const buildColonoscopyReportSections = (
     { label: "Duration of Withdrawal (Min)", value: preoperative.withdrawalDuration },
     { label: "Urgency", value: preoperative.procedureUrgency, badges: true },
     {
-      label: "Signs & Symptoms",
-      value: joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+      label: "Indication for Colonoscopy",
+      value: joinSelections(preoperative.indications, preoperative.indicationOther),
       fullWidth: true,
     },
     {
-      label: "Indication for Colonoscopy",
-      value: joinSelections(preoperative.indications, preoperative.indicationOther),
+      label: "Signs & Symptoms",
+      value: joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
       fullWidth: true,
     },
     {
@@ -552,7 +533,7 @@ export const buildColonoscopyReportSections = (
           label: "Sedationist",
           value:
             preoperative.sedationist === "Other"
-              ? `Other: ${preoperative.sedationistOther || ""}`
+              ? `${preoperative.sedationistOther || ""}`
               : preoperative.sedationist,
         },
         {
@@ -581,12 +562,22 @@ export const buildColonoscopyReportSections = (
   }
 
   const interventionDetails: string[] = [];
-  appendCsvLine(interventionDetails, "Interventions", interventions.interventions);
-  appendTextLine(interventionDetails, "Other Intervention", interventions.other);
+  const interventionSelections = toCsv(interventions.interventions);
+  if (interventionSelections) {
+    interventionDetails.push(interventionSelections);
+  }
+  if (hasText(interventions.other)) {
+    interventionDetails.push(String(interventions.other).trim());
+  }
 
   const diagnosisDetails: string[] = [];
-  appendCsvLine(diagnosisDetails, "Final Endoscopic Diagnosis", diagnosis.diagnoses);
-  appendTextLine(diagnosisDetails, "Other Diagnosis", diagnosis.diagnosisOther);
+  const diagnosisSelections = toCsv(diagnosis.diagnoses);
+  if (diagnosisSelections) {
+    diagnosisDetails.push(diagnosisSelections);
+  }
+  if (hasText(diagnosis.diagnosisOther)) {
+    diagnosisDetails.push(String(diagnosis.diagnosisOther).trim());
+  }
 
   sections.push(
     {
@@ -598,7 +589,7 @@ export const buildColonoscopyReportSections = (
           fullWidth: true,
         },
         {
-          label: "Diagnosis",
+          label: "Endoscopic Diagnosis",
           value: diagnosisDetails,
           fullWidth: true,
         },
@@ -626,15 +617,15 @@ export const buildColonoscopyReportSections = (
       ],
     },
     {
-      title: "Conclusion",
-      entries: [{ label: "Conclusion", value: additionalInfo.conclusion, fullWidth: true }],
-    },
-    {
       title: "Additional Notes",
       entries: [{ label: "Additional Notes", value: additionalInfo.additionalNotes, fullWidth: true }],
     },
     {
-      title: "Post Operative Management",
+      title: "Conclusion",
+      entries: [{ label: "Conclusion", value: additionalInfo.conclusion, fullWidth: true }],
+    },
+    {
+      title: "MANAGEMENT AND RECOMMENDATIONS",
       entries: [
         {
           label: "Post Operative Management",

@@ -216,7 +216,7 @@ export const GastroscopyForm = ({
     stomach: true,
     duodenum: true,
   });
-  const [isSedationExpanded, setIsSedationExpanded] = React.useState(true);
+  const [isSedationExpanded, setIsSedationExpanded] = React.useState(false);
 
   const updatePatientInfoFields = (updates: Record<string, any>) => {
     if (onBulkPatientInfoUpdate) {

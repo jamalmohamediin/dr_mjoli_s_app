@@ -644,14 +644,14 @@ export const generateRectalCancerPDF = async (
       '';
     const imagingText = rectalCancerData?.procedureDetails?.preoperativeImaging?.map(imaging => 
       imaging === 'Other' && rectalCancerData.procedureDetails.preoperativeImagingOther 
-        ? `Other: ${rectalCancerData.procedureDetails.preoperativeImagingOther}` 
+        ? rectalCancerData.procedureDetails.preoperativeImagingOther 
         : imaging
     ).join(', ') || '';
     const neoadjuvantTreatment = rectalCancerData?.operationType?.neoadjuvantTreatment || '';
     const indicationText = (rectalCancerData?.operationType?.operationFindingsOptions || [])
       .map((option: string) => {
         if (option === 'Other' && rectalCancerData?.operationType?.operationFindingsOther?.trim()) {
-          return `Other: ${rectalCancerData.operationType.operationFindingsOther}`;
+          return rectalCancerData.operationType.operationFindingsOther;
         }
         return option;
       })
@@ -695,7 +695,7 @@ export const generateRectalCancerPDF = async (
     const operationFindingsSelectionText = operationFindingsOptions
       .map((option: string) => {
         if (option === 'Other' && rectalCancerData?.operationType?.operationFindingsOther?.trim()) {
-          return `Other: ${rectalCancerData.operationType.operationFindingsOther}`;
+          return rectalCancerData.operationType.operationFindingsOther;
         }
         return option;
       })
@@ -773,14 +773,11 @@ export const generateRectalCancerPDF = async (
     const conversionText = isConverted ? `${conversionReason}${conversionOther}` : '';
 
     const rectumOpsText = rectalCancerData?.operationType?.rectumOperationType?.join(', ') || '';
-    const rectumOtherText = rectalCancerData?.operationType?.rectumOperationOther
-      ? `, Other: ${rectalCancerData.operationType.rectumOperationOther}`
-      : '';
-    const rectumFullText = `${rectumOpsText}${rectumOtherText}`;
-    const rectumOperationTypes =
-      rectumFullText && rectumFullText.trim() && rectumFullText.trim() !== ', Other: '
-        ? rectumFullText
-        : '';
+    const rectumOtherText = rectalCancerData?.operationType?.rectumOperationOther || '';
+    const rectumOperationTypes = [rectumOpsText, rectumOtherText]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .join(', ');
 
     const isMinimallyInvasive = normalizedApproaches.some((approach: string) =>
       (approach.includes('laparoscopic') || approach.includes('robotic')) && !approach.includes('open')
@@ -795,7 +792,7 @@ export const generateRectalCancerPDF = async (
     const pointsOfDifficultyOther = rectalCancerData?.operativeEvents?.pointsOfDifficultyOther || '';
     const pointsOfDifficultyText = pointsOfDifficultyList
       .map((item: string) =>
-        item === 'Other' && pointsOfDifficultyOther ? `Other: ${pointsOfDifficultyOther}` : item
+        item === 'Other' && pointsOfDifficultyOther ? pointsOfDifficultyOther : item
       )
       .join(', ');
 
@@ -805,7 +802,7 @@ export const generateRectalCancerPDF = async (
     const intraoperativeEventsOther = rectalCancerData?.operativeEvents?.intraoperativeEventsOther || '';
     const intraoperativeEventsText = intraoperativeEventsList
       .map((item: string) =>
-        item === 'Other' && intraoperativeEventsOther ? `Other: ${intraoperativeEventsOther}` : item
+        item === 'Other' && intraoperativeEventsOther ? intraoperativeEventsOther : item
       )
       .join(', ');
 
@@ -1025,7 +1022,7 @@ export const generateRectalCancerPDF = async (
     const extentMobilizationOther = rectalCancerData?.mobilizationAndResection?.extentOfMobilizationOther || '';
     const extentMobilizationText = Array.isArray(extentMobilizationList)
       ? extentMobilizationList
-          .map((item: string) => (item === 'Other' && extentMobilizationOther ? `Other: ${extentMobilizationOther}` : item))
+          .map((item: string) => (item === 'Other' && extentMobilizationOther ? extentMobilizationOther : item))
           .join(', ')
       : '';
     const vesselLigation = rectalCancerData?.mobilizationAndResection?.vesselLigation?.join(', ') || '';
@@ -1035,7 +1032,7 @@ export const generateRectalCancerPDF = async (
     const vesselHemostasisText = Array.isArray(vesselHemostasis)
       ? vesselHemostasis
           .map((technique: string) =>
-            technique === 'Other' && vesselHemostasisOther ? `Other: ${vesselHemostasisOther}` : technique,
+            technique === 'Other' && vesselHemostasisOther ? vesselHemostasisOther : technique,
           )
           .join(', ')
       : '';
@@ -1051,7 +1048,7 @@ export const generateRectalCancerPDF = async (
     const analCanalTransectionOther = rectalCancerData?.mobilizationAndResection?.analCanalTransectionOther || '';
     const analCanalTransectionStr = Array.isArray(analCanalTransection)
       ? analCanalTransection
-          .map((level: string) => (level === 'Other' && analCanalTransectionOther ? `Other: ${analCanalTransectionOther}` : level))
+          .map((level: string) => (level === 'Other' && analCanalTransectionOther ? analCanalTransectionOther : level))
           .join(', ')
       : '';
 
@@ -1148,7 +1145,7 @@ export const generateRectalCancerPDF = async (
         const sutureMaterialOther = anastomosisDetails?.sutureMaterialOther || '';
         const sutureMaterialText = sutureMaterial
           .map((material: string) =>
-            material === 'Other' && sutureMaterialOther ? `Other: ${sutureMaterialOther}` : material,
+            material === 'Other' && sutureMaterialOther ? sutureMaterialOther : material,
           )
           .join(', ');
 
@@ -1173,7 +1170,7 @@ export const generateRectalCancerPDF = async (
           {
             label: 'Linear Stapler Sizes',
             value: linearSizes
-              .map((size: string) => (size === 'Other' && linearOther ? `Other: ${linearOther}` : size))
+              .map((size: string) => (size === 'Other' && linearOther ? linearOther : size))
               .join(', '),
             alwaysVisible: true,
           },
@@ -1181,7 +1178,7 @@ export const generateRectalCancerPDF = async (
             label: 'Circular Stapler Sizes',
             value: circularSizes
               .map((size: string) =>
-                size === 'Other' && circularOther ? `Other: ${circularOther}` : size,
+                size === 'Other' && circularOther ? circularOther : size,
               )
               .join(', '),
             alwaysVisible: true,
@@ -1219,13 +1216,13 @@ export const generateRectalCancerPDF = async (
       if (Array.isArray(reasonForStoma)) {
         reasonForStomaText = reasonForStoma
           .map((reason: string) =>
-            reason === 'Other' && reasonForStomaOther ? `Other: ${reasonForStomaOther}` : reason,
+            reason === 'Other' && reasonForStomaOther ? reasonForStomaOther : reason,
           )
           .join(', ');
       } else {
         reasonForStomaText = String(reasonForStoma || '');
         if (reasonForStomaText === 'Other' && reasonForStomaOther) {
-          reasonForStomaText = `Other: ${reasonForStomaOther}`;
+          reasonForStomaText = reasonForStomaOther;
         }
       }
 
@@ -1283,7 +1280,7 @@ export const generateRectalCancerPDF = async (
       drainTypeDisplay = drainTypes
         .map((type: string) => {
           if (type === 'Other' && rectalCancerData?.operativeEvents?.drainTypeOther?.trim()) {
-            return `Other: ${rectalCancerData.operativeEvents.drainTypeOther.trim()}`;
+            return rectalCancerData.operativeEvents.drainTypeOther.trim();
           }
           return type;
         })
@@ -1316,7 +1313,7 @@ export const generateRectalCancerPDF = async (
     const fascialMaterial = Array.isArray(rectalCancerData?.closure?.fascialSutureMaterial) 
       ? rectalCancerData.closure.fascialSutureMaterial.map(material => 
           material === 'Other' && rectalCancerData?.closure?.fascialSutureMaterialOther 
-            ? `Other: ${rectalCancerData.closure.fascialSutureMaterialOther}` 
+            ? rectalCancerData.closure.fascialSutureMaterialOther 
             : material
         ).join(', ') 
       : (rectalCancerData?.closure?.fascialSutureMaterial || '');
@@ -1341,7 +1338,7 @@ export const generateRectalCancerPDF = async (
     const skinMaterial = Array.isArray(rectalCancerData?.closure?.skinClosureMaterial) 
       ? rectalCancerData.closure.skinClosureMaterial.map(material => 
           material === 'Other' && rectalCancerData?.closure?.skinClosureMaterialOther 
-            ? `Other: ${rectalCancerData.closure.skinClosureMaterialOther}` 
+            ? rectalCancerData.closure.skinClosureMaterialOther 
             : material
         ).join(', ') 
       : (rectalCancerData?.closure?.skinClosureMaterial || '');

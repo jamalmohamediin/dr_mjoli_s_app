@@ -145,7 +145,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     addLine(oesophagusDetails, "Varices", oesophagus.varicesGrade);
   }
   if (hasSelection(oesophagus.findings, "Other") && hasText(oesophagus.other)) {
-    oesophagusDetails.push(`Other: ${oesophagus.other}`);
+    oesophagusDetails.push(String(oesophagus.other).trim());
   }
 
   const stomachDetails: string[] = [];
@@ -189,7 +189,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     addLine(stomachDetails, "Stricture Overlying Mucosa", stomach.strictureMucosa);
   }
   if (hasSelection(stomach.findings, "Other") && hasText(stomach.other)) {
-    stomachDetails.push(`Other: ${stomach.other}`);
+    stomachDetails.push(String(stomach.other).trim());
   }
 
   const duodenumDetails: string[] = [];
@@ -216,7 +216,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     addLine(duodenumDetails, "Stricture Overlying Mucosa", duodenum.strictureMucosa);
   }
   if (hasSelection(duodenum.findings, "Other") && hasText(duodenum.other)) {
-    duodenumDetails.push(`Other: ${duodenum.other}`);
+    duodenumDetails.push(String(duodenum.other).trim());
   }
 
   const interventionDetails: string[] = [];
@@ -245,7 +245,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     interventionDetails.push(`Injection Agent: ${interventions.injectionAgent}`);
   }
   if (hasSelection(interventions.interventions, "Other") && hasText(interventions.other)) {
-    interventionDetails.push(`Other: ${interventions.other}`);
+    interventionDetails.push(String(interventions.other).trim());
   }
 
   const otherSpecimensTakenValue =
@@ -558,14 +558,14 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     false,
   );
   drawEntryRow(
-    "Signs & Symptoms",
-    joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
+    "Indications",
+    joinSelections(preoperative.indications, preoperative.indicationOther),
     false,
     false,
   );
   drawEntryRow(
-    "Indications",
-    joinSelections(preoperative.indications, preoperative.indicationOther),
+    "Signs & Symptoms",
+    joinSelections(preoperative.signsSymptoms, preoperative.signsSymptomsOther),
     false,
     false,
   );
@@ -872,7 +872,7 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     pdf.setFont("helvetica", "normal");
   }
 
-  drawSectionTitle("Interventions / Therapy and Diagnosis");
+  drawSectionTitle("Interventions / Therapy");
   const interventionRows: GastroscopyPdfRow[] = [];
   appendFindingRow(interventionRows, "Interventions / Therapy", toArray(interventions.interventions).join(", "));
   appendFindingDetailsRows(interventionRows, interventionDetails);
@@ -890,13 +890,13 @@ export const generateGastroscopyPDF = async (data: any, patientInfo?: any) => {
     false,
   );
 
-  drawSectionTitle("CONCLUSION");
-  drawSingleRow(formatValue(additionalInfo.conclusion, false));
-
   drawSectionTitle("ADDITIONAL NOTES");
   drawSingleRow(formatValue(additionalInfo.additionalNotes, false));
 
-  drawSectionTitle("POST OPERATIVE MANAGEMENT");
+  drawSectionTitle("CONCLUSION");
+  drawSingleRow(formatValue(additionalInfo.conclusion, false));
+
+  drawSectionTitle("MANAGEMENT AND RECOMMENDATIONS");
   drawSingleRow(formatValue(additionalInfo.postOperativeManagement, false));
 
   ensureSpace(24, 18);

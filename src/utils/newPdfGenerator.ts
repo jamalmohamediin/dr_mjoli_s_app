@@ -315,7 +315,7 @@ export const generateSinglePagePDF = async (
       }
       
       if (reportData.followUp.other) {
-        const otherLines = pdf.splitTextToSize(`Other: ${reportData.followUp.other}`, pageWidth - 2 * margin);
+        const otherLines = pdf.splitTextToSize(`${reportData.followUp.other}`, pageWidth - 2 * margin);
         pdf.text(otherLines, margin, y);
         y += otherLines.length * 4 + 3;
       }

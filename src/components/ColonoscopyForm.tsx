@@ -193,7 +193,7 @@ export const ColonoscopyForm = ({
     Boolean(inflammation.ulcerBurden) && inflammation.ulcerBurden !== "None";
 
   const [collapsedFindingsSections, setCollapsedFindingsSections] = React.useState<Record<string, boolean>>({});
-  const [isSedationExpanded, setIsSedationExpanded] = React.useState(true);
+  const [isSedationExpanded, setIsSedationExpanded] = React.useState(false);
   const [isBbpsExpanded, setIsBbpsExpanded] = React.useState(true);
 
   const isFindingSectionExpanded = (sectionKey: string) => !collapsedFindingsSections[sectionKey];

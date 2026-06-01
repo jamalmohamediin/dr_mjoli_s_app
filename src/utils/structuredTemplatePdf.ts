@@ -67,6 +67,36 @@ const shouldRenderEntryValueOnly = (sectionTitle: string, entryLabel: string) =>
   return normalizedSectionTitle === normalizedEntryLabel;
 };
 
+const normalizeComparableLabel = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const sanitizeExportEntryText = (entryLabel: string, rawValue: string) => {
+  if (!rawValue) {
+    return "";
+  }
+
+  let sanitized = String(rawValue);
+  sanitized = sanitized.replace(/(^|[\n,;|]\s*)Other:\s*/gi, "$1");
+
+  const normalizedEntryLabel = normalizeComparableLabel(entryLabel);
+  if (normalizedEntryLabel) {
+    const entryPrefixPattern = new RegExp(
+      `^\\s*${normalizedEntryLabel.replace(/\s+/g, "\\s+")}\\s*:\\s*`,
+      "i",
+    );
+    sanitized = sanitized.replace(entryPrefixPattern, "");
+  }
+
+  if (normalizedEntryLabel.includes("interventions")) {
+    sanitized = sanitized.replace(/(^|[\n,;|]\s*)Interventions:\s*/gi, "$1");
+  }
+
+  return sanitized.trim();
+};
+
 interface StructuredTemplatePdfOptions {
   title: string;
   patientInfo?: any;
@@ -540,7 +570,12 @@ export const generateStructuredTemplatePdf = async ({
   };
 
   const toEntryValue = (entry: StructuredTemplatePdfEntry) =>
-    Array.isArray(entry.value) ? toArray(entry.value).join(", ") : entry.value || "";
+    Array.isArray(entry.value)
+      ? entry.value
+          .map((value) => sanitizeExportEntryText(entry.label, String(value || "")))
+          .filter((value) => hasText(value))
+          .join(", ")
+      : sanitizeExportEntryText(entry.label, String(entry.value || ""));
 
   const toEntryText = (entry: StructuredTemplatePdfEntry) =>
     `${entry.label}: ${toEntryValue(entry)}`;
@@ -573,8 +608,8 @@ export const generateStructuredTemplatePdf = async ({
     );
     drawSingleRow(formatEntry("Urgency") || formatEntry("Procedure Urgency"));
     drawSingleRow(formatEntry("Preoperative Imaging"));
-    drawSingleRow(formatEntry("Signs & Symptoms"));
     drawSingleRow(formatEntry("Indication for Colonoscopy"));
+    drawSingleRow(formatEntry("Signs & Symptoms"));
   };
 
   const renderAlignedPreoperativeGridSection = (entries: StructuredTemplatePdfEntry[]) => {

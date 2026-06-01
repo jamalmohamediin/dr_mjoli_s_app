@@ -667,7 +667,7 @@ export const generateFinalPDF = async (
       if (followUpText) {
         combinedFollowUp = followUpText;
         if (followUpOther) {
-          combinedFollowUp += ` (Other: ${followUpOther})`;
+          combinedFollowUp += ` (${followUpOther})`;
         }
       }
       

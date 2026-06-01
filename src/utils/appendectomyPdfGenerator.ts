@@ -228,7 +228,7 @@ export const generateAppendectomyPDF = async (
           : [];
 
       return items
-        .map((item) => (item === 'Other' && otherValue ? `Other: ${otherValue}` : item))
+        .map((item) => (item === 'Other' && otherValue ? otherValue : item))
         .join(', ');
     };
 
@@ -708,7 +708,7 @@ export const generateAppendectomyPDF = async (
           return `Visceral Injury: ${closureData.visceralInjuryDetail}`;
         }
         if (complication === 'Other' && hasPrintableValue(closureData.complicationOther)) {
-          return `Other: ${closureData.complicationOther}`;
+          return closureData.complicationOther;
         }
         return getTextValue(complication);
       })

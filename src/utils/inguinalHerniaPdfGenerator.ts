@@ -52,7 +52,7 @@ export const generateInguinalHerniaPDF = async (data: any, patientInfo?: any) =>
   const preperitonealDevelopment = toArray(procedure.preperitonealDevelopment)
     .map((entry) => {
       if (entry.toLowerCase() === "other" && procedure.preperitonealDevelopmentOther) {
-        return `Other: ${procedure.preperitonealDevelopmentOther}`;
+        return procedure.preperitonealDevelopmentOther;
       }
 
       return entry;

@@ -317,7 +317,7 @@ export const joinSelections = (value: unknown, otherValue?: unknown) =>
   toArray(value)
     .map((entry) => {
       if (entry === "Other" && hasText(otherValue)) {
-        return `Other: ${text(otherValue)}`;
+        return text(otherValue);
       }
 
       return entry;
@@ -374,7 +374,7 @@ export const formatPathologyLaboratorySelection = (
       .map((selection) => {
         if (selection === "Other") {
           const otherText = String(otherLaboratory || "").trim();
-          return otherText ? `Other: ${otherText}` : "Other";
+          return otherText || "Other";
         }
 
         return selection;
