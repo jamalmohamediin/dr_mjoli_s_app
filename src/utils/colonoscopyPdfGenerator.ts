@@ -4,7 +4,10 @@ import {
 } from "@/utils/structuredTemplatePdf";
 import { buildColonoscopyReportSections } from "@/utils/colonoscopyReportSections";
 import { getLocalDateTimeValue } from "@/utils/dateFormatter";
-import { normalizeDiagramLegendItems } from "@/utils/templateDataHelpers";
+import {
+  hasPdfDisplayValue,
+  normalizeDiagramLegendItems,
+} from "@/utils/templateDataHelpers";
 
 const PRESERVE_UPPERCASE_TOKENS = new Set([
   "ASA",
@@ -63,6 +66,10 @@ const FINDINGS_DETAIL_SECTION_TITLES = new Set([
   "Ulcer (s)",
 ]);
 
+const COLONOSCOPY_PROCEDURE_COLUMN_LABEL_WIDTH = 84;
+const COLONOSCOPY_PROCEDURE_COLUMN_LABEL_GAP = 2;
+const COLONOSCOPY_FINDINGS_GROUP_SPACING = 3;
+
 export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
   const additionalInfo = data?.additionalInfo || {};
   const diagram = data?.diagram || {};
@@ -97,42 +104,163 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
     includeSedationAndBbps: false,
   });
 
-  const procedureDetailsSection = baseSections.find((section) => section.title === "Procedure Details");
-  const findingsSummarySection = baseSections.find((section) => section.title === "Findings Summary");
+  const procedureDetailsSection = baseSections.find(
+    (section) => section.title === "Procedure Details",
+  );
+  const findingsSummarySection = baseSections.find(
+    (section) => section.title === "Findings Summary",
+  );
   const interventionsSection = baseSections.find(
     (section) => section.title === "Interventions and Final Endoscopic Diagnosis",
   );
+  const renderableEntries = (entries: any[] = []) =>
+    entries.filter((entry) => hasPdfDisplayValue(entry?.value));
 
-  const mergedProcedureDetailsEntries = [
-    ...(procedureDetailsSection?.entries || []),
-    ...(findingsSummarySection?.entries || []),
-    ...(interventionsSection?.entries || []),
-  ];
+  const detailedFindingSections = baseSections.filter((section) =>
+    FINDINGS_DETAIL_SECTION_TITLES.has(section.title),
+  );
+  const specimenSection = baseSections.find((section) => section.title === "Specimen");
+  const additionalNotesSection = baseSections.find(
+    (section) => section.title === "Additional Notes",
+  );
+  const conclusionSection = baseSections.find((section) => section.title === "Conclusion");
+  const managementSection = baseSections.find(
+    (section) =>
+      section.title === "MANAGEMENT AND RECOMMENDATIONS" ||
+      section.title === "Management and Recommendations" ||
+      section.title === "Post Operative Management",
+  );
 
-  const normalizedSections = baseSections
-    .filter(
+  const findingsEntries: any[] = [];
+  detailedFindingSections.forEach((section) => {
+    const populatedEntries = renderableEntries(section.entries);
+    if (populatedEntries.length === 0) {
+      return;
+    }
+
+    findingsEntries.push({
+      label: section.title,
+      subheading: true,
+    });
+    findingsEntries.push(
+      ...populatedEntries.map((entry, index) => ({
+        ...entry,
+        spacerAfter:
+          index === populatedEntries.length - 1
+            ? COLONOSCOPY_FINDINGS_GROUP_SPACING
+            : undefined,
+      })),
+    );
+  });
+
+  if (
+    Array.isArray(findingsSummary.findings) &&
+    findingsSummary.findings.includes("Other") &&
+    String(findingsSummary.findingOther || "").trim()
+  ) {
+    findingsEntries.push({
+      label: "Other",
+      subheading: true,
+    });
+    findingsEntries.push({
+      label: "Details",
+      value: findingsSummary.findingOther,
+      fullWidth: true,
+      spacerAfter: COLONOSCOPY_FINDINGS_GROUP_SPACING,
+    });
+  }
+
+  const siteEntry = findingsSummarySection?.entries.find(
+    (entry) => entry.label === "Site(s) of Abnormality",
+  );
+  if (siteEntry && hasPdfDisplayValue(siteEntry.value)) {
+    findingsEntries.push(siteEntry);
+  }
+
+  const descriptionEntry = findingsSummarySection?.entries.find(
+    (entry) => entry.label === "Description of Findings",
+  );
+  if (descriptionEntry && hasPdfDisplayValue(descriptionEntry.value)) {
+    findingsEntries.push(descriptionEntry);
+  }
+
+  const interventionEntry = interventionsSection?.entries.find(
+    (entry) => entry.label === "Procedure Interventions",
+  );
+  const diagnosisEntry = interventionsSection?.entries.find(
+    (entry) => entry.label === "Endoscopic Diagnosis" || entry.label === "Diagnosis",
+  );
+
+  const normalizedSections = [
+    ...baseSections.filter(
       (section) =>
         section.title !== "Findings Summary" &&
-        section.title !== "Interventions and Final Endoscopic Diagnosis",
-    )
-    .map((section) => {
-      if (section.title !== "Procedure Details") {
-        return section;
-      }
-
-      return {
-        ...section,
-        entries: mergedProcedureDetailsEntries,
-      };
-    });
+        !FINDINGS_DETAIL_SECTION_TITLES.has(section.title) &&
+        section.title !== "Interventions and Final Endoscopic Diagnosis" &&
+        section.title !== "Specimen" &&
+        section.title !== "Additional Notes" &&
+        section.title !== "Conclusion" &&
+        section.title !== "MANAGEMENT AND RECOMMENDATIONS" &&
+        section.title !== "Management and Recommendations" &&
+        section.title !== "Post Operative Management",
+    ),
+    {
+      title: "Findings",
+      entries: findingsEntries,
+      layout: "label-value-table" as const,
+    },
+    {
+      title: "Endoscopic Diagnosis",
+      hideTitle: true,
+      entries: diagnosisEntry
+        ? [
+            {
+              label: "Endoscopic Diagnosis",
+              value: diagnosisEntry.value,
+              fullWidth: true,
+            },
+          ]
+        : [],
+      layout: "label-value-table" as const,
+    },
+    {
+      title: "Interventions / Therapy",
+      entries: interventionEntry
+        ? [
+            {
+              label: "Interventions / Therapy",
+              value: interventionEntry.value,
+              fullWidth: true,
+              valueOnly: true,
+            },
+          ]
+        : [],
+      layout: "label-value-table" as const,
+    },
+    {
+      ...(specimenSection || { title: "Specimen", entries: [] }),
+      title: "Specimen",
+    },
+    {
+      ...(additionalNotesSection || { title: "Additional Notes", entries: [] }),
+      title: "Additional Notes",
+    },
+    {
+      ...(conclusionSection || { title: "Conclusion", entries: [] }),
+      title: "Conclusion",
+    },
+    {
+      ...(managementSection || { title: "Management and Recommendations", entries: [] }),
+      title: "Management and Recommendations",
+    },
+  ];
 
   const sections: StructuredTemplatePdfSection[] = normalizedSections.map((section) => ({
     title:
       section.title === "Bowel Preparation and Procedure Details"
         ? "Bowel Preparation"
-        : section.title === "Post Operative Management"
-          ? "MANAGEMENT AND RECOMMENDATIONS"
         : section.title,
+    hideTitle: section.hideTitle,
     layout:
       section.title === "Preoperative Information"
         ? "label-value-table"
@@ -142,14 +270,25 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
         ? 1
         : undefined,
     fixedLabelWidth:
-      section.title === "Preoperative Information"
-        ? 52
-        : section.title === "Bowel Preparation and Procedure Details"
-        ? 44
+      section.title === "Preoperative Information" ||
+      section.title === "Bowel Preparation and Procedure Details" ||
+      section.title === "Procedure Details" ||
+      section.title === "Findings" ||
+      section.title === "Endoscopic Diagnosis"
+        ? COLONOSCOPY_PROCEDURE_COLUMN_LABEL_WIDTH
         : FINDINGS_DETAIL_SECTION_TITLES.has(section.title)
           ? 78
           : undefined,
-    labelGap: FINDINGS_DETAIL_SECTION_TITLES.has(section.title) ? 3 : undefined,
+    labelGap:
+      section.title === "Preoperative Information" ||
+      section.title === "Bowel Preparation and Procedure Details" ||
+      section.title === "Procedure Details" ||
+      section.title === "Findings" ||
+      section.title === "Endoscopic Diagnosis"
+        ? COLONOSCOPY_PROCEDURE_COLUMN_LABEL_GAP
+        : FINDINGS_DETAIL_SECTION_TITLES.has(section.title)
+          ? 3
+          : undefined,
     entries: section.entries.map((entry) => ({
       label:
         section.title === "Preoperative Information" &&
@@ -161,11 +300,13 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
           : section.title === "Preoperative Information" &&
               entry.label === "Duration of Withdrawal (Min)"
             ? "Withdrawal Duration"
-          : section.title === "Procedure Details" && entry.label === "Diagnosis"
-            ? "Endoscopic Diagnosis"
           : entry.label,
       value: formatExportValue(entry.value),
       fullWidth: entry.fullWidth,
+      subheading: entry.subheading,
+      valueOnly: entry.valueOnly,
+      spacerBefore: entry.spacerBefore,
+      spacerAfter: entry.spacerAfter,
     })),
   }));
 
@@ -181,8 +322,7 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
       ? {
           title: "Colonoscopy Diagram",
           imageData: diagramImageData,
-          placement: "inlineRight",
-          sectionTitle: "Procedure Details",
+          placement: "end",
           style: "plain",
           legendTitle: "Legend",
           legendPosition: "top",
@@ -190,7 +330,9 @@ export const generateColonoscopyPDF = async (data: any, patientInfo?: any) => {
             diagramLegendItems.length > 0
               ? diagramLegendItems
               : ["Diagram annotations are included directly in the image."],
-          boxHeight: 74,
+          boxWidth: 84,
+          boxHeight: 126,
+          align: "left",
           inlineReserveHeight: 28,
           inlineLayout: "questionAnswerDiagram",
         }

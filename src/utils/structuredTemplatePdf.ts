@@ -18,12 +18,15 @@ export interface StructuredTemplatePdfEntry {
   subheading?: boolean;
   keepWhenEmpty?: boolean;
   valueOnly?: boolean;
+  spacerBefore?: number;
+  spacerAfter?: number;
 }
 
 export interface StructuredTemplatePdfSection {
   title: string;
   entries: StructuredTemplatePdfEntry[];
   startOnNewPage?: boolean;
+  hideTitle?: boolean;
   layout?:
     | "default"
     | "colonoscopy-preoperative"
@@ -113,6 +116,8 @@ interface StructuredTemplatePdfOptions {
     legendItems?: unknown;
     legendPosition?: "top" | "bottom";
     boxHeight?: number;
+    boxWidth?: number;
+    align?: "left" | "center";
     inlineValueOffset?: number;
     inlineReserveHeight?: number;
     inlineLayout?: "default" | "questionAnswerDiagram";
@@ -224,7 +229,9 @@ export const generateStructuredTemplatePdf = async ({
           return {
             ...entry,
             keepWhenEmpty,
-            valueOnly: shouldRenderEntryValueOnly(section.title, entry.label),
+            valueOnly:
+              Boolean(entry.valueOnly) ||
+              shouldRenderEntryValueOnly(section.title, entry.label),
           };
         })
         .filter((entry) =>
@@ -826,13 +833,17 @@ export const generateStructuredTemplatePdf = async ({
         ? Math.max(16, Number(diagram?.inlineReserveHeight) || 94)
         : section.layout === "label-value-three-column"
           ? 26
+          : section.hideTitle
+            ? 10
           : 16;
     ensureSpace(sectionOpeningHeight);
     drawRule();
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.text(section.title, margin, y);
-    y += 7;
+    if (!section.hideTitle) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.text(section.title, margin, y);
+      y += 7;
+    }
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
 
@@ -1132,8 +1143,29 @@ export const generateStructuredTemplatePdf = async ({
       const effectiveLabelWidth = section.fixedLabelWidth || sectionLabelWidth;
       const effectiveLabelGap = section.labelGap || 2;
       section.entries.forEach((entry) => {
+        if (entry.spacerBefore) {
+          y += entry.spacerBefore;
+        }
+
+        if (entry.subheading) {
+          ensureSpace(lineHeight + 2);
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(10);
+          pdf.text(entry.label, margin, y);
+          y += lineHeight + 1;
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(9);
+          if (entry.spacerAfter) {
+            y += entry.spacerAfter;
+          }
+          return;
+        }
+
         if (entry.valueOnly) {
           drawSingleRow(toEntryValue(entry));
+          if (entry.spacerAfter) {
+            y += entry.spacerAfter;
+          }
           return;
         }
 
@@ -1146,6 +1178,9 @@ export const generateStructuredTemplatePdf = async ({
           Boolean(entry.keepWhenEmpty),
           effectiveLabelGap,
         );
+        if (entry.spacerAfter) {
+          y += entry.spacerAfter;
+        }
       });
       return;
     }
@@ -1202,9 +1237,18 @@ export const generateStructuredTemplatePdf = async ({
   if (shouldRenderDiagramAtEnd) {
     y += 2;
     const endLegendPosition = diagram?.legendPosition === "top" ? "top" : "bottom";
+    const endDiagramWidth = Math.max(
+      40,
+      Math.min(contentWidth, Number(diagram?.boxWidth) || contentWidth),
+    );
+    const endDiagramHeight = Math.max(40, Number(diagram?.boxHeight) || 75);
+    const endDiagramX =
+      diagram?.align === "center"
+        ? margin + (contentWidth - endDiagramWidth) / 2
+        : margin;
     const endLegendLineHeight = Math.max(lineHeight - 0.5, 3.8);
     const endLegendSwatchSize = Math.max(2.2, endLegendLineHeight - 1.6);
-    const endLegendTextWidth = contentWidth - endLegendSwatchSize - 1.5;
+    const endLegendTextWidth = endDiagramWidth - endLegendSwatchSize - 1.5;
     const endLegendLinesCount = normalizedDiagramLegendItems.reduce(
       (count, item) => count + getLegendLines(item.label, endLegendTextWidth).length,
       0,
@@ -1213,7 +1257,6 @@ export const generateStructuredTemplatePdf = async ({
       normalizedDiagramLegendItems.length > 0
         ? lineHeight + endLegendLinesCount * endLegendLineHeight + 1
         : 0;
-    const endDiagramHeight = 75;
     ensureSpace(
       15 + endDiagramHeight + (normalizedDiagramLegendItems.length > 0 ? endLegendHeight + 3 : 0),
       30,
@@ -1221,33 +1264,58 @@ export const generateStructuredTemplatePdf = async ({
     drawRule();
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
-    pdf.text(diagram?.title || "Diagram", margin, y);
+    pdf.text(diagram?.title || "Diagram", endDiagramX, y);
     y += 7;
     if (normalizedDiagramLegendItems.length > 0 && endLegendPosition === "top") {
       pdf.setFont("helvetica", "bold");
-      pdf.text(diagram?.legendTitle || "Legend", margin, y);
+      pdf.text(diagram?.legendTitle || "Legend", endDiagramX, y);
       y += lineHeight;
       pdf.setFont("helvetica", "normal");
-      y = drawLegendItems(margin, y, contentWidth, endLegendLineHeight);
+      y = drawLegendItems(endDiagramX, y, endDiagramWidth, endLegendLineHeight);
       y += 2;
     }
     const endDiagramImageData = String(diagram?.imageData || "");
-    pdf.addImage(
-      endDiagramImageData,
-      detectImageFormat(endDiagramImageData),
-      margin,
-      y,
-      contentWidth,
-      endDiagramHeight,
-    );
+    try {
+      const endImageProperties = pdf.getImageProperties(endDiagramImageData);
+      const endAspectRatio = endImageProperties.width / endImageProperties.height;
+      let imageWidth = endDiagramWidth;
+      let imageHeight = endDiagramWidth / endAspectRatio;
+
+      if (imageHeight > endDiagramHeight) {
+        imageHeight = endDiagramHeight;
+        imageWidth = endDiagramHeight * endAspectRatio;
+      }
+
+      const imageX = endDiagramX + (endDiagramWidth - imageWidth) / 2;
+      const imageY = y + (endDiagramHeight - imageHeight) / 2;
+      pdf.addImage(
+        endDiagramImageData,
+        detectImageFormat(endDiagramImageData),
+        imageX,
+        imageY,
+        imageWidth,
+        imageHeight,
+      );
+    } catch (error) {
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(8);
+      pdf.text(
+        "Diagram could not be rendered",
+        endDiagramX + endDiagramWidth / 2,
+        y + endDiagramHeight / 2,
+        { align: "center" },
+      );
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+    }
     y += endDiagramHeight + 5;
     if (normalizedDiagramLegendItems.length > 0 && endLegendPosition === "bottom") {
       ensureSpace(endLegendHeight + 4, 20);
       pdf.setFont("helvetica", "bold");
-      pdf.text(diagram?.legendTitle || "Legend", margin, y);
+      pdf.text(diagram?.legendTitle || "Legend", endDiagramX, y);
       y += lineHeight;
       pdf.setFont("helvetica", "normal");
-      y = drawLegendItems(margin, y, contentWidth, endLegendLineHeight);
+      y = drawLegendItems(endDiagramX, y, endDiagramWidth, endLegendLineHeight);
       y += 1;
     }
   }
